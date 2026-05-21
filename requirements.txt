@@ -1,0 +1,13 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
+Flask>=3.0.0
+
+# ── Financial Data Pipeline ───────────────────────────────────────────────────
+yfinance>=0.2.54
+
+# ── Data Processing (RSI, SMA, normalization) ─────────────────────────────────
+pandas>=2.2.0
+numpy>=1.26.0
+requests>=2.31.0
+
+# ── Standard library (no install needed) ─────────────────────────────────────
+# ctypes, csv, os, time, math — all built into Python 3
