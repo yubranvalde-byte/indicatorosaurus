@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Financial Intelligence Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+tailwind.config = {
+  darkMode:"class",
+  theme:{ extend:{
+    colors:{
+      "primary":"#adc6ff","primary-container":"#4d8eff","on-primary":"#002e6a",
+      "secondary":"#4edea3","on-secondary":"#003824","secondary-container":"#00a572",
+      "tertiary":"#ffb3ad","tertiary-container":"#ff5451",
+      "surface":"#131313","surface-dim":"#131313","surface-bright":"#393939",
+      "surface-container-lowest":"#0e0e0e","surface-container-low":"#1c1b1b",
+      "surface-container":"#201f1f","surface-container-high":"#2a2a2a",
+      "surface-container-highest":"#353534","surface-variant":"#353534",
+      "on-surface":"#e5e2e1","on-surface-variant":"#c2c6d6",
+      "outline":"#8c909f","outline-variant":"#424754",
+      "background":"#131313","on-background":"#e5e2e1",
+      "inverse-surface":"#e5e2e1","inverse-on-surface":"#313030",
+      "error":"#ffb4ab","error-container":"#93000a"
+    },
+    borderRadius:{ DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem" },
+    fontFamily:{ "body-md":["Inter"],"headline-lg":["Inter"],"headline-md":["Inter"],
+      "headline-sm":["Inter"],"body-lg":["Inter"],"label-caps":["Inter"],"data-display":["JetBrains Mono"] },
+    fontSize:{
+      "label-caps":["12px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"700"}],
+      "body-md":["14px",{lineHeight:"1.5",fontWeight:"400"}],
+      "headline-lg":["32px",{lineHeight:"1.2",letterSpacing:"-0.02em",fontWeight:"700"}],
+      "headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+      "headline-sm":["20px",{lineHeight:"1.4",fontWeight:"600"}],
+      "body-lg":["16px",{lineHeight:"1.6",fontWeight:"400"}],
+      "data-display":["14px",{lineHeight:"1.4",letterSpacing:"-0.01em",fontWeight:"500"}]
+    }
+  }}
+};
+</script>
+<style>
+  input[type=range]{-webkit-appearance:none;width:100%;background:transparent}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#adc6ff;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(173,198,255,0.18)}
+  input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#4d8eff var(--pct,50%),#424754 var(--pct,50%));border-radius:2px}
+  input[type=range]:focus{outline:none}
+  .profile-btn{transition:all .2s;border:1px solid #424754;background:#1c1b1b;color:#c2c6d6;font-size:12px;font-weight:700;letter-spacing:.05em;padding:6px 4px;border-radius:6px;cursor:pointer;text-align:center}
+  .profile-btn:hover,.profile-btn.active{border-color:#adc6ff;background:rgba(173,198,255,0.12);color:#adc6ff}
+  .tooltip-wrap{position:relative;display:inline-flex}
+  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#2a2a2a;color:#c2c6d6;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 10px;border:1px solid #424754;opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
+  .tooltip-wrap:hover .tip{opacity:1}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:#131313}
+  ::-webkit-scrollbar-thumb{background:#424754;border-radius:2px}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .3s ease forwards}
+  .accordion-row{transition:all .25s ease}
+</style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden">
+
+<!-- Top Bar -->
+<header class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-14 px-8 z-40" style="left:288px">
+  <div class="flex items-center gap-3">
+    <h1 class="text-headline-md font-bold text-on-surface">Financial Intelligence Dashboard</h1>
+    <span id="active-profile-chip" class="hidden px-3 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-label-caps"></span>
+  </div>
+  <div class="flex items-center gap-2">
+    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant text-label-caps text-on-surface-variant">
+      <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse inline-block"></span>Live Data
+    </span>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full bg-surface/80 backdrop-blur-xl border-r border-outline-variant flex flex-col z-50 overflow-hidden" style="width:288px">
+  <!-- Logo -->
+  <div class="px-5 pt-5 pb-3 border-b border-outline-variant flex-shrink-0">
+    <h2 class="text-headline-sm font-bold text-primary">StockAnalyzer</h2>
+    <p class="text-label-caps text-on-surface-variant mt-1">Market Intelligence v3.0</p>
+  </div>
+
+  <!-- Scrollable body -->
+  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+    <!-- Profile Buttons -->
+    <div>
+      <p class="text-label-caps text-on-surface-variant mb-2">INVESTMENT PROFILES</p>
+      <div class="grid grid-cols-3 gap-1.5 mb-1.5">
+        <button class="profile-btn" onclick="applyPreset('deep-value')">Deep Value</button>
+        <button class="profile-btn" onclick="applyPreset('hyper-growth')">Hyper-Growth</button>
+        <button class="profile-btn" onclick="applyPreset('momentum')">Momentum</button>
+      </div>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button class="profile-btn" onclick="applyPreset('income')">Income</button>
+        <button class="profile-btn" onclick="applyPreset('quality')">Quality</button>
+      </div>
+    </div>
+
+    <!-- Universe Filters -->
+    <div>
+      <p class="text-label-caps text-on-surface-variant mb-2">UNIVERSE FILTERS</p>
+      
+      <!-- Sector Filter -->
+      <div class="space-y-1 mb-3">
+        <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block">Allowed Sectors</label>
+        <div class="relative">
+          <button id="sector-dropdown-btn" onclick="toggleSectorDropdown()" type="button" class="w-full text-left bg-surface-container border border-outline-variant rounded-md px-3 py-1.5 text-xs flex justify-between items-center text-on-surface hover:bg-surface-container-high transition-colors">
+            <span id="sector-btn-text" class="truncate">All Sectors</span>
+            <span class="material-symbols-outlined text-[14px]">expand_more</span>
+          </button>
+          <div id="sector-dropdown" class="hidden absolute top-full left-0 w-full bg-surface-container-high border border-outline-variant mt-1 rounded-md max-h-48 overflow-y-auto z-50 p-2 space-y-1.5 shadow-lg">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Market Cap Filter -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1">Min Cap ($B)</label>
+          <input type="number" id="min-market-cap" min="0" placeholder="e.g. 10"
+            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40" />
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1">Max Cap ($B)</label>
+          <input type="number" id="max-market-cap" min="0" placeholder="e.g. 500"
+            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Parameters Collapsible Drawer -->
+    <div class="border-t border-outline-variant/30 pt-3">
+      <button onclick="toggleSlidersDrawer()" type="button" class="w-full flex items-center justify-between py-2 text-left hover:bg-surface-bright/10 rounded px-2 transition-colors duration-200">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px] text-primary">settings</span>
+          <span class="text-label-caps text-on-surface-variant font-bold">Model Parameters</span>
+        </div>
+        <span id="sliders-drawer-icon" class="material-symbols-outlined text-[16px] transition-transform duration-300">expand_more</span>
+      </button>
+      <div id="sliders-drawer-content" class="max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+        <div id="sliders-container" class="space-y-1 mt-2 px-1 pb-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calculate button -->
+  <div class="px-4 py-4 border-t border-outline-variant flex-shrink-0">
+    <button id="calculate-btn"
+      class="w-full bg-primary text-on-primary font-bold text-sm py-2.5 px-4 rounded-lg hover:bg-primary-container transition-all shadow-[0_0_20px_rgba(77,142,255,0.25)] hover:shadow-[0_0_28px_rgba(77,142,255,0.4)] active:scale-[.98]">
+      ⚡ Calculate Score
+    </button>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main class="overflow-y-auto p-6" style="margin-left:288px;margin-top:56px;height:calc(100vh - 56px)">
+  <div class="max-w-5xl mx-auto">
+    <div class="mb-5">
+      <h2 class="text-headline-lg text-on-surface font-bold">Algorithm Results</h2>
+      <p class="text-body-lg text-on-surface-variant mt-1">Top ranking equities scored by the C-engine weighted dot product.</p>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-surface-container border-b border-[#2a2a2a]">
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant w-16 text-center">#</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant">Ticker</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-center w-28">Profile</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-right w-28">Score</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body">
+            <tr><td colspan="4" class="px-4 py-12 text-center text-on-surface-variant text-body-md">
+              Set your weights and click <strong class="text-primary">Calculate Score</strong> to rank all 140 stocks.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="px-4 py-3 bg-surface-container-low border-t border-[#2a2a2a] flex justify-between items-center">
+        <span class="text-label-caps text-on-surface-variant" id="result-count">No results yet</span>
+        <span class="text-label-caps text-on-surface-variant">C Engine · QuickSort · Min-Max Normalized</span>
+      </div>
+    </div>
+
+    <!-- Backtesting Panel -->
+    <div id="backtest-panel" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] mt-6 p-6 space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-[#2a2a2a] pb-4 gap-4">
+        <div>
+          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">analytics</span>
+            Historical Backtesting Dashboard
+          </h3>
+          <p class="text-xs text-on-surface-variant mt-1">Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.</p>
+        </div>
+        
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <!-- Time window select -->
+          <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg">
+            <button id="bt-window-3y" onclick="setBacktestWindow('3y')" class="px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
+            <button id="bt-window-5y" onclick="setBacktestWindow('5y')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
+          </div>
+          <!-- Run button -->
+          <button id="run-backtest-btn" disabled onclick="runPortfolioBacktest()" class="bg-primary/20 text-primary border border-primary/30 opacity-50 cursor-not-allowed font-bold text-xs py-1.5 px-4 rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center gap-1.5 active:scale-[.98]">
+            <span class="material-symbols-outlined text-[14px]">play_arrow</span>
+            📊 Run Trailing Backtest
+          </button>
+        </div>
+      </div>
+      
+      <!-- State Boundary Helper message -->
+      <div id="backtest-helper-msg" class="text-center py-6 text-on-surface-variant/80 text-xs bg-surface-container/20 rounded-lg border border-dashed border-outline-variant/30 flex flex-col items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-[24px] text-outline">info</span>
+        <span>Rank stocks to generate a portfolio before running a backtest.</span>
+      </div>
+
+      <!-- Backtest Content (hidden initially) -->
+      <div id="backtest-content" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Left 2 cols for Chart -->
+        <div class="md:col-span-2 bg-surface-container/40 border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-label-caps text-on-surface-variant font-bold">Trailing Cumulative Performance</span>
+            <div class="flex items-center gap-4 text-[11px] font-bold">
+              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span>Portfolio</span>
+              <span class="flex items-center gap-1.5 text-tertiary"><span class="w-2 h-2 rounded-full bg-tertiary inline-block"></span>SPY Benchmark</span>
+            </div>
+          </div>
+          <div class="relative flex-1" style="height: 250px;">
+            <canvas id="backtestchart"></canvas>
+          </div>
+        </div>
+        
+        <!-- Right col for KPIs -->
+        <div class="space-y-4">
+          <span class="text-label-caps text-on-surface-variant font-bold block">Key Portfolio Metrics</span>
+          
+          <!-- Sharpe Grid -->
+          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-on-surface-variant">Annualized Sharpe Ratio</span>
+              <span class="material-symbols-outlined text-[16px] text-primary">assessment</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">Portfolio</span>
+                <div id="kpi-port-sharpe" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
+              </div>
+              <div class="bg-surface-container-high/40 border border-outline-variant/30 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-outline uppercase font-bold tracking-wide">SPY</span>
+                <div id="kpi-spy-sharpe" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Max Drawdown Grid -->
+          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-on-surface-variant">Maximum Drawdown</span>
+              <span class="material-symbols-outlined text-[16px] text-tertiary">trending_down</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              <div class="bg-tertiary/5 border border-tertiary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-tertiary uppercase font-bold tracking-wide">Portfolio</span>
+                <div id="kpi-port-max-dd" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
+              </div>
+              <div class="bg-surface-container-high/40 border border-outline-variant/30 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-outline uppercase font-bold tracking-wide">SPY</span>
+                <div id="kpi-spy-max-dd" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alpha Grid -->
+          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Total Excess Return (Alpha)</span>
+              <div id="kpi-total-alpha" class="text-headline-md font-bold text-secondary mt-1">--</div>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center border border-secondary/20">
+              <span class="material-symbols-outlined text-secondary text-[24px]">insights</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Indicator definitions (16 in INDICATOR_COLUMNS order) ───────────────────
+const INDICATORS = [
+  { id:'sl-forward-pe',       col:'ForwardPE',        label:'Forward P/E',       icon:'timeline',      group:'Valuation',
+    tip:'Price vs projected earnings. Lower = cheaper entry point.',
+    fmt: v => v.toFixed(2) },
+  { id:'sl-peg-ratio',        col:'EV_EBITDA',        label:'EV / EBITDA',       icon:'show_chart',    group:'Valuation',
+    tip:'Enterprise Value / EBITDA. Lower = cheaper valuation multiple.',
+    fmt: v => v.toFixed(2) },
+  { id:'sl-fcf-yield',        col:'FCFYield',         label:'FCF Yield',         icon:'account_balance',group:'Valuation',
+    tip:'Free cash flow / market cap. Higher = more cash generation relative to price.',
+    fmt: v => `${(v*100).toFixed(2)}%` },
+  { id:'sl-revenue-growth',   col:'RevenueGrowth',    label:'Revenue Growth',    icon:'trending_up',   group:'Growth',
+    tip:'Year-over-year revenue increase rate.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-eps-growth',       col:'EPSGrowth',        label:'EPS Growth',        icon:'bar_chart',     group:'Growth',
+    tip:'Year-over-year earnings per share increase.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-gross-margin',     col:'GrossMargin',      label:'Gross Margin',      icon:'percent',       group:'Profitability',
+    tip:'Revenue remaining after cost of goods. Measures pricing power.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-op-margin',        col:'OperatingMargin',  label:'Operating Margin',  icon:'factory',       group:'Profitability',
+    tip:'Profit from operations as % of revenue. Operational efficiency.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-roic',             col:'ROIC',             label:'ROIC (ROA proxy)',   icon:'savings',       group:'Profitability',
+    tip:'Return on assets — capital efficiency proxy. Avoids ROE distortion from buybacks.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-debt-equity',      col:'DebtToEquity',     label:'Debt / Equity',     icon:'credit_card',   group:'Health',
+    tip:'Financial leverage ratio. Lower = safer balance sheet.',
+    fmt: v => v.toFixed(2) },
+  { id:'sl-div-yield',        col:'ShareholderYield', label:'Shareholder Yield', icon:'payments',      group:'Income',
+    tip:'Total cash returned via dividends, net share buybacks, and debt reduction. Higher = better.',
+    fmt: v => `${(v*100).toFixed(2)}%` },
+  { id:'sl-div-safety',       col:'FiveYDivGrowth',   label:'Div Safety',        icon:'calendar_month',group:'Income',
+    tip:'Payout ratio proxy for dividend sustainability.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-payout',           col:'PayoutRatio',      label:'Payout Ratio',      icon:'pie_chart',     group:'Income',
+    tip:'% of earnings paid as dividends. Lower = more room for reinvestment.',
+    fmt: v => `${(v*100).toFixed(1)}%` },
+  { id:'sl-beta',             col:'Beta',             label:'Beta',              icon:'equalizer',     group:'Technical',
+    tip:'Volatility vs market. Higher beta = stronger momentum signal.',
+    fmt: v => v.toFixed(3) },
+  { id:'sl-rsi',              col:'RSI',              label:'RSI (14-day)',       icon:'speed',         group:'Technical',
+    tip:"Wilder's RSI. Above 70 = overbought momentum. Below 30 = oversold.",
+    fmt: v => v.toFixed(1) },
+  { id:'sl-p200sma',          col:'PriceVs200SMA',    label:'Price / 200-SMA',   icon:'ssid_chart',    group:'Technical',
+    tip:'Current price divided by 200-day moving average. >1.0 = bullish trend.',
+    fmt: v => v.toFixed(4) },
+  { id:'sl-rel-strength',     col:'RelativeStrength', label:'Relative Strength', icon:'leaderboard',   group:'Technical',
+    tip:'1-year stock return minus SPY 1-year return. Positive = outperformed market.',
+    fmt: v => `${(v*100).toFixed(2)}%` },
+];
+
+// ── 5 Master Investment Profile Preset Matrix ───────────────────────────────
+// Weights indexed 0-15 matching INDICATORS array order. Each sums to 100.
+const PROFILES = {
+  'deep-value':   { label:'Deep Value',   color:'#4edea3',
+    w:[25,20,25, 0, 5, 0, 0, 0,15,10, 0, 0, 0, 0, 0, 0] },
+  'hyper-growth': { label:'Hyper-Growth', color:'#adc6ff',
+    w:[ 0, 0, 20, 25, 25, 15, 0, 15, 0, 0, 0, 0, 0, 0, 0, 0] },
+  'momentum':     { label:'Momentum',     color:'#ffb3ad',
+    w:[ 0, 0, 0, 10, 10, 0, 0, 0, 0, 0, 0, 0, 0, 30, 20, 30] },
+  'income':       { label:'Income',       color:'#f9d97e',
+    w:[ 5, 0, 35, 0, 0, 0, 0, 0, 10, 20, 15, 10, 0, 0, 0, 5] },
+  'quality':      { label:'Quality',      color:'#c084fc',
+    w:[15,10,20,10,15,10,10,10, 0, 0, 0, 0, 0, 0, 0, 0] },
+};
+
+let activeProfile = null;
+let userTouchedSlider = false;
+let currentResults = [];
+let backtestWindow = '3y';
+let backtestChart = null;
+
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+const SECTORS = [
+  'Basic Materials',
+  'Communication Services',
+  'Consumer Cyclical',
+  'Consumer Defensive',
+  'Energy',
+  'Financial Services',
+  'Healthcare',
+  'Industrials',
+  'Real Estate',
+  'Technology',
+  'Utilities'
+];
+
+let selectedSectors = [];
+
+// ── Build sector dropdown ───────────────────────────────────────────────────
+(function buildSectorDropdown() {
+  const dropdown = document.getElementById('sector-dropdown');
+  if (!dropdown) return;
+  SECTORS.forEach(sec => {
+    const item = document.createElement('label');
+    item.className = 'flex items-center gap-2 px-2 py-1 hover:bg-surface-bright/20 rounded cursor-pointer text-xs text-on-surface select-none';
+    item.innerHTML = `
+      <input type="checkbox" value="${sec}" onchange="onSectorChange(this)" class="rounded border-outline-variant bg-surface-container text-primary focus:ring-primary w-3.5 h-3.5" />
+      <span>${sec}</span>
+    `;
+    dropdown.appendChild(item);
+  });
+})();
+
+function toggleSectorDropdown() {
+  const dropdown = document.getElementById('sector-dropdown');
+  if (dropdown) dropdown.classList.toggle('hidden');
+}
+
+function onSectorChange(cb) {
+  if (cb.checked) {
+    if (!selectedSectors.includes(cb.value)) selectedSectors.push(cb.value);
+  } else {
+    selectedSectors = selectedSectors.filter(s => s !== cb.value);
+  }
+  
+  // Update button text
+  const btnText = document.getElementById('sector-btn-text');
+  if (btnText) {
+    if (selectedSectors.length === 0) {
+      btnText.textContent = 'All Sectors';
+    } else if (selectedSectors.length === 1) {
+      btnText.textContent = selectedSectors[0];
+    } else {
+      btnText.textContent = `${selectedSectors.length} Sectors`;
+    }
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('sector-dropdown');
+  const btn = document.getElementById('sector-dropdown-btn');
+  if (dropdown && btn && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+    dropdown.classList.add('hidden');
+  }
+});
+
+function toggleSlidersDrawer() {
+  const content = document.getElementById('sliders-drawer-content');
+  const icon = document.getElementById('sliders-drawer-icon');
+  if (!content || !icon) return;
+  
+  const isCollapsed = content.classList.contains('max-h-0');
+  if (isCollapsed) {
+    content.classList.remove('overflow-visible');
+    content.classList.add('overflow-hidden');
+    
+    content.classList.remove('max-h-0');
+    content.classList.add('max-h-[2500px]');
+    icon.style.transform = 'rotate(180deg)';
+    
+    const onEnd = (e) => {
+      if (e.propertyName === 'max-height') {
+        if (!content.classList.contains('max-h-0')) {
+          content.classList.remove('overflow-hidden');
+          content.classList.add('overflow-visible');
+        }
+        content.removeEventListener('transitionend', onEnd);
+      }
+    };
+    content.addEventListener('transitionend', onEnd);
+  } else {
+    content.classList.remove('overflow-visible');
+    content.classList.add('overflow-hidden');
+    
+    requestAnimationFrame(() => {
+      content.classList.remove('max-h-[2500px]');
+      content.classList.add('max-h-0');
+      icon.style.transform = '';
+    });
+  }
+}
+
+// ── Build sliders in sidebar ─────────────────────────────────────────────────
+(function buildSliders() {
+  const container = document.getElementById('sliders-container');
+  let lastGroup = null;
+
+  INDICATORS.forEach((ind, i) => {
+    if (ind.group !== lastGroup) {
+      const sep = document.createElement('p');
+      sep.className = 'text-label-caps text-on-surface-variant/60 mt-3 mb-1.5 pl-0.5 uppercase tracking-widest text-[10px]';
+      sep.textContent = '— ' + ind.group;
+      container.appendChild(sep);
+      lastGroup = ind.group;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'py-1.5';
+    wrap.innerHTML = `
+      <div class="flex justify-between items-center mb-1">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-outline" style="font-size:14px">${ind.icon}</span>
+          <span class="text-body-md text-on-surface">${ind.label}</span>
+          <span class="tooltip-wrap">
+            <span class="text-outline text-[10px] font-bold cursor-help select-none">(?)</span>
+            <span class="tip">${ind.tip}</span>
+          </span>
+        </div>
+        <span class="text-data-display text-primary text-[13px] font-bold tabular-nums" id="val-${ind.id}">0</span>
+      </div>
+      <input type="range" id="${ind.id}" min="0" max="100" value="0"
+        class="w-full focus:outline-none"
+        oninput="onSliderInput('${ind.id}',this.value,${i})"/>
+    `;
+    container.appendChild(wrap);
+  });
+})();
+
+// ── Slider input handler ─────────────────────────────────────────────────────
+function onSliderInput(id, val, idx) {
+  document.getElementById('val-' + id).textContent = val;
+  updateTrack(id, val);
+  if (activeProfile !== null) {
+    userTouchedSlider = true;
+    setActiveProfile(null);
+  }
+}
+
+function updateTrack(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.style.setProperty('--pct', val + '%');
+}
+
+// ── Apply preset ─────────────────────────────────────────────────────────────
+function applyPreset(key) {
+  const p = PROFILES[key];
+  if (!p) return;
+  INDICATORS.forEach((ind, i) => {
+    const el = document.getElementById(ind.id);
+    if (el) { el.value = p.w[i]; updateTrack(ind.id, p.w[i]); }
+    const lbl = document.getElementById('val-' + ind.id);
+    if (lbl) lbl.textContent = p.w[i];
+  });
+  userTouchedSlider = false;
+  setActiveProfile(key);
+}
+
+function setActiveProfile(key) {
+  activeProfile = key;
+  document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('active'));
+  const chip = document.getElementById('active-profile-chip');
+  if (key && PROFILES[key]) {
+    const btn = [...document.querySelectorAll('.profile-btn')].find(b =>
+      b.getAttribute('onclick').includes(key));
+    if (btn) btn.classList.add('active');
+    chip.textContent = PROFILES[key].label;
+    chip.style.setProperty('--tw-border-opacity','1');
+    chip.classList.remove('hidden');
+  } else {
+    chip.textContent = 'Custom';
+    chip.classList.remove('hidden');
+  }
+}
+
+// ── Score colour ─────────────────────────────────────────────────────────────
+function scoreColor(s) {
+  if (s >= 70) return '#4edea3';
+  if (s >= 40) return '#adc6ff';
+  return '#ffb3ad';
+}
+
+function scoreBg(s) {
+  if (s >= 70) return 'rgba(78,222,163,0.1)';
+  if (s >= 40) return 'rgba(173,198,255,0.1)';
+  return 'rgba(255,179,173,0.1)';
+}
+
+// ── Toggle accordion ─────────────────────────────────────────────────────────
+function toggleRow(id) {
+  const row = document.getElementById(id);
+  const icon = document.getElementById('icon-' + id);
+  if (!row) return;
+  const hidden = row.classList.toggle('hidden');
+  if (icon) { icon.style.transform = hidden ? '' : 'rotate(180deg)'; }
+}
+
+// ── Build accordion detail HTML for one stock ────────────────────────────────
+function buildAccordion(item) {
+  const ind = item.indicators || {};
+  const cells = INDICATORS.map(meta => {
+    const d = ind[meta.col] || { raw: 0, score: 0 };
+    const raw = isNaN(d.raw) ? 0 : d.raw;
+    const sc  = isNaN(d.score) ? 0 : d.score;
+    const rawStr = (() => { try { return meta.fmt(raw); } catch(e){ return '—'; } })();
+    const pct = Math.round(sc);
+    const c   = scoreColor(sc);
+    const bg  = scoreBg(sc);
+    return `
+      <div style="background:${bg};border:1px solid rgba(255,255,255,0.06)" class="p-2 rounded-lg flex flex-col gap-1">
+        <span style="font-size:10px;letter-spacing:.06em;font-weight:700;color:#8c909f;text-transform:uppercase">${meta.label}</span>
+        <div class="flex items-baseline justify-between mt-0.5">
+          <span class="font-data-display text-data-display text-on-surface" style="font-size:13px">${rawStr}</span>
+          <span style="font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c}">${pct}/100</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:#2a2a2a;margin-top:2px">
+          <div style="height:100%;border-radius:2px;width:${pct}%;background:${c};transition:width .4s"></div>
+        </div>
+      </div>`;
+  }).join('');
+  return `<div class="grid gap-2 p-4" style="grid-template-columns:repeat(4,1fr)">${cells}</div>`;
+}
+
+// ── Calculate button ─────────────────────────────────────────────────────────
+document.getElementById('calculate-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('calculate-btn');
+  btn.textContent = '⏳ Computing…';
+  btn.disabled = true;
+  btn.classList.add('opacity-75');
+
+  const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
+
+  try {
+    const minCapVal = document.getElementById('min-market-cap').value.trim();
+    const maxCapVal = document.getElementById('max-market-cap').value.trim();
+    const min_market_cap = minCapVal !== '' ? parseFloat(minCapVal) * 1e9 : null;
+    const max_market_cap = maxCapVal !== '' ? parseFloat(maxCapVal) * 1e9 : null;
+
+    if (min_market_cap !== null && isNaN(min_market_cap)) {
+      throw new Error("Invalid Minimum Market Cap value");
+    }
+    if (max_market_cap !== null && isNaN(max_market_cap)) {
+      throw new Error("Invalid Maximum Market Cap value");
+    }
+
+    const res = await fetch('/api/calculate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        weights,
+        strategy: activeProfile || null,
+        allowed_sectors: selectedSectors.length > 0 ? selectedSectors : null,
+        min_market_cap,
+        max_market_cap
+      })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.status); }
+    const data = await res.json();
+    const results = data.results || [];
+
+    const tbody = document.getElementById('leaderboard-body');
+    tbody.innerHTML = '';
+
+    const profileLabel = (activeProfile && PROFILES[activeProfile])
+      ? PROFILES[activeProfile].label : 'Custom';
+    const chipColor = (activeProfile && PROFILES[activeProfile])
+      ? PROFILES[activeProfile].color : '#c2c6d6';
+
+    results.forEach((item, idx) => {
+      const sc = parseFloat(item.score);
+      const rowBg = idx % 2 === 0 ? '#1a1a1a' : '#1e1e1e';
+      const initial = (item.ticker || '?').charAt(0);
+
+      // Parent row
+      const tr = document.createElement('tr');
+      tr.style.cssText = `background:${rowBg};border-bottom:1px solid #2a2a2a;cursor:pointer`;
+      tr.className = 'hover:bg-surface-container-high transition-colors fade-in';
+      tr.setAttribute('onclick', `toggleRow('acc-${idx}')`);
+      tr.innerHTML = `
+        <td class="px-4 py-3 text-center text-data-display text-on-surface-variant tabular-nums">${idx+1}</td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-surface-container-high flex items-center justify-center text-data-display text-primary font-bold flex-shrink-0">${escapeHTML(initial)}</div>
+            <div class="flex flex-col min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-on-surface text-[15px]">${escapeHTML(item.ticker)}</span>
+                ${item.sector ? `<span class="text-[10px] uppercase tracking-wider text-secondary font-semibold bg-secondary/10 px-1.5 py-0.5 rounded border border-secondary/20">${escapeHTML(item.sector)}</span>` : ''}
+                <span class="material-symbols-outlined text-on-surface-variant transition-transform duration-200" id="icon-acc-${idx}" style="font-size:16px">expand_more</span>
+              </div>
+              <span class="text-xs text-on-surface-variant truncate max-w-[280px]" title="${escapeHTML(item.longName || '')}">${escapeHTML(item.longName || '—')}</span>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span class="text-label-caps px-2 py-0.5 rounded-full" style="color:${chipColor};background:${chipColor}22;border:1px solid ${chipColor}44">${profileLabel}</span>
+        </td>
+        <td class="px-4 py-3 text-right">
+          <span class="font-bold text-data-display tabular-nums" style="color:${scoreColor(sc)};font-size:15px">${item.score}</span>
+        </td>`;
+      tbody.appendChild(tr);
+
+      // Accordion row
+      const acc = document.createElement('tr');
+      acc.id = `acc-${idx}`;
+      acc.className = 'hidden accordion-row';
+      acc.style.cssText = `background:#161616;border-bottom:1px solid #2a2a2a`;
+      const td = document.createElement('td');
+      td.setAttribute('colspan','4');
+      td.innerHTML = buildAccordion(item);
+      acc.appendChild(td);
+      tbody.appendChild(acc);
+    });
+
+    document.getElementById('result-count').textContent =
+      `Showing ${results.length} stocks · Ranked by ${profileLabel} weights`;
+
+    currentResults = results;
+    const runBtn = document.getElementById('run-backtest-btn');
+    const helperMsg = document.getElementById('backtest-helper-msg');
+    const contentDiv = document.getElementById('backtest-content');
+    
+    if (results.length > 0) {
+      runBtn.disabled = false;
+      runBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      runBtn.classList.add('cursor-pointer');
+      helperMsg.innerHTML = `
+        <span class="material-symbols-outlined text-[20px] text-secondary">check_circle</span>
+        <span>Portfolio generated with ${results.length} stocks. Ready to run trailing backtest.</span>
+      `;
+      helperMsg.classList.remove('hidden');
+      contentDiv.classList.add('hidden');
+    } else {
+      runBtn.disabled = true;
+      runBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      runBtn.classList.remove('cursor-pointer');
+      helperMsg.innerHTML = `
+        <span class="material-symbols-outlined text-[24px] text-outline">info</span>
+        <span>Rank stocks to generate a portfolio before running a backtest.</span>
+      `;
+      helperMsg.classList.remove('hidden');
+      contentDiv.classList.add('hidden');
+    }
+
+  } catch (err) {
+    alert('Error: ' + err.message);
+    console.error(err);
+  } finally {
+    btn.textContent = '⚡ Calculate Score';
+    btn.disabled = false;
+    btn.classList.remove('opacity-75');
+  }
+});
+
+function setBacktestWindow(win) {
+  backtestWindow = win;
+  const btn3y = document.getElementById('bt-window-3y');
+  const btn5y = document.getElementById('bt-window-5y');
+  if (!btn3y || !btn5y) return;
+  
+  if (win === '3y') {
+    btn3y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10";
+    btn5y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
+  } else {
+    btn5y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10";
+    btn3y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
+  }
+}
+
+async function runPortfolioBacktest() {
+  const btn = document.getElementById('run-backtest-btn');
+  const helperMsg = document.getElementById('backtest-helper-msg');
+  const contentDiv = document.getElementById('backtest-content');
+  
+  if (!currentResults || currentResults.length === 0) {
+    alert("No ranked stocks available to backtest.");
+    return;
+  }
+
+  const topTickers = currentResults.slice(0, 10).map(item => item.ticker);
+  if (topTickers.length === 0) {
+    alert("No tickers found to run simulation.");
+    return;
+  }
+
+  const originalText = btn.innerHTML;
+  btn.innerHTML = `⏳ Running Simulation...`;
+  btn.disabled = true;
+  btn.classList.add('opacity-75');
+
+  const minCapVal = document.getElementById('min-market-cap').value.trim();
+  const maxCapVal = document.getElementById('max-market-cap').value.trim();
+  const min_market_cap = minCapVal !== '' ? parseFloat(minCapVal) * 1e9 : null;
+  const max_market_cap = maxCapVal !== '' ? parseFloat(maxCapVal) * 1e9 : null;
+
+  const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
+
+  try {
+    const res = await fetch('/api/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tickers: topTickers,
+        time_window: backtestWindow,
+        weights: weights,
+        strategy: activeProfile || null,
+        allowed_sectors: selectedSectors.length > 0 ? selectedSectors : null,
+        min_market_cap: min_market_cap,
+        max_market_cap: max_market_cap
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || res.statusText);
+    }
+
+    const data = await res.json();
+    
+    helperMsg.classList.add('hidden');
+    contentDiv.classList.remove('hidden');
+
+    const metrics = data.metrics || {};
+    document.getElementById('kpi-port-sharpe').textContent = metrics.portfolio_sharpe.toFixed(2);
+    document.getElementById('kpi-spy-sharpe').textContent = metrics.spy_sharpe.toFixed(2);
+    
+    const portDDPercent = (metrics.portfolio_max_drawdown * 100).toFixed(2) + '%';
+    const spyDDPercent = (metrics.spy_max_drawdown * 100).toFixed(2) + '%';
+    document.getElementById('kpi-port-max-dd').textContent = portDDPercent;
+    document.getElementById('kpi-spy-max-dd').textContent = spyDDPercent;
+    
+    const alphaSign = metrics.total_alpha >= 0 ? '+' : '';
+    document.getElementById('kpi-total-alpha').textContent = alphaSign + (metrics.total_alpha * 100).toFixed(2) + '%';
+
+    renderBacktestChart(data.performance_series);
+
+  } catch (err) {
+    alert('Backtest Error: ' + err.message);
+    console.error(err);
+    helperMsg.classList.remove('hidden');
+    helperMsg.innerHTML = `
+      <span class="material-symbols-outlined text-[24px] text-error">error</span>
+      <span class="text-error font-bold">Failed to complete simulation: ${escapeHTML(err.message)}</span>
+    `;
+    contentDiv.classList.add('hidden');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+    btn.classList.remove('opacity-75');
+  }
+}
+
+function renderBacktestChart(series) {
+  const ctx = document.getElementById('backtestchart').getContext('2d');
+  
+  const labels = series.map(d => d.date);
+  const portfolioData = series.map(d => d.portfolio_return);
+  const spyData = series.map(d => d.spy_return);
+  
+  if (backtestChart) {
+    backtestChart.destroy();
+  }
+  
+  backtestChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Portfolio',
+          data: portfolioData,
+          borderColor: '#4d8eff',
+          backgroundColor: 'rgba(77, 142, 255, 0.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.1
+        },
+        {
+          label: 'SPY Benchmark',
+          data: spyData,
+          borderColor: '#ff5451',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#1c1b1b',
+          titleColor: '#e5e2e1',
+          bodyColor: '#c2c6d6',
+          borderColor: '#424754',
+          borderWidth: 1,
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                label += ((context.parsed.y - 1.0) * 100).toFixed(2) + '%';
+              }
+              return label;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.03)'
+          },
+          ticks: {
+            color: '#8c909f',
+            font: {
+              size: 9
+            },
+            maxTicksLimit: 8
+          }
+        },
+        y: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.05)'
+          },
+          ticks: {
+            color: '#8c909f',
+            font: {
+              size: 10
+            },
+            callback: function(value) {
+              return ((value - 1.0) * 100).toFixed(0) + '%';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
