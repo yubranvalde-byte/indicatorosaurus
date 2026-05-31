@@ -1,4 +1,5 @@
 import bisect
+import gc
 import math
 import os
 import pandas as pd
@@ -87,76 +88,107 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     unique_tickers = [t.strip().upper() for t in unique_tickers if t]
     all_symbols = list(set(unique_tickers + ['SPY']))
 
+    # Load prices using a pure offline strategy
     cache_path = 'historical_prices_cache.pkl'
     price_data = None
+    
     if os.path.exists(cache_path):
         try:
-            cached_df = pd.read_pickle(cache_path)
-            # Verify if cached_df has the required columns and date range
-            if not cached_df.empty:
-                if isinstance(cached_df.columns, pd.MultiIndex):
-                    existing_symbols = set(cached_df.columns.get_level_values(1).unique())
-                else:
-                    existing_symbols = set(cached_df.columns)
-                
-                missing_symbols = set(all_symbols) - existing_symbols
-                if not missing_symbols:
-                    # Check date range
-                    cache_min = cached_df.index.min()
-                    cache_max = cached_df.index.max()
-                    # Strip timezones just in case
-                    if hasattr(cache_min, 'tz') and cache_min.tz is not None:
-                        cache_min = cache_min.tz_localize(None)
-                    if hasattr(cache_max, 'tz') and cache_max.tz is not None:
-                        cache_max = cache_max.tz_localize(None)
-                    
-                    # We need the cache to start at least as early as start_date (with a 7-day tolerance)
-                    # and end at least as late as end_date (with a 10-day tolerance for weekends/holidays)
-                    start_ok = cache_min <= (start_date + pd.Timedelta(days=7))
-                    end_ok = cache_max >= (end_date - pd.Timedelta(days=10))
-                    
-                    if start_ok and end_ok:
-                        price_data = cached_df
-                        print("[Backtest Engine] Loaded prices from local cache.")
-                    else:
-                        print(f"[Backtest Engine] Cache date range [{cache_min.strftime('%Y-%m-%d')}, {cache_max.strftime('%Y-%m-%d')}] "
-                              f"does not cover requested range [{start_date.strftime('%Y-%m-%d')}, {end_date.strftime('%Y-%m-%d')}]. Re-downloading.")
-                else:
-                    print(f"[Backtest Engine] Cache is missing {len(missing_symbols)} symbols. Re-downloading.")
+            price_data = pd.read_pickle(cache_path)
+            print("[Backtest Engine] Loaded prices from local pickle cache.")
         except Exception as e:
-            print(f"[Backtest Engine] Error reading cache: {e}. Downloading new data.")
+            print(f"[Backtest Engine] Error reading local pickle cache: {e}.")
+            price_data = None
+
+    if price_data is None:
+        csv_cache_path = os.path.join('simfin_data_cache', 'us-shareprices-daily.csv')
+        if os.path.exists(csv_cache_path):
+            print(f"[Backtest Engine] Local pickle cache '{cache_path}' not found or failed. "
+                  f"Reading prices from offline CSV '{csv_cache_path}' in chunks...")
+            try:
+                chunks = []
+                # To prevent memory bloat, read only specific columns and filter each chunk
+                for chunk in pd.read_csv(csv_cache_path, sep=';', usecols=['Ticker', 'Date', 'Adj. Close', 'Close'], chunksize=100000):
+                    chunk['Ticker'] = chunk['Ticker'].str.strip().str.upper()
+                    # Filter chunk to keep only symbols that are part of our universe
+                    chunk_filtered = chunk[chunk['Ticker'].isin(all_symbols)].copy()
+                    chunks.append(chunk_filtered)
+                
+                raw_prices = pd.concat(chunks)
+                del chunks
+                
+                # Check column mapping
+                price_col = 'Adj. Close' if 'Adj. Close' in raw_prices.columns else 'Close'
+                raw_prices['Date'] = pd.to_datetime(raw_prices['Date'])
+                
+                # Pivot
+                price_data = raw_prices.pivot(index='Date', columns='Ticker', values=price_col)
+                del raw_prices
+                print("[Backtest Engine] Loaded and pivoted prices from offline CSV.")
+            except Exception as e:
+                print(f"[Backtest Engine] Error reading offline CSV: {e}")
+                price_data = None
 
     if price_data is None:
         raise FileNotFoundError(
-            f"Local price cache '{cache_path}' is missing, incomplete, or out of bounds. "
+            f"Local price cache '{cache_path}' and offline CSV are missing or incomplete. "
             "Please run 'fetch_static_data.py' to download and cache the offline price dataset."
         )
 
     if price_data.empty:
         raise ValueError(f"Local price cache '{cache_path}' is empty.")
 
-    # Extract adjusted close prices.
-    # With auto_adjust=True yfinance puts adjusted closes under 'Close'.
-    # Without it they appear under 'Adj Close'. Support both layouts.
+    # Downcast and handle MultiIndex
+    price_data = price_data.astype('float32', errors='ignore')
+
     if isinstance(price_data.columns, pd.MultiIndex):
         lvl0 = price_data.columns.get_level_values(0).unique().tolist()
         price_col = 'Close' if 'Close' in lvl0 else ('Adj Close' if 'Adj Close' in lvl0 else lvl0[0])
-        close_data = price_data[price_col]
+        close_data = price_data[price_col].copy()
     else:
-        close_data = price_data
+        close_data = price_data.copy()
 
-    # Ensure close_data's index is timezone-naive
+    del price_data
+    gc.collect()
+
+    # Ensure close_data index is timezone-naive
     if hasattr(close_data.index, 'tz') and close_data.index.tz is not None:
         close_data.index = close_data.index.tz_localize(None)
+    close_data.index = pd.to_datetime(close_data.index)
+    close_data = close_data.astype('float32', errors='ignore')
 
-    # Drop columns that are entirely NaN across the whole window
-    # (delisted or bad tickers). Keep SPY unconditionally.
-    all_nan_cols = [c for c in close_data.columns if close_data[c].isna().all() and c != 'SPY']
-    if all_nan_cols:
-        close_data = close_data.drop(columns=all_nan_cols)
-
+    # Strict Drop-Missing Policy
     if 'SPY' not in close_data.columns:
-        raise ValueError("Benchmark SPY is missing from the downloaded data.")
+        raise ValueError("Benchmark SPY is missing from the local price cache.")
+
+    valid_symbols = []
+    dropped_symbols = []
+
+    for ticker in unique_tickers:
+        if ticker not in close_data.columns:
+            dropped_symbols.append((ticker, "missing from cache columns"))
+            continue
+        
+        # Check if ticker has any valid (non-NaN) prices within the requested backtest window
+        ticker_series = close_data.loc[start_date:end_date, ticker]
+        if ticker_series.isna().all():
+            dropped_symbols.append((ticker, "no valid prices in backtest window"))
+            continue
+            
+        valid_symbols.append(ticker)
+
+    if dropped_symbols:
+        for ticker, reason in dropped_symbols:
+            print(f"[Backtest Engine] Warning: Ticker '{ticker}' is dropped from active universe. Reason: {reason}.")
+        
+        dropped_set = {t for t, _ in dropped_symbols}
+        df = df[~df['Ticker'].isin(dropped_set)]
+        unique_tickers = [t for t in unique_tickers if t not in dropped_set]
+        all_symbols = list(set(unique_tickers + ['SPY']))
+
+    # Keep only active symbols in close_data and free unused columns to optimize memory
+    close_data = close_data[all_symbols].copy()
+    gc.collect()
 
     # Reindex close_data to include selected anchors and prevent day-of-week KeyError
     anchor_dates = pd.DatetimeIndex([pd.Timestamp(a).tz_localize(None) for a in selected_anchors])
@@ -326,6 +358,9 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
         portfolio_daily_returns.append(port_ret)
         spy_daily_returns.append(spy_ret)
+
+    del daily_returns
+    gc.collect()
 
     port_series = pd.Series(portfolio_daily_returns, index=simulation_dates)
     spy_series = pd.Series(spy_daily_returns, index=simulation_dates)
