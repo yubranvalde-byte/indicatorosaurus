@@ -2,7 +2,6 @@ import bisect
 import math
 import os
 import pandas as pd
-import yfinance as yf
 
 def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
     """
@@ -73,11 +72,15 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if not window_anchors:
         raise ValueError("No matching historical quarter anchors in the selected time window.")
 
-    # Select anchor dates with step size
+    # Select anchor dates with freq_months spacing to handle weekly frequency correctly
     selected_anchors = []
-    for idx, anchor in enumerate(window_anchors):
-        if idx % step == 0:
-            selected_anchors.append(anchor)
+    if window_anchors:
+        current_anchor = window_anchors[0]
+        selected_anchors.append(current_anchor)
+        for anchor in window_anchors:
+            if anchor >= current_anchor + pd.DateOffset(months=freq_months):
+                current_anchor = anchor
+                selected_anchors.append(current_anchor)
 
     # Fetch historical price series baseline for the entire static universe upfront (weekly interval)
     unique_tickers = list(df['Ticker'].dropna().unique())
@@ -124,23 +127,13 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             print(f"[Backtest Engine] Error reading cache: {e}. Downloading new data.")
 
     if price_data is None:
-        try:
-            print(f"[Backtest Engine] Downloading data for {len(all_symbols)} symbols from yfinance...")
-            price_data = yf.download(
-                all_symbols,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval="1wk",
-                auto_adjust=True   # returns adjusted closes in 'Close' column, avoids Adj Close ambiguity
-            )
-            if not price_data.empty:
-                price_data.to_pickle(cache_path)
-                print("[Backtest Engine] Saved downloaded prices to local cache.")
-        except Exception as e:
-            raise RuntimeError(f"yfinance download failed: {str(e)}")
+        raise FileNotFoundError(
+            f"Local price cache '{cache_path}' is missing, incomplete, or out of bounds. "
+            "Please run 'fetch_static_data.py' to download and cache the offline price dataset."
+        )
 
-    if price_data is None or price_data.empty:
-        raise ValueError("No historical price data returned by yfinance.")
+    if price_data.empty:
+        raise ValueError(f"Local price cache '{cache_path}' is empty.")
 
     # Extract adjusted close prices.
     # With auto_adjust=True yfinance puts adjusted closes under 'Close'.
@@ -164,6 +157,11 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     if 'SPY' not in close_data.columns:
         raise ValueError("Benchmark SPY is missing from the downloaded data.")
+
+    # Reindex close_data to include selected anchors and prevent day-of-week KeyError
+    anchor_dates = pd.DatetimeIndex([pd.Timestamp(a).tz_localize(None) for a in selected_anchors])
+    combined_index = close_data.index.union(anchor_dates).sort_values()
+    close_data = close_data.reindex(combined_index).ffill().bfill()
 
     trading_dates = close_data.index
 
@@ -205,6 +203,18 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
         raw_snapshot = []
         for _, row in snapshot_df.iterrows():
+            ticker = str(row.get('Ticker', '')).strip().upper()
+            if not ticker or ticker not in close_data.columns:
+                continue
+                
+            # Dynamic price availability check at anchor date t_k
+            try:
+                price_val = close_data.loc[t_k, ticker]
+                if pd.isna(price_val) or price_val <= 0.0:
+                    continue
+            except KeyError:
+                continue
+
             # Check if any critical parameters (MarketCap, EBITDA, CurrentRatio, or any of the 16 indicators) are missing
             critical_cols = [
                 'MarketCap', 'EBITDA', 'CurrentRatio', 'ForwardPE', 'EV_EBITDA',
@@ -220,14 +230,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 if pd.isna(val):
                     is_missing = True
                     break
-                # Special cases: MarketCap, EBITDA, and CurrentRatio
-                if col == 'MarketCap' and float(val) <= 0.0:
-                    is_missing = True
-                    break
-                if col == 'EBITDA' and float(val) == 0.0:
-                    is_missing = True
-                    break
-                if col == 'CurrentRatio' and float(val) <= 0.0:
+                # Special cases: MarketCap, EBITDA, and CurrentRatio must be strictly positive (>0)
+                if col in ('MarketCap', 'EBITDA', 'CurrentRatio') and float(val) <= 0.0:
                     is_missing = True
                     break
             

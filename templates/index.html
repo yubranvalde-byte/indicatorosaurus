@@ -221,7 +221,13 @@ tailwind.config = {
       </div>
 
       <!-- Backtest Content (hidden initially) -->
-      <div id="backtest-content" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="backtest-content" class="hidden relative grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Backtesting Glassmorphic Loading Overlay -->
+        <div id="backtest-loading" class="hidden absolute inset-0 bg-[#131313]/70 backdrop-blur-md z-30 flex flex-col items-center justify-center gap-3 rounded-xl border border-outline-variant/20">
+          <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span class="font-bold text-primary text-sm">Simulating Rolling Performance...</span>
+          <span class="text-[10px] text-outline">Processing rolling rebalancing matrices over 82,000 historical rows</span>
+        </div>
         <!-- Left 2 cols for Chart -->
         <div class="md:col-span-2 bg-surface-container/40 border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
           <div class="flex justify-between items-center mb-4">
@@ -346,7 +352,6 @@ const INDICATORS = [
 ];
 
 // ── 5 Master Investment Profile Preset Matrix ───────────────────────────────
-// Weights indexed 0-15 matching INDICATORS array order. Each sums to 100.
 const PROFILES = {
   'deep-value':   { label:'Deep Value',   color:'#4edea3',
     w:[25,20,25, 0, 5, 0, 0, 0,15,10, 0, 0, 0, 0, 0, 0] },
@@ -364,7 +369,7 @@ let activeProfile = null;
 let userTouchedSlider = false;
 let currentResults = [];
 let backtestWindow = '3y';
-let backtestChart = null;
+let chartInstance = null;
 
 function escapeHTML(str) {
   if (!str) return '';
@@ -516,10 +521,7 @@ function toggleSlidersDrawer() {
 function onSliderInput(id, val, idx) {
   document.getElementById('val-' + id).textContent = val;
   updateTrack(id, val);
-  if (activeProfile !== null) {
-    userTouchedSlider = true;
-    setActiveProfile(null);
-  }
+  setActiveProfile(null);
 }
 
 function updateTrack(id, val) {
@@ -539,6 +541,10 @@ function applyPreset(key) {
   });
   userTouchedSlider = false;
   setActiveProfile(key);
+
+  // Automatically trigger calculation & backtesting concurrently
+  runCalculate();
+  runPortfolioBacktest();
 }
 
 function setActiveProfile(key) {
@@ -550,7 +556,6 @@ function setActiveProfile(key) {
       b.getAttribute('onclick').includes(key));
     if (btn) btn.classList.add('active');
     chip.textContent = PROFILES[key].label;
-    chip.style.setProperty('--tw-border-opacity','1');
     chip.classList.remove('hidden');
   } else {
     chip.textContent = 'Custom';
@@ -558,7 +563,23 @@ function setActiveProfile(key) {
   }
 }
 
-// ── Score colour ─────────────────────────────────────────────────────────────
+// ── Format Market Cap Utility ────────────────────────────────────────────────
+function formatMarketCap(val) {
+  if (!val || isNaN(val)) return '—';
+  const num = parseFloat(val);
+  if (num >= 1e12) {
+    return '$' + (num / 1e12).toFixed(2) + 'T';
+  }
+  if (num >= 1e9) {
+    return '$' + (num / 1e9).toFixed(2) + 'B';
+  }
+  if (num >= 1e6) {
+    return '$' + (num / 1e6).toFixed(2) + 'M';
+  }
+  return '$' + num.toLocaleString();
+}
+
+// ── Score color ──────────────────────────────────────────────────────────────
 function scoreColor(s) {
   if (s >= 70) return '#4edea3';
   if (s >= 40) return '#adc6ff';
@@ -606,8 +627,8 @@ function buildAccordion(item) {
   return `<div class="grid gap-2 p-4" style="grid-template-columns:repeat(4,1fr)">${cells}</div>`;
 }
 
-// ── Calculate button ─────────────────────────────────────────────────────────
-document.getElementById('calculate-btn').addEventListener('click', async () => {
+// ── Calculate Score Action ───────────────────────────────────────────────────
+async function runCalculate() {
   const btn = document.getElementById('calculate-btn');
   btn.textContent = '⏳ Computing…';
   btn.disabled = true;
@@ -672,7 +693,7 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
                 ${item.sector ? `<span class="text-[10px] uppercase tracking-wider text-secondary font-semibold bg-secondary/10 px-1.5 py-0.5 rounded border border-secondary/20">${escapeHTML(item.sector)}</span>` : ''}
                 <span class="material-symbols-outlined text-on-surface-variant transition-transform duration-200" id="icon-acc-${idx}" style="font-size:16px">expand_more</span>
               </div>
-              <span class="text-xs text-on-surface-variant truncate max-w-[280px]" title="${escapeHTML(item.longName || '')}">${escapeHTML(item.longName || '—')}</span>
+              <span class="text-xs text-on-surface-variant truncate max-w-[280px]" title="${escapeHTML(item.longName || '')}">${escapeHTML(item.longName || '—')} · ${formatMarketCap(item.marketCap)}</span>
             </div>
           </div>
         </td>
@@ -702,7 +723,6 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
     currentResults = results;
     const runBtn = document.getElementById('run-backtest-btn');
     const helperMsg = document.getElementById('backtest-helper-msg');
-    const contentDiv = document.getElementById('backtest-content');
     
     if (results.length > 0) {
       runBtn.disabled = false;
@@ -712,8 +732,6 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
         <span class="material-symbols-outlined text-[20px] text-secondary">check_circle</span>
         <span>Portfolio generated with ${results.length} stocks. Ready to run trailing backtest.</span>
       `;
-      helperMsg.classList.remove('hidden');
-      contentDiv.classList.add('hidden');
     } else {
       runBtn.disabled = true;
       runBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -722,8 +740,6 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
         <span class="material-symbols-outlined text-[24px] text-outline">info</span>
         <span>Rank stocks to generate a portfolio before running a backtest.</span>
       `;
-      helperMsg.classList.remove('hidden');
-      contentDiv.classList.add('hidden');
     }
 
   } catch (err) {
@@ -734,8 +750,14 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
     btn.disabled = false;
     btn.classList.remove('opacity-75');
   }
+}
+
+document.getElementById('calculate-btn').addEventListener('click', () => {
+  runCalculate();
+  runPortfolioBacktest();
 });
 
+// ── Backtest Window Setter ───────────────────────────────────────────────────
 function setBacktestWindow(win) {
   backtestWindow = win;
   const btn3y = document.getElementById('bt-window-3y');
@@ -749,28 +771,27 @@ function setBacktestWindow(win) {
     btn5y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10";
     btn3y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
   }
+  
+  // Re-run backtest simulation automatically if we have results
+  if (currentResults && currentResults.length > 0) {
+    runPortfolioBacktest();
+  }
 }
 
+// ── Run Backtest Simulation ──────────────────────────────────────────────────
 async function runPortfolioBacktest() {
   const btn = document.getElementById('run-backtest-btn');
   const helperMsg = document.getElementById('backtest-helper-msg');
+  const loadingMsg = document.getElementById('backtest-loading');
   const contentDiv = document.getElementById('backtest-content');
-  
-  if (!currentResults || currentResults.length === 0) {
-    alert("No ranked stocks available to backtest.");
-    return;
-  }
 
-  const topTickers = currentResults.slice(0, 10).map(item => item.ticker);
-  if (topTickers.length === 0) {
-    alert("No tickers found to run simulation.");
-    return;
-  }
-
-  const originalText = btn.innerHTML;
-  btn.innerHTML = `⏳ Running Simulation...`;
   btn.disabled = true;
   btn.classList.add('opacity-75');
+
+  // Immediately reveal the content grid and trigger the glassmorphic overlay
+  helperMsg.classList.add('hidden');
+  contentDiv.classList.remove('hidden');
+  loadingMsg.classList.remove('hidden');
 
   const minCapVal = document.getElementById('min-market-cap').value.trim();
   const maxCapVal = document.getElementById('max-market-cap').value.trim();
@@ -784,7 +805,7 @@ async function runPortfolioBacktest() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tickers: topTickers,
+        tickers: [], // Omit tickers, backend resolves dynamically from weights and filters
         time_window: backtestWindow,
         weights: weights,
         strategy: activeProfile || null,
@@ -801,8 +822,8 @@ async function runPortfolioBacktest() {
 
     const data = await res.json();
     
-    helperMsg.classList.add('hidden');
-    contentDiv.classList.remove('hidden');
+    // Hide the glassmorphic loading overlay
+    loadingMsg.classList.add('hidden');
 
     const metrics = data.metrics || {};
     document.getElementById('kpi-port-sharpe').textContent = metrics.portfolio_sharpe.toFixed(2);
@@ -819,8 +840,8 @@ async function runPortfolioBacktest() {
     renderBacktestChart(data.performance_series);
 
   } catch (err) {
-    alert('Backtest Error: ' + err.message);
     console.error(err);
+    loadingMsg.classList.add('hidden');
     helperMsg.classList.remove('hidden');
     helperMsg.innerHTML = `
       <span class="material-symbols-outlined text-[24px] text-error">error</span>
@@ -828,12 +849,12 @@ async function runPortfolioBacktest() {
     `;
     contentDiv.classList.add('hidden');
   } finally {
-    btn.innerHTML = originalText;
     btn.disabled = false;
     btn.classList.remove('opacity-75');
   }
 }
 
+// ── Chart.js Lifecycle Management ────────────────────────────────────────────
 function renderBacktestChart(series) {
   const ctx = document.getElementById('backtestchart').getContext('2d');
   
@@ -841,11 +862,13 @@ function renderBacktestChart(series) {
   const portfolioData = series.map(d => d.portfolio_return);
   const spyData = series.map(d => d.spy_return);
   
-  if (backtestChart) {
-    backtestChart.destroy();
+  // Lifecycle Guard: explicitly destroy previous instance to prevent canvas glitches
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
   }
   
-  backtestChart = new Chart(ctx, {
+  chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
