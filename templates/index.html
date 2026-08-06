@@ -231,8 +231,8 @@ tailwind.config = {
           <div class="flex justify-between items-center mb-4">
             <span class="text-label-caps text-on-surface-variant font-bold">Trailing Cumulative Performance</span>
             <div class="flex items-center gap-4 text-[11px] font-bold">
-              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span>Portfolio</span>
-              <span class="flex items-center gap-1.5 text-tertiary"><span class="w-2 h-2 rounded-full bg-tertiary inline-block"></span>SPY Benchmark</span>
+              <span class="flex items-center gap-1.5 text-secondary"><span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>Portfolio</span>
+              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span>SPY Benchmark</span>
             </div>
           </div>
           <div class="relative flex-1" style="height: 250px;">
@@ -251,12 +251,12 @@ tailwind.config = {
               <span class="material-symbols-outlined text-[16px] text-primary">assessment</span>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-1">
-              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">Portfolio</span>
+              <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Portfolio</span>
                 <div id="kpi-port-sharpe" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
               </div>
-              <div class="bg-surface-container-high/40 border border-outline-variant/30 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-outline uppercase font-bold tracking-wide">SPY</span>
+              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
                 <div id="kpi-spy-sharpe" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
               </div>
             </div>
@@ -269,12 +269,12 @@ tailwind.config = {
               <span class="material-symbols-outlined text-[16px] text-tertiary">trending_down</span>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-1">
-              <div class="bg-tertiary/5 border border-tertiary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-tertiary uppercase font-bold tracking-wide">Portfolio</span>
+              <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Portfolio</span>
                 <div id="kpi-port-max-dd" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
               </div>
-              <div class="bg-surface-container-high/40 border border-outline-variant/30 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-outline uppercase font-bold tracking-wide">SPY</span>
+              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
+                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
                 <div id="kpi-spy-max-dd" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
               </div>
             </div>
@@ -922,8 +922,8 @@ function renderBacktestChart(series) {
         {
           label: 'Portfolio',
           data: portfolioData,
-          borderColor: '#4d8eff',
-          backgroundColor: 'rgba(77, 142, 255, 0.1)',
+          borderColor: '#4edea3',
+          backgroundColor: 'rgba(78, 222, 163, 0.1)',
           borderWidth: 2,
           pointRadius: 0,
           fill: true,
@@ -932,7 +932,7 @@ function renderBacktestChart(series) {
         {
           label: 'SPY Benchmark',
           data: spyData,
-          borderColor: '#ff5451',
+          borderColor: '#4d8eff',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
