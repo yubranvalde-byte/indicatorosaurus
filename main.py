@@ -30,6 +30,7 @@ def index():
 
 @app.route('/api/calculate', methods=['POST'])
 def calculate():
+    """Endpoint A: Handles immediate C Engine stock scoring and returns ranked stock list."""
     payload = request.get_json()
     if not payload:
         return jsonify({"error": "No JSON payload provided"}), 400
@@ -180,52 +181,24 @@ def calculate():
 
 @app.route('/api/backtest', methods=['POST'])
 def backtest():
+    """Endpoint B: Triggers asynchronous trailing backtest simulation for portfolio tickers."""
     payload = request.get_json()
     if not payload:
         return jsonify({"error": "No JSON payload provided"}), 400
 
-    # tickers is optional
     tickers = payload.get('tickers', [])
-    if not isinstance(tickers, list):
-        tickers = []
+    if not tickers or not isinstance(tickers, list):
+        return jsonify({"error": "tickers parameter must be a non-empty list of strings"}), 400
 
     time_window = payload.get('time_window', '3y')
     if time_window not in ('3y', '5y'):
         return jsonify({"error": "time_window parameter must be either '3y' or '5y'"}), 400
 
     weights = payload.get('weights', None)
-    if weights is None:
-        return jsonify({"error": "weights parameter is required"}), 400
-    if not isinstance(weights, list) or len(weights) != 16 or not all(isinstance(w, (int, float)) for w in weights):
-        return jsonify({"error": "weights must be a 16-element array of numbers"}), 400
-
     strategy = payload.get('strategy', None)
-    if strategy is not None and strategy not in VALID_STRATEGIES:
-        return jsonify({"error": f"Unknown strategy: '{strategy}'. "
-                                 f"Valid values: {sorted(VALID_STRATEGIES)}"}), 400
-
     allowed_sectors = payload.get('allowed_sectors', None)
-    if allowed_sectors is not None:
-        if not isinstance(allowed_sectors, list) or not all(isinstance(s, str) for s in allowed_sectors):
-            return jsonify({"error": "allowed_sectors must be a list of strings"}), 400
-
     min_market_cap = payload.get('min_market_cap', None)
-    if min_market_cap is not None:
-        try:
-            min_market_cap = float(min_market_cap)
-        except (ValueError, TypeError):
-            return jsonify({"error": "min_market_cap must be a numeric value"}), 400
-
     max_market_cap = payload.get('max_market_cap', None)
-    if max_market_cap is not None:
-        try:
-            max_market_cap = float(max_market_cap)
-        except (ValueError, TypeError):
-            return jsonify({"error": "max_market_cap must be a numeric value"}), 400
-
-    if min_market_cap is not None and max_market_cap is not None:
-        if min_market_cap > max_market_cap:
-            return jsonify({"error": "min_market_cap cannot be greater than max_market_cap"}), 400
 
     try:
         results = run_backtest(
