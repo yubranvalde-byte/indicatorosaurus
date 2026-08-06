@@ -187,7 +187,7 @@ tailwind.config = {
         <span class="text-label-caps text-on-surface-variant" id="result-count">No results yet</span>
         <div id="pagination-controls" class="hidden items-center gap-2">
           <button id="load-more-btn" onclick="loadMoreStocks()" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
-          <button id="show-all-btn" onclick="showAllStocks()" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
+          <button id="toggle-all-btn" onclick="showAllStocks()" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
         </div>
         <span class="text-label-caps text-on-surface-variant">C Engine · QuickSort · Min-Max Normalized</span>
       </div>
@@ -670,14 +670,27 @@ function renderLeaderboard() {
   });
 
   const paginationControls = document.getElementById('pagination-controls');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  const toggleAllBtn = document.getElementById('toggle-all-btn');
   const countSpan = document.getElementById('result-count');
+
   if (currentResults.length > 0) {
     const visibleNum = Math.min(visibleCount, currentResults.length);
     countSpan.textContent = `Showing ${visibleNum} of ${currentResults.length} stocks · Ranked by ${profileLabel} weights`;
     
-    if (visibleCount < currentResults.length) {
+    if (currentResults.length > 10) {
       paginationControls.classList.remove('hidden');
       paginationControls.classList.add('flex');
+
+      if (visibleCount < currentResults.length) {
+        loadMoreBtn.classList.remove('hidden');
+        toggleAllBtn.textContent = 'Show All';
+        toggleAllBtn.setAttribute('onclick', 'showAllStocks()');
+      } else {
+        loadMoreBtn.classList.add('hidden');
+        toggleAllBtn.textContent = 'Hide All';
+        toggleAllBtn.setAttribute('onclick', 'hideAllStocks()');
+      }
     } else {
       paginationControls.classList.add('hidden');
       paginationControls.classList.remove('flex');
@@ -696,6 +709,11 @@ function loadMoreStocks() {
 
 function showAllStocks() {
   visibleCount = currentResults.length;
+  renderLeaderboard();
+}
+
+function hideAllStocks() {
+  visibleCount = 10;
   renderLeaderboard();
 }
 
