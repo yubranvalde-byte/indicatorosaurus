@@ -1,11 +1,22 @@
+# Virtual Environments
 linux_env/
 env/
+venv/
+.venv/
 __pycache__/
+
+# Compiled C binaries and objects
 *.o
 *.so
+*.dll
+*.exe
 visualize_test
-.env
-simfin_data_cache/
+
+# Data directories and large datasets / caches
+data/
 *.csv
-*.tar
 *.pkl
+
+# System and IDE files
+.DS_Store
+*.log

@@ -2,6 +2,8 @@ import ctypes
 import os
 import math
 import statistics
+import csv
+import pandas as pd
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,41 @@ GOLDILOCKS_PARAMS = {
     'ShareholderYield': {'L': 0.04,  'U': 0.09,  'sigma_L': 0.03,  'sigma_R': 0.04},
 }
 
+# ─── Data Ingestion Helper ───────────────────────────────────────────────────
+
+def load_latest_fundamental_snapshot(csv_path):
+    """
+    Ingests historical_fundamental_data.csv (or market_data.csv as fallback),
+    extracts the latest cross-sectional snapshot per Ticker, and returns a list of raw dicts.
+    """
+    if not os.path.exists(csv_path):
+        return None, f"Dataset not found at {csv_path}"
+    
+    try:
+        df = pd.read_csv(csv_path)
+        if df.empty:
+            return [], None
+            
+        if "Quarter_End_Date" in df.columns:
+            df["Quarter_End_Date"] = pd.to_datetime(df["Quarter_End_Date"])
+            # Filter for the latest available quarter per ticker
+            df = df.sort_values("Quarter_End_Date").groupby("Ticker").last().reset_index()
+            df["Quarter_End_Date"] = df["Quarter_End_Date"].dt.strftime("%Y-%m-%d")
+        
+        # Ensure 'Sector' key exists (mapped from GICS_Sector if needed)
+        if "GICS_Sector" in df.columns and "Sector" not in df.columns:
+            df["Sector"] = df["GICS_Sector"]
+
+        # Ensure 'LongName' key exists
+        if "LongName" not in df.columns:
+            df["LongName"] = df["Ticker"]
+            
+        records = df.to_dict(orient="records")
+        return records, None
+    except Exception as e:
+        return None, f"Failed to parse fundamental snapshot dataset: {str(e)}"
+
+
 # ─── 1. Data Structure Definition ─────────────────────────────────────────────
 
 class Stock(ctypes.Structure):
@@ -103,17 +140,16 @@ lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libsortbusl
 
 try:
     lib = ctypes.CDLL(lib_path)
+    # void compute_scores(Stock* stocks, int num_stocks, const double* weights);
+    lib.compute_scores.argtypes = [ctypes.POINTER(Stock), ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
+    lib.compute_scores.restype  = None
+
+    # void sort_stocks_by_score(Stock* stocks, int num_stocks);
+    lib.sort_stocks_by_score.argtypes = [ctypes.POINTER(Stock), ctypes.c_int]
+    lib.sort_stocks_by_score.restype  = None
 except OSError as e:
-    print(f"Error loading {lib_path}. Did you compile it?")
-    raise e
-
-# void compute_scores(Stock* stocks, int num_stocks, const double* weights);
-lib.compute_scores.argtypes = [ctypes.POINTER(Stock), ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
-lib.compute_scores.restype  = None
-
-# void sort_stocks_by_score(Stock* stocks, int num_stocks);
-lib.sort_stocks_by_score.argtypes = [ctypes.POINTER(Stock), ctypes.c_int]
-lib.sort_stocks_by_score.restype  = None
+    print(f"Warning: Could not load C-library at {lib_path}. Execution will require WSL/Linux environment.")
+    lib = None
 
 
 # ─── 3. Knock-out Filter Engine ──────────────────────────────────────────────
@@ -152,7 +188,7 @@ def apply_knockout_filters(stocks_list, strategy):
 
     before = len(stocks_list)
     after  = len(survivors)
-    print(f"[KnockoutFilter] '{strategy}': {before} → {after} stocks "
+    print(f"[KnockoutFilter] '{strategy}': {before} -> {after} stocks "
           f"({before - after} eliminated)")
     return survivors
 
@@ -177,7 +213,7 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
     for stock in stocks_list:
         # 1. Sector filter
         if sector_set is not None:
-            sector = str(stock.get('Sector', '')).strip().lower()
+            sector = str(stock.get('Sector', stock.get('GICS_Sector', ''))).strip().lower()
             if sector not in sector_set:
                 continue
 
@@ -206,7 +242,7 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
 
     before = len(stocks_list)
     after = len(survivors)
-    print(f"[DynamicFilter] Sector/Cap: {before} → {after} stocks ({before - after} eliminated)")
+    print(f"[DynamicFilter] Sector/Cap: {before} -> {after} stocks ({before - after} eliminated)")
     return survivors
 
 
@@ -457,6 +493,16 @@ def run_financial_engine(normalized_stocks, weights_list):
     num_stocks = len(normalized_stocks)
     if num_stocks == 0:
         return []
+
+    if lib is None:
+        # Fallback scoring for host OS without compiled C library
+        results = []
+        tot_w = sum(float(w) for w in weights_list)
+        for stock_data in normalized_stocks:
+            score = sum(float(stock_data.get(col, 0.0)) * float(w) for col, w in zip(INDICATOR_COLUMNS, weights_list))
+            results.append({'Ticker': stock_data['Ticker'], 'FinalScore': round(score, 4)})
+        results.sort(key=lambda x: x['FinalScore'], reverse=True)
+        return results
 
     # ── Step 1: Populate ctypes Stock array ──────────────────────────────────
     StockArray = Stock * num_stocks

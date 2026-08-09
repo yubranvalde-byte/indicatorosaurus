@@ -1,8 +1,8 @@
 import bisect
-import gc
 import math
 import os
 import pandas as pd
+from financial_module import normalize_stocks, run_financial_engine, _safe_float
 
 def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
     """
@@ -73,133 +73,50 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if not window_anchors:
         raise ValueError("No matching historical quarter anchors in the selected time window.")
 
-    # Select anchor dates with freq_months spacing to handle weekly frequency correctly
+    # Select anchor dates with step size
     selected_anchors = []
-    if window_anchors:
-        current_anchor = window_anchors[0]
-        selected_anchors.append(current_anchor)
-        for anchor in window_anchors:
-            if anchor >= current_anchor + pd.DateOffset(months=freq_months):
-                current_anchor = anchor
-                selected_anchors.append(current_anchor)
+    for idx, anchor in enumerate(window_anchors):
+        if idx % step == 0:
+            selected_anchors.append(anchor)
 
-    # Fetch historical price series baseline for the entire static universe upfront (weekly interval)
-    unique_tickers = list(df['Ticker'].dropna().unique())
-    unique_tickers = [t.strip().upper() for t in unique_tickers if t]
-    all_symbols = list(set(unique_tickers + ['SPY']))
-
-    # Load prices using a pure offline strategy
+    # Load historical price series from local cache (Pure Offline Mode)
     cache_path = 'historical_prices_cache.pkl'
-    price_data = None
-    
-    if os.path.exists(cache_path):
-        try:
-            price_data = pd.read_pickle(cache_path)
-            print("[Backtest Engine] Loaded prices from local pickle cache.")
-        except Exception as e:
-            print(f"[Backtest Engine] Error reading local pickle cache: {e}.")
-            price_data = None
+    if not os.path.exists(cache_path):
+        raise FileNotFoundError("Local price cache 'historical_prices_cache.pkl' not found. Online network fallback is strictly prohibited under V3.2.1 Pure Offline mandate.")
 
-    if price_data is None:
-        csv_cache_path = os.path.join('simfin_data_cache', 'us-shareprices-daily.csv')
-        if os.path.exists(csv_cache_path):
-            print(f"[Backtest Engine] Local pickle cache '{cache_path}' not found or failed. "
-                  f"Reading prices from offline CSV '{csv_cache_path}' in chunks...")
-            try:
-                chunks = []
-                # To prevent memory bloat, read only specific columns and filter each chunk
-                for chunk in pd.read_csv(csv_cache_path, sep=';', usecols=['Ticker', 'Date', 'Adj. Close', 'Close'], chunksize=100000):
-                    chunk['Ticker'] = chunk['Ticker'].str.strip().str.upper()
-                    # Filter chunk to keep only symbols that are part of our universe
-                    chunk_filtered = chunk[chunk['Ticker'].isin(all_symbols)].copy()
-                    chunks.append(chunk_filtered)
-                
-                raw_prices = pd.concat(chunks)
-                del chunks
-                
-                # Check column mapping
-                price_col = 'Adj. Close' if 'Adj. Close' in raw_prices.columns else 'Close'
-                raw_prices['Date'] = pd.to_datetime(raw_prices['Date'])
-                
-                # Pivot
-                price_data = raw_prices.pivot(index='Date', columns='Ticker', values=price_col)
-                del raw_prices
-                print("[Backtest Engine] Loaded and pivoted prices from offline CSV.")
-            except Exception as e:
-                print(f"[Backtest Engine] Error reading offline CSV: {e}")
-                price_data = None
+    try:
+        price_data = pd.read_pickle(cache_path)
+        print("[Backtest Engine] Loaded prices from local cache.")
+    except Exception as e:
+        raise ValueError(f"Failed to read local historical price cache '{cache_path}': {e}")
 
-    if price_data is None:
-        raise FileNotFoundError(
-            f"Local price cache '{cache_path}' and offline CSV are missing or incomplete. "
-            "Please run 'fetch_static_data.py' to download and cache the offline price dataset."
-        )
+    if price_data is None or price_data.empty:
+        raise ValueError(f"Historical price cache '{cache_path}' is empty or invalid.")
 
-    if price_data.empty:
-        raise ValueError(f"Local price cache '{cache_path}' is empty.")
-
-    # Downcast and handle MultiIndex
-    price_data = price_data.astype('float32', errors='ignore')
-
+    # Extract adjusted close prices.
     if isinstance(price_data.columns, pd.MultiIndex):
         lvl0 = price_data.columns.get_level_values(0).unique().tolist()
         price_col = 'Close' if 'Close' in lvl0 else ('Adj Close' if 'Adj Close' in lvl0 else lvl0[0])
-        close_data = price_data[price_col].copy()
+        close_data = price_data[price_col]
     else:
-        close_data = price_data.copy()
+        close_data = price_data
 
-    del price_data
-    gc.collect()
-
-    # Ensure close_data index is timezone-naive
+    # Ensure close_data's index is timezone-naive
     if hasattr(close_data.index, 'tz') and close_data.index.tz is not None:
         close_data.index = close_data.index.tz_localize(None)
-    close_data.index = pd.to_datetime(close_data.index)
-    close_data = close_data.astype('float32', errors='ignore')
 
-    # Strict Drop-Missing Policy
+    # Drop columns that are entirely NaN across the whole window
+    # (delisted or bad tickers). Keep SPY unconditionally.
+    all_nan_cols = [c for c in close_data.columns if close_data[c].isna().all() and c != 'SPY']
+    if all_nan_cols:
+        close_data = close_data.drop(columns=all_nan_cols)
+
     if 'SPY' not in close_data.columns:
-        raise ValueError("Benchmark SPY is missing from the local price cache.")
-
-    valid_symbols = []
-    dropped_symbols = []
-
-    for ticker in unique_tickers:
-        if ticker not in close_data.columns:
-            dropped_symbols.append((ticker, "missing from cache columns"))
-            continue
-        
-        # Check if ticker has any valid (non-NaN) prices within the requested backtest window
-        ticker_series = close_data.loc[start_date:end_date, ticker]
-        if ticker_series.isna().all():
-            dropped_symbols.append((ticker, "no valid prices in backtest window"))
-            continue
-            
-        valid_symbols.append(ticker)
-
-    if dropped_symbols:
-        for ticker, reason in dropped_symbols:
-            print(f"[Backtest Engine] Warning: Ticker '{ticker}' is dropped from active universe. Reason: {reason}.")
-        
-        dropped_set = {t for t, _ in dropped_symbols}
-        df = df[~df['Ticker'].isin(dropped_set)]
-        unique_tickers = [t for t in unique_tickers if t not in dropped_set]
-        all_symbols = list(set(unique_tickers + ['SPY']))
-
-    # Keep only active symbols in close_data and free unused columns to optimize memory
-    close_data = close_data[all_symbols].copy()
-    gc.collect()
-
-    # Reindex close_data to include selected anchors and prevent day-of-week KeyError
-    anchor_dates = pd.DatetimeIndex([pd.Timestamp(a).tz_localize(None) for a in selected_anchors])
-    combined_index = close_data.index.union(anchor_dates).sort_values()
-    close_data = close_data.reindex(combined_index).ffill().bfill()
+        raise ValueError("Benchmark SPY is missing from local historical price cache.")
 
     trading_dates = close_data.index
 
     # Clamp start_date to the first actual trading day present in price data.
-    # This prevents the compounding chain from being zeroed-out on weekend /
-    # holiday days that fall before the first real close price row.
     effective_start = trading_dates[trading_dates >= start_date][0] if any(trading_dates >= start_date) else trading_dates[0]
 
     # Establish interval holding periods (ensuring all dates are timezone-naive)
@@ -223,7 +140,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             })
 
     # Rank and select portfolios for each interval
-    from financial_module import normalize_stocks, run_financial_engine
     last_valid_top_10 = []
 
     for p in periods:
@@ -236,49 +152,25 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         raw_snapshot = []
         for _, row in snapshot_df.iterrows():
             ticker = str(row.get('Ticker', '')).strip().upper()
-            if not ticker or ticker not in close_data.columns:
-                continue
-                
-            # Dynamic price availability check at anchor date t_k
-            try:
-                price_val = close_data.loc[t_k, ticker]
-                if pd.isna(price_val) or price_val <= 0.0:
-                    continue
-            except KeyError:
+            if not ticker or pd.isna(row.get('Ticker')):
                 continue
 
-            # Check if any critical parameters (MarketCap, EBITDA, CurrentRatio, or any of the 16 indicators) are missing
-            critical_cols = [
-                'MarketCap', 'EBITDA', 'CurrentRatio', 'ForwardPE', 'EV_EBITDA',
-                'FCFYield', 'RevenueGrowth', 'EPSGrowth', 'GrossMargin',
-                'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
-                'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
-                'RelativeStrength'
-            ]
-            
-            is_missing = False
-            for col in critical_cols:
-                val = row.get(col)
-                if pd.isna(val):
-                    is_missing = True
-                    break
-                # Special cases: MarketCap, EBITDA, and CurrentRatio must be strictly positive (>0)
-                if col in ('MarketCap', 'EBITDA', 'CurrentRatio') and float(val) <= 0.0:
-                    is_missing = True
-                    break
-            
-            if is_missing or pd.isna(row.get('GICS_Sector')) or str(row.get('GICS_Sector')).strip() == '':
+            # Ensure valid non-zero market cap
+            mkt_cap = _safe_float(row.get('MarketCap', 0.0))
+            if mkt_cap <= 0.0:
                 continue
 
             d = {}
             for col in snapshot_df.columns:
                 d[col] = row[col]
-            d['Sector'] = d.get('GICS_Sector', '')
-            d['MarketCap'] = float(d.get('MarketCap', 0.0))
-            d['EBITDA'] = float(d.get('EBITDA', 0.0))
+            d['Ticker'] = ticker
+            d['Sector'] = str(d.get('GICS_Sector') or d.get('Sector') or '').strip()
+            d['MarketCap'] = mkt_cap
+            d['EBITDA'] = _safe_float(d.get('EBITDA', 0.0))
             raw_snapshot.append(d)
 
         try:
+            # 1. Primary scoring attempt with requested strategy & filters
             normalized_snapshot = normalize_stocks(
                 raw_snapshot,
                 strategy=strategy,
@@ -287,6 +179,31 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 max_market_cap=max_market_cap,
                 global_stocks_list=raw_snapshot
             )
+
+            # 2. If strategy knockout filter dropped all stocks, fallback to relaxed strategy gates
+            if not normalized_snapshot and strategy is not None:
+                print(f"[Backtest Engine] Strategy '{strategy}' knocked out all stocks at {t_k}. Relaxing strategy knockout filters.")
+                normalized_snapshot = normalize_stocks(
+                    raw_snapshot,
+                    strategy=None,
+                    allowed_sectors=allowed_sectors,
+                    min_market_cap=min_market_cap,
+                    max_market_cap=max_market_cap,
+                    global_stocks_list=raw_snapshot
+                )
+
+            # 3. If dynamic filters (sector/cap) also resulted in 0 stocks, fallback to raw snapshot
+            if not normalized_snapshot:
+                print(f"[Backtest Engine] Dynamic filters knocked out all stocks at {t_k}. Falling back to baseline snapshot.")
+                normalized_snapshot = normalize_stocks(
+                    raw_snapshot,
+                    strategy=None,
+                    allowed_sectors=None,
+                    min_market_cap=None,
+                    max_market_cap=None,
+                    global_stocks_list=raw_snapshot
+                )
+
             if not normalized_snapshot:
                 top_10 = []
             else:
@@ -358,9 +275,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
         portfolio_daily_returns.append(port_ret)
         spy_daily_returns.append(spy_ret)
-
-    del daily_returns
-    gc.collect()
 
     port_series = pd.Series(portfolio_daily_returns, index=simulation_dates)
     spy_series = pd.Series(spy_daily_returns, index=simulation_dates)

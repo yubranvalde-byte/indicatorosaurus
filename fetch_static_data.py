@@ -1,28 +1,15 @@
-import os
-import sys
+import yfinance as yf
+import pandas as pd
+import csv
 import time
-import math
+import os
 import requests
 import io
-import pandas as pd
-import numpy as np
-import csv
-from dotenv import load_dotenv
-import simfin as sf
+import sys
+import math
 
-# ─── Load Environment & Initialize SimFin ─────────────────────────────────────
-load_dotenv()
-SIMFIN_API_KEY = os.environ.get('SIMFIN_API_KEY')
-if not SIMFIN_API_KEY:
-    print("Error: SIMFIN_API_KEY environment variable not found in .env.")
-    sys.exit(1)
-
-sf.set_api_key(SIMFIN_API_KEY)
-sf.set_data_dir(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'simfin_data_cache'))
-
-# ─── Helper Functions for Universe Selection ──────────────────────────────────
 def sanitize_ticker(ticker):
-    """Sanitize ticker string for SimFin compatibility."""
+    """Sanitize ticker string for yfinance compatibility (uppercase, dot -> hyphen)."""
     return str(ticker).strip().upper().replace('.', '-')
 
 def fetch_sp500_tickers(session):
@@ -41,6 +28,7 @@ def fetch_nasdaq100_tickers(session):
     resp = session.get(url, timeout=15)
     resp.raise_for_status()
     tables = pd.read_html(io.StringIO(resp.text))
+    # Search for the constituents table (usually columns: Ticker/Symbol, Company)
     for df in tables:
         cols = [str(c).lower() for c in df.columns]
         if any(x in cols for x in ('ticker', 'symbol')) and len(df) < 200:
@@ -48,71 +36,57 @@ def fetch_nasdaq100_tickers(session):
             return df[col].dropna().astype(str).tolist()
     raise ValueError("Nasdaq 100 table not found in Wikipedia page")
 
-def get_pit_universe():
-    """Union S&P/Nasdaq constituents and local delisted tickers passing $2B market cap proxy pre-filter."""
+def get_dynamic_universe():
+    """Merge, deduplicate, and sanitize constituents of S&P 500 and Nasdaq 100, prepending SPY and QQQ."""
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
     
-    # 1. Fetch current wiki constituents
     try:
         sp500 = fetch_sp500_tickers(session)
         nasdaq100 = fetch_nasdaq100_tickers(session)
-        wiki_tickers = {sanitize_ticker(t) for t in (sp500 + nasdaq100) if t}
+        combined = set(sp500 + nasdaq100)
+        sanitized = {sanitize_ticker(t) for t in combined if t}
+        # Prepend benchmarks and sort the rest
+        other_tickers = sorted(list(sanitized - {'SPY', 'QQQ'}))
+        return ['SPY', 'QQQ'] + other_tickers
     except Exception as e:
-        print(f"[WARN] Wikipedia scraper failed ({e}). Falling back to static constituent list.")
-        wiki_tickers = {'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'BRK-B', 'NVDA', 'META', 'TSLA'}
+        print(f"⚠️ Warning: Wikipedia scraper failed ({e}). Falling back to static mega-cap list.")
+        return ['SPY', 'QQQ', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'BRK-B', 'NVDA', 'META', 'TSLA']
 
-    # Ensure benchmarks are in wiki_tickers
-    wiki_tickers.update({'SPY', 'QQQ'})
+# Deduplicated, dynamically fetched full universe (S&P 500 + Nasdaq 100)
+ALL_TICKERS = get_dynamic_universe()
 
-    # 2. Mine local files for historical / delisted tickers
-    s_tickers = set()
-    if os.path.exists('securities.csv'):
-        try:
-            s_df = pd.read_csv('securities.csv')
-            s_tickers = set(s_df.iloc[:, 0].dropna().apply(sanitize_ticker))
-        except Exception as e:
-            print(f"[WARN] Error reading securities.csv: {e}")
+# ─── 22-column schema (+ Ticker = 23 fields total) ──────────────────────────
+# CurrentRatio is filter-only (Quality gate). EBITDA is gating-only for EV/EBITDA
+# override (prevents negative EBITDA inversion). Neither is packed into the C struct.
+CSV_HEADER = [
+    'Ticker', 'ForwardPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
+    'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
+    'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA', 'RelativeStrength',
+    'CurrentRatio',   # Filter-only — not scored by C engine
+    'LongName',       # Metadata — not scored by C engine
+    'Sector',         # Metadata — not scored by C engine
+    'MarketCap',      # Metadata/Filter — not scored by C engine
+    'EBITDA',         # Gating-only — EV_EBITDA override guard, placed at the absolute end!
+]
 
-    f_tickers = set()
-    if os.path.exists('fundamentals.csv'):
-        try:
-            f_df = pd.read_csv('fundamentals.csv')
-            f_tickers = set(f_df['Ticker Symbol'].dropna().apply(sanitize_ticker))
-        except Exception as e:
-            print(f"[WARN] Error reading fundamentals.csv: {e}")
+OUTPUT_FILE = 'market_data.csv'
+MAX_RETRIES = 3
+INTER_TICKER_DELAY = 0.5   # seconds between successful tickers
 
-    local_tickers = s_tickers.union(f_tickers)
-    historical_candidates = local_tickers - wiki_tickers
 
-    passed_historical = set()
-    if historical_candidates:
-        print(f"[INFO] Evaluating {len(historical_candidates)} historical candidates with $2 Billion market cap pre-filter...")
-        try:
-            # Load daily share prices to check historical market capitalization
-            prices = sf.load_shareprices(variant='daily', market='us')
-            # Pre-filter for candidates to optimize memory/speed
-            prices_cand = prices[prices.index.get_level_values('Ticker').isin(historical_candidates)].copy()
-            if not prices_cand.empty:
-                # Calculate MarketCap = Close * Shares Outstanding
-                prices_cand['MarketCap'] = prices_cand['Close'] * prices_cand['Shares Outstanding']
-                max_mc = prices_cand.groupby(level='Ticker')['MarketCap'].max()
-                passed = max_mc[max_mc >= 2e9].index.tolist()
-                passed_historical = set(passed)
-                print(f"[OK] {len(passed_historical)} historical tickers passed $2B threshold.")
-        except Exception as e:
-            print(f"[WARN] Error applying $2B filter: {e}. Falling back to including all candidates.")
-            passed_historical = historical_candidates
+# ─── Helper: safe float coercion ──────────────────────────────────────────────
+def safe_float(val):
+    """Return float(val) or 0.0 on any failure / None."""
+    if val is None:
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
 
-    # 3. Combine and sort
-    all_sanitized = wiki_tickers.union(passed_historical)
-    other_tickers = sorted(list(all_sanitized - {'SPY', 'QQQ'}))
-    return ['SPY', 'QQQ'] + other_tickers
 
-# Deduplicated, dynamically fetched full PIT universe
-ALL_TICKERS = get_pit_universe()
-
-# ─── Retained Custom Technical Helper Functions (Not used in bulk but preserved) ─────────────────
+# ─── Helper: Wilder's RSI (EWM smoothing, Wall Street standard) ───────────────
 def compute_rsi(close_series: pd.Series, period: int = 14) -> float:
     """
     Compute 14-day Wilder's RSI using Exponential Weighted Means (EWM).
@@ -124,6 +98,7 @@ def compute_rsi(close_series: pd.Series, period: int = 14) -> float:
     delta = close_series.diff().dropna()
     gain = delta.clip(lower=0)
     loss = (-delta).clip(lower=0)
+    # Wilder's smoothing: EWM with alpha = 1/period, adjust=False
     avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean().iloc[-1]
     avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean().iloc[-1]
     if math.isnan(avg_gain) or math.isnan(avg_loss):
@@ -133,6 +108,8 @@ def compute_rsi(close_series: pd.Series, period: int = 14) -> float:
     rs = avg_gain / avg_loss
     return round(100.0 - (100.0 / (1.0 + rs)), 4)
 
+
+# ─── Helper: Price vs 200-day SMA ─────────────────────────────────────────────
 def compute_price_vs_200sma(close_series: pd.Series) -> float:
     """
     Current close / 200-day SMA.
@@ -145,6 +122,8 @@ def compute_price_vs_200sma(close_series: pd.Series) -> float:
     current = close_series.iloc[-1]
     return round(current / sma, 6) if sma > 0 else 0.0
 
+
+# ─── Helper: Relative Strength vs SPY ─────────────────────────────────────────
 def compute_relative_strength(close_series: pd.Series, spy_return: float | None) -> float:
     """
     Stock 1-year total return minus SPY 1-year total return.
@@ -158,400 +137,756 @@ def compute_relative_strength(close_series: pd.Series, spy_return: float | None)
     stock_return = (close_series.iloc[-1] / close_series.iloc[0]) - 1.0
     return round(stock_return - spy_return, 6)
 
-# ─── Vectorized Technical Calculation Helpers (Mathematically Identical) ───────────
-def compute_rsi_series(close_series: pd.Series, period: int = 14) -> pd.Series:
-    """Vectorized calculation of Wilder's RSI over a series."""
-    delta = close_series.diff()
-    gain = delta.clip(lower=0)
-    loss = (-delta).clip(lower=0)
-    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100.0 - (100.0 / (1.0 + rs))
-    rsi = rsi.fillna(50.0)
-    rsi.loc[avg_loss == 0] = 100.0
-    rsi.iloc[:period] = 0.0
-    return rsi
 
-# ─── Master CSV Headers ────────────────────────────────────────────────────────
-CSV_HEADER = [
-    'Ticker', 'ForwardPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
-    'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
-    'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA', 'RelativeStrength',
-    'CurrentRatio',   # Filter-only
-    'LongName',       # Metadata
-    'Sector',         # Metadata
-    'MarketCap',      # Metadata/Filter
-    'EBITDA',         # Gating-only EV_EBITDA override guard
-]
+# ─── Helper: Shareholder Yield from cashflow statement ───────────────────────
+def build_shareholder_yield(ticker_obj: 'yf.Ticker', mktcap: float) -> float:
+    """
+    Compute Net Cash Flow to Shareholders / MarketCap.
+    Outflows (Dividends, Repurchases, Repayments) are negative in yfinance.
+    Inflows (Issuances) are positive.
+    Total Returned = - (DividendsPaid + NetStockFlow + NetDebtFlow)
+    """
+    if mktcap <= 0:
+        return 0.0
+    try:
+        cf = ticker_obj.cashflow   # Annual cashflow — most recent column (index 0)
+        if cf is None or cf.empty:
+            return 0.0
 
-HIST_HEADER = [
-    'Ticker', 'GICS_Sector', 'Quarter_End_Date', 'ForwardPE', 'EV_EBITDA', 'FCFYield',
-    'RevenueGrowth', 'EPSGrowth', 'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity',
-    'ShareholderYield', 'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
-    'RelativeStrength', 'CurrentRatio', 'MarketCap', 'EBITDA'
-]
+        def _get_cf_row(*keys):
+            """Try multiple key aliases; return first match or 0.0."""
+            for key in keys:
+                if key in cf.index:
+                    val = cf.loc[key].iloc[0]
+                    try:
+                        v = float(val)
+                        return 0.0 if (v != v) else v  # NaN guard
+                    except (TypeError, ValueError):
+                        pass
+            return 0.0
 
-OUTPUT_FILE = 'market_data.csv'
-HIST_OUTPUT_FILE = 'historical_fundamental_data.csv'
+        # 1. Cash Dividends Paid (outflow, negative)
+        dividends = _get_cf_row(
+            'DividendsPaid', 'Cash Dividends Paid',
+            'CommonStockDividendsPaid', 'PaymentOfDividends'
+        )
+        if dividends > 0:
+            dividends = -dividends
 
-# ─── Core Data Pipeline Execution ─────────────────────────────────────────────
-def run_pipeline():
-    print("[INFO] Downloading SimFin bulk datasets (US market)...")
-    
-    # 1. Load companies and industries
-    companies = sf.load_companies(market='us').reset_index()
-    industries = sf.load_industries().reset_index()
-    metadata = pd.merge(companies, industries, on='IndustryId', how='left')
-    metadata = metadata.rename(columns={'Company Name': 'LongName'})
-    
-    # 2. Load financial statements
-    target_tickers = [t for t in ALL_TICKERS if t not in ('SPY', 'QQQ')]
-    
-    income = sf.load_income(variant='quarterly', market='us').reset_index()
-    balance = sf.load_balance(variant='quarterly', market='us').reset_index()
-    cashflow = sf.load_cashflow(variant='quarterly', market='us').reset_index()
-    
-    # Filter statements for target universe to speed up calculations
-    income = income[income['Ticker'].isin(target_tickers)]
-    balance = balance[balance['Ticker'].isin(target_tickers)]
-    cashflow = cashflow[cashflow['Ticker'].isin(target_tickers)]
-    
-    # 3. Merge statements on Ticker and Report Date (Period End Date)
-    q_df = pd.merge(income, balance, on=['Ticker', 'Report Date'], how='inner', suffixes=('', '_bal'))
-    q_df = pd.merge(q_df, cashflow, on=['Ticker', 'Report Date'], how='inner', suffixes=('', '_cf'))
-    
-    # 4. YoY growth calculations
-    q_df = q_df.sort_values(by=['Ticker', 'Report Date'])
-    shifted = q_df[['Ticker', 'Fiscal Year', 'Fiscal Period', 'Revenue', 'Net Income']].copy()
-    shifted['Fiscal Year'] = shifted['Fiscal Year'] + 1
-    shifted = shifted.rename(columns={'Revenue': 'Revenue_Prior', 'Net Income': 'Net_Income_Prior'})
-    
-    q_df = pd.merge(q_df, shifted, on=['Ticker', 'Fiscal Year', 'Fiscal Period'], how='left')
-    
-    q_df['RevenueGrowth'] = (q_df['Revenue'] - q_df['Revenue_Prior']) / q_df['Revenue_Prior']
-    q_df.loc[q_df['Revenue_Prior'] <= 0, 'RevenueGrowth'] = 0.0
-    q_df['RevenueGrowth'] = q_df['RevenueGrowth'].fillna(0.0)
-    
-    q_df['EPSGrowth'] = (q_df['Net Income'] - q_df['Net_Income_Prior']) / q_df['Net_Income_Prior']
-    q_df.loc[q_df['Net_Income_Prior'] <= 0, 'EPSGrowth'] = 0.0
-    q_df['EPSGrowth'] = q_df['EPSGrowth'].fillna(0.0)
-    
-    # 5. Load share prices and perform weekly downsampling
-    prices = sf.load_shareprices(variant='daily', market='us')
-    prices = prices[prices.index.get_level_values('Ticker').isin(ALL_TICKERS)]
-    
-    # Resample daily to Friday weekly interval ('W-FRI')
-    prices_weekly = prices.groupby(level='Ticker').resample('W-FRI', level='Date').last()
-    prices_weekly = prices_weekly.groupby(level='Ticker').ffill().reset_index()
-    
-    # 6. Zero Look-Ahead Bias Weekly Alignment (pd.merge_asof on Date and Publish Date)
-    prices_weekly['Date'] = pd.to_datetime(prices_weekly['Date'])
-    q_df['Publish Date'] = pd.to_datetime(q_df['Publish Date'])
-    
-    prices_weekly = prices_weekly.sort_values(by='Date')
-    q_df = q_df.sort_values(by='Publish Date')
-    
-    aligned = pd.merge_asof(
-        prices_weekly,
-        q_df,
-        left_on='Date',
-        right_on='Publish Date',
-        by='Ticker',
-        direction='backward'
-    )
-    
-    # 7. Core Indicators & Features Calculation
-    shares = aligned['Shares Outstanding'].fillna(aligned['Shares (Basic)']).fillna(0.0)
-    aligned['MarketCap'] = aligned['Close'] * shares
-    
-    # ForwardPE
-    annualized_eps = (aligned['Net Income'].fillna(0.0) * 4.0) / aligned['Shares (Basic)'].fillna(1.0)
-    aligned['ForwardPE'] = np.where(annualized_eps > 0, aligned['Close'] / annualized_eps, 0.0)
-    
-    # EV_EBITDA
-    total_debt = aligned['Short Term Debt'].fillna(0.0) + aligned['Long Term Debt'].fillna(0.0)
-    cash_col = 'Cash, Cash Equivalents & Short Term Investments'
-    if cash_col not in aligned.columns:
-        cash_col = 'Cash & Cash Equivalents'
-    cash = aligned[cash_col].fillna(0.0)
-    EV = aligned['MarketCap'] + total_debt - cash
-    
-    EBITDA = aligned['Operating Income (Loss)'].fillna(0.0) + aligned['Depreciation & Amortization'].fillna(0.0)
-    annualized_ebitda = EBITDA * 4.0
-    aligned['EV_EBITDA'] = np.where(annualized_ebitda > 0, EV / annualized_ebitda, 0.0)
-    aligned['EBITDA'] = annualized_ebitda
-    
-    # FCFYield
-    capex = aligned['Change in Fixed Assets & Intangibles'].fillna(0.0)
-    capex = -capex.abs()
-    fcf = aligned['Net Cash from Operating Activities'].fillna(0.0) + capex
-    annualized_fcf = fcf * 4.0
-    aligned['FCFYield'] = np.where(aligned['MarketCap'] > 0, annualized_fcf / aligned['MarketCap'], 0.0)
-    
-    # Margins & Returns
-    aligned['GrossMargin'] = np.where(aligned['Revenue'] > 0, aligned['Gross Profit'] / aligned['Revenue'], 0.0)
-    aligned['OperatingMargin'] = np.where(aligned['Revenue'] > 0, aligned['Operating Income (Loss)'] / aligned['Revenue'], 0.0)
-    aligned['ROIC'] = np.where(aligned['Total Assets'] > 0, aligned['Net Income'] / aligned['Total Assets'], 0.0)
-    aligned['DebtToEquity'] = np.where(aligned['Total Equity'] > 0, aligned['Total Liabilities'] / aligned['Total Equity'], 0.0)
-    
-    # ShareholderYield
-    divs = aligned['Dividends Paid'].fillna(0.0)
-    rep = aligned['Cash from (Repurchase of) Equity'].fillna(0.0)
-    debt_cf = aligned['Cash from (Repayment of) Debt'].fillna(0.0)
-    total_returned = - (divs + rep + debt_cf)
-    annualized_returned = total_returned * 4.0
-    aligned['ShareholderYield'] = np.where(aligned['MarketCap'] > 0, annualized_returned / aligned['MarketCap'], 0.0)
-    
-    # FiveYDivGrowth (rolling 5yr avg yield)
-    weekly_div = aligned['Dividends Paid'].fillna(0.0).abs() * 4.0
-    div_yield = np.where(aligned['MarketCap'] > 0, weekly_div / aligned['MarketCap'], 0.0)
-    aligned['DivYield'] = div_yield
-    aligned['FiveYDivGrowth'] = aligned.groupby('Ticker')['DivYield'].transform(lambda x: x.rolling(260, min_periods=1).mean()).fillna(0.0)
-    
-    # PayoutRatio
-    aligned['PayoutRatio'] = np.where(aligned['Net Income'] > 0, aligned['Dividends Paid'].fillna(0.0).abs() / aligned['Net Income'], 0.0)
-    
-    # CurrentRatio
-    aligned['CurrentRatio'] = np.where(aligned['Total Current Liabilities'] > 0, aligned['Total Current Assets'] / aligned['Total Current Liabilities'], 0.0)
-    
-    # Technical Indicators (Wilder's RSI, 200 SMA)
-    aligned = aligned.sort_values(by=['Ticker', 'Date'])
-    aligned['RSI'] = aligned.groupby('Ticker')['Close'].transform(lambda x: compute_rsi_series(x)).fillna(0.0)
-    aligned['PriceVs200SMA'] = aligned.groupby('Ticker')['Close'].transform(lambda x: x / x.rolling(200, min_periods=1).mean()).fillna(0.0)
-    
-    # Relative Strength vs SPY
-    aligned['Close_1yr_ago'] = aligned.groupby('Ticker')['Close'].shift(52)
-    aligned['Stock_Return_1yr'] = (aligned['Close'] / aligned['Close_1yr_ago']) - 1.0
-    
-    spy_prices = aligned[aligned['Ticker'] == 'SPY'][['Date', 'Close']].rename(columns={'Close': 'SPY_Close'})
-    spy_prices['SPY_Close_1yr_ago'] = spy_prices['SPY_Close'].shift(52)
-    spy_prices['SPY_Return_1yr'] = (spy_prices['SPY_Close'] / spy_prices['SPY_Close_1yr_ago']) - 1.0
-    
-    aligned = pd.merge(aligned, spy_prices[['Date', 'SPY_Return_1yr']], on='Date', how='left')
-    aligned['RelativeStrength'] = aligned['Stock_Return_1yr'] - aligned['SPY_Return_1yr']
-    aligned['RelativeStrength'] = aligned['RelativeStrength'].fillna(0.0)
-    
-    # Rolling Beta
-    print("[INFO] Calculating rolling Beta...")
-    prices_pivot = aligned.pivot(index='Date', columns='Ticker', values='Close')
-    prices_pivot = prices_pivot.ffill().bfill()
-    returns_pivot = prices_pivot.pct_change()
-    
-    spy_ret = returns_pivot['SPY']
-    roll_cov = returns_pivot.rolling(window=156, min_periods=12).cov(spy_ret)
-    roll_var = spy_ret.rolling(window=156, min_periods=12).var()
-    beta_pivot = roll_cov.div(np.where(roll_var > 0, roll_var, np.nan), axis=0)
-    beta_pivot = beta_pivot.fillna(1.0)
-    
-    beta_long = beta_pivot.reset_index().melt(id_vars='Date', value_name='Beta')
-    aligned = pd.merge(aligned, beta_long, on=['Date', 'Ticker'], how='left')
-    aligned['Beta'] = aligned['Beta'].fillna(1.0)
-    
-    # Merge Metadata (LongName, Sector)
-    aligned = pd.merge(aligned, metadata[['Ticker', 'LongName', 'Sector']], on='Ticker', how='left')
-    
-    # 8. Save Prices Cache (for Backtest Engine offline mode)
-    print("[INFO] Saving prices cache to historical_prices_cache.pkl...")
-    cache_prices = aligned.pivot(index='Date', columns='Ticker', values='Close')
-    cache_prices.index = pd.to_datetime(cache_prices.index)
-    if cache_prices.index.tz is not None:
-        cache_prices.index = cache_prices.index.tz_localize(None)
-    for t in ALL_TICKERS:
-        if t not in cache_prices.columns:
-            cache_prices[t] = np.nan
-    cache_prices.to_pickle('historical_prices_cache.pkl')
-    
-    return aligned
+        # 2. Net Stock Flow = Issuance (positive) + Repurchases (negative)
+        repurchases = _get_cf_row(
+            'RepurchaseOfCapitalStock', 'RepurchaseOfStock',
+            'CommonStockRepurchased', 'PurchaseOfBusiness', 'RepurchaseOfCommonStock'
+        )
+        if repurchases > 0:
+            repurchases = -repurchases
 
-# ─── State Recovery, Flushing, and File Exporters ────────────────────────────
-def write_rows_with_flushing(file_path, header, rows, append=False):
-    """Write rows in chunks of 10 with active flushing to disk."""
-    mode = 'a' if append else 'w'
-    file_exists = os.path.exists(file_path)
-    write_header = not append or not file_exists
-    
-    with open(file_path, mode, newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(header)
-        
-        chunk = []
-        for r in rows:
-            chunk.append(r)
-            if len(chunk) >= 10:
-                writer.writerows(chunk)
-                f.flush()
-                chunk.clear()
-        if chunk:
-            writer.writerows(chunk)
-            f.flush()
+        issuances = _get_cf_row(
+            'CommonStockIssuance', 'IssuanceOfStock',
+            'ProceedsFromIssuanceOfCommonStock', 'IssuanceOfCapitalStock'
+        )
+        if issuances < 0:
+            issuances = -issuances
 
+        net_stock_flow = issuances + repurchases
+
+        # 3. Net Debt Flow = Issuance (positive) + Repayments (negative)
+        net_debt_combined = _get_cf_row('NetIssuancePaymentsOfDebt', 'Net Issuance Payments Of Debt')
+        if net_debt_combined != 0.0:
+            net_debt_flow = net_debt_combined
+        else:
+            debt_issuances = _get_cf_row(
+                'ProceedsFromIssuanceOfLongTermDebt', 'LongTermDebtIssuance', 'IssuanceOfDebt'
+            )
+            if debt_issuances < 0:
+                debt_issuances = -debt_issuances
+
+            debt_repayments = _get_cf_row(
+                'RepaymentOfLongTermDebt', 'LongTermDebtPayment', 'RepaymentsOfLongTermDebt', 'RepaymentOfDebt'
+            )
+            if debt_repayments > 0:
+                debt_repayments = -debt_repayments
+
+            net_debt_flow = debt_issuances + debt_repayments
+
+        total_returned = - (dividends + net_stock_flow + net_debt_flow)
+        shareholder_yield = total_returned / mktcap
+        return round(shareholder_yield, 6)
+    except Exception:
+        return 0.0
+
+
+# ─── Helper: assemble a single data row ───────────────────────────────────────
+def build_row(symbol: str, info: dict, hist: pd.DataFrame, spy_return: float | None,
+              ticker_obj=None) -> list:
+    """
+    Compute all 16 scored metrics and auxiliary columns aligned to CSV_HEADER.
+
+    ROIC proxy: returnOnAssets (ROA) — more stable than ROE for mega-caps.
+    FiveYDivGrowth: fiveYearAvgDividendYield — true 5-year dividend yield anchor
+      (eliminates prior payoutRatio mapping collision that caused identical raw/score
+      output for both 'Div Safety' and 'Payout Ratio' columns).
+    EV_EBITDA: enterpriseToEbitda from yfinance info dict.
+    ShareholderYield: computed from cashflow statement (dividends + buybacks + debt reduction).
+    EBITDA: stored as filter-only metadata for pre-scoring override gate.
+    CurrentRatio: filter-only (Quality knockout gate).
+    """
+    close = hist['Close'] if not hist.empty else pd.Series(dtype=float)
+
+    # ── Computed metrics ────────────────────────────────────────────────────
+    fcf    = safe_float(info.get('freeCashflow'))
+    mktcap = safe_float(info.get('marketCap'))
+    fcf_yield = round(fcf / mktcap, 6) if mktcap > 0 else 0.0
+
+    rsi              = compute_rsi(close)
+    price_vs_200sma  = compute_price_vs_200sma(close)
+    rel_strength     = compute_relative_strength(close, spy_return)
+
+    ev_ebitda        = safe_float(info.get('enterpriseToEbitda'))   # EV/EBITDA multiple
+    ebitda_raw       = safe_float(info.get('ebitda'))               # Gate-only: sign check
+
+    # Shareholder Yield requires the cashflow statement — use ticker_obj if provided
+    shareholder_yield = build_shareholder_yield(ticker_obj, mktcap) if ticker_obj else 0.0
+
+    # FiveYDivGrowth: true 5-year avg dividend yield (NOT payoutRatio)
+    five_y_div = safe_float(info.get('fiveYearAvgDividendYield'))  # % form from yfinance → keep as-is
+    # yfinance returns fiveYearAvgDividendYield as a percent (e.g. 1.45 for 1.45%) — normalise to decimal
+    if five_y_div > 1.0:
+        five_y_div = round(five_y_div / 100.0, 6)
+
+    return [
+        symbol,
+        safe_float(info.get('forwardPE')),           # ForwardPE
+        ev_ebitda,                                    # EV_EBITDA  (enterpriseToEbitda)
+        fcf_yield,                                    # FCFYield  (freeCashflow / marketCap)
+        safe_float(info.get('revenueGrowth')),        # RevenueGrowth
+        safe_float(info.get('earningsGrowth')),       # EPSGrowth
+        safe_float(info.get('grossMargins')),         # GrossMargin
+        safe_float(info.get('operatingMargins')),     # OperatingMargin
+        safe_float(info.get('returnOnAssets')),       # ROIC  [proxy: ROA — avoids ROE distortion]
+        safe_float(info.get('debtToEquity')),         # DebtToEquity
+        shareholder_yield,                            # ShareholderYield  (cashflow-derived)
+        five_y_div,                                   # FiveYDivGrowth  [5yr avg yield — not payoutRatio]
+        safe_float(info.get('payoutRatio')),          # PayoutRatio
+        safe_float(info.get('beta')),                 # Beta
+        rsi,                                          # RSI  (Wilder's 14-day EWM)
+        price_vs_200sma,                              # PriceVs200SMA
+        rel_strength,                                 # RelativeStrength  (vs SPY 1yr)
+        safe_float(info.get('currentRatio')),         # CurrentRatio  [filter-only: Quality gate]
+        str(info.get('longName', '')),                # LongName
+        str(info.get('sector', '')),                  # Sector
+        safe_float(info.get('marketCap')),            # MarketCap
+        ebitda_raw,                                   # EBITDA  [gating-only: EV_EBITDA override, placed at absolute end!]
+    ]
+
+
+# ─── Per-ticker fetch with 3-attempt incremental retry ────────────────────────
+def fetch_ticker_data(symbol: str, spy_return: float | None) -> tuple[list, bool]:
+    """
+    Fetch info + 1-year history for a single ticker with up to MAX_RETRIES attempts.
+    Validation guard (DUAL): info dict must be non-empty with 'symbol' key,
+    AND price history must contain at least 15 rows (enough for Wilder's 14-period RSI).
+    Backoff is incremental: attempt 1 → 1.5s, attempt 2 → 3.0s, attempt 3 → 4.5s.
+    Returns (row_list, was_exception).
+    """
+    # 16 scored + CurrentRatio + LongName + Sector + MarketCap + EBITDA(gate)
+    zeroed_row = [symbol] + [0.0] * 17 + ['', '', 0.0, 0.0]
+    last_exception = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        backoff = 1.5 * attempt
+        try:
+            t = yf.Ticker(symbol)
+            info = t.info
+            hist = t.history(period='1y')
+
+            # ── DUAL validation guard ──────────────────────────────────────
+            info_valid = bool(info) and 'symbol' in info
+            hist_valid = len(hist) >= 15
+
+            if info_valid and hist_valid:
+                row = build_row(symbol, info, hist, spy_return, ticker_obj=t)
+                price = hist['Close'].iloc[-1] if not hist.empty else 0.0
+                print(f"  ✓ [{attempt}/{MAX_RETRIES}] {symbol:<8} "
+                      f"RSI={row[14]:.1f}  P/200SMA={row[15]:.3f}  "
+                      f"RelStr={row[16]:+.3f}  CurrRatio={row[17]:.2f}  Close=${price:.2f}")
+                return row, False
+
+            # Partial failure — report which guard failed
+            if not info_valid:
+                reason = "info dict empty or missing 'symbol'"
+            else:
+                reason = f"history only {len(hist)} rows (<15)"
+
+            if attempt < MAX_RETRIES:
+                print(f"  ↻ [{attempt}/{MAX_RETRIES}] {symbol} — {reason}. "
+                      f"Retrying in {backoff:.1f}s...")
+                time.sleep(backoff)
+            else:
+                print(f"  ✗ [{attempt}/{MAX_RETRIES}] {symbol} — {reason}. Writing zeroed row.")
+
+        except Exception as exc:
+            last_exception = exc
+            print(f"  ✗ [{attempt}/{MAX_RETRIES}] {symbol} — Exception: {exc}")
+            if attempt < MAX_RETRIES:
+                time.sleep(backoff)
+
+    return zeroed_row, (last_exception is not None)
+
+
+# ─── Main driver ──────────────────────────────────────────────────────────────
 def fetch_and_save_market_data():
-    """Build and write the current/latest static dataset (market_data.csv)."""
-    print("=" * 60)
-    print("[START] Starting Current Market Data Ingestion Pipeline...")
-    print("=" * 60)
-    
-    # Tickers to skip (already completed in recovery)
+    # ── Step 1: State Recovery & Metadata Repair Safeguard ────────────────
     fetched_tickers = set()
-    if os.path.exists(OUTPUT_FILE) and os.path.getsize(OUTPUT_FILE) > 0:
-        try:
-            with open(OUTPUT_FILE, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                header = next(reader, None)
-                if header and 'Ticker' in header:
-                    ticker_idx = header.index('Ticker')
-                    for row in reader:
-                        if row:
-                            fetched_tickers.add(row[ticker_idx])
-            print(f"[OK] State Recovery: Found {len(fetched_tickers)} already written tickers.")
-        except Exception as e:
-            print(f"Warning parsing existing market_data.csv: {e}")
-            
-    # Filter for target tickers
-    target_tickers = [t for t in ALL_TICKERS if t not in ('SPY', 'QQQ')]
-    remaining_tickers = [t for t in target_tickers if t not in fetched_tickers]
-    
-    if not remaining_tickers:
-        print("[OK] All tickers already fetched and verified.")
-        return
-        
-    print(f"Ingesting {len(remaining_tickers)} remaining tickers...")
-    
-    aligned = run_pipeline()
-    
-    # Get latest row for each remaining ticker
-    latest_rows = []
-    for ticker in remaining_tickers:
-        stock_data = aligned[aligned['Ticker'] == ticker]
-        if stock_data.empty:
-            continue
-        
-        # Take the absolute last row (latest date)
-        latest = stock_data.iloc[-1]
-        
-        # Drop Missing Policy: skip if critical parameters are missing/invalid
-        if pd.isna(latest['MarketCap']) or latest['MarketCap'] <= 0 or \
-           pd.isna(latest['EBITDA']) or latest['EBITDA'] == 0 or \
-           pd.isna(latest['CurrentRatio']) or latest['CurrentRatio'] <= 0:
-            print(f"[WARN] Skipping {ticker}: missing or invalid critical values (MarketCap, EBITDA, or CurrentRatio).")
-            continue
-            
-        row = [
-            ticker,
-            round(float(latest['ForwardPE']), 4) if not pd.isna(latest['ForwardPE']) else 0.0,
-            round(float(latest['EV_EBITDA']), 4) if not pd.isna(latest['EV_EBITDA']) else 0.0,
-            round(float(latest['FCFYield']), 6) if not pd.isna(latest['FCFYield']) else 0.0,
-            round(float(latest['RevenueGrowth']), 6) if not pd.isna(latest['RevenueGrowth']) else 0.0,
-            round(float(latest['EPSGrowth']), 6) if not pd.isna(latest['EPSGrowth']) else 0.0,
-            round(float(latest['GrossMargin']), 6) if not pd.isna(latest['GrossMargin']) else 0.0,
-            round(float(latest['OperatingMargin']), 6) if not pd.isna(latest['OperatingMargin']) else 0.0,
-            round(float(latest['ROIC']), 6) if not pd.isna(latest['ROIC']) else 0.0,
-            round(float(latest['DebtToEquity']), 4) if not pd.isna(latest['DebtToEquity']) else 0.0,
-            round(float(latest['ShareholderYield']), 6) if not pd.isna(latest['ShareholderYield']) else 0.0,
-            round(float(latest['FiveYDivGrowth']), 6) if not pd.isna(latest['FiveYDivGrowth']) else 0.0,
-            round(float(latest['PayoutRatio']), 6) if not pd.isna(latest['PayoutRatio']) else 0.0,
-            round(float(latest['Beta']), 4) if not pd.isna(latest['Beta']) else 1.0,
-            round(float(latest['RSI']), 4) if not pd.isna(latest['RSI']) else 0.0,
-            round(float(latest['PriceVs200SMA']), 6) if not pd.isna(latest['PriceVs200SMA']) else 0.0,
-            round(float(latest['RelativeStrength']), 6) if not pd.isna(latest['RelativeStrength']) else 0.0,
-            round(float(latest['CurrentRatio']), 4) if not pd.isna(latest['CurrentRatio']) else 0.0,
-            str(latest['LongName']) if not pd.isna(latest['LongName']) else '',
-            str(latest['Sector']) if not pd.isna(latest['Sector']) else '',
-            round(float(latest['MarketCap']), 2) if not pd.isna(latest['MarketCap']) else 0.0,
-            round(float(latest['EBITDA']), 2) if not pd.isna(latest['EBITDA']) else 0.0,
-        ]
-        latest_rows.append(row)
-        print(f"[OK] Formatted {ticker}: MarketCap={row[20]}, CurrentRatio={row[17]}, EBITDA={row[21]}")
-        
-    write_rows_with_flushing(OUTPUT_FILE, CSV_HEADER, latest_rows, append=True)
-    print(f"[SUCCESS] Successfully wrote {len(latest_rows)} records to {OUTPUT_FILE}.")
+    valid_rows = []
+    file_exists = os.path.exists(OUTPUT_FILE)
+    file_empty = False
 
-def fetch_and_save_historical_fundamental_data():
-    """Build and write the entire historical weekly panel dataset (historical_fundamental_data.csv)."""
-    print("=" * 60)
-    print("[START] Starting Historical Panel Ingestion Pipeline...")
-    print("=" * 60)
-    
-    aligned = run_pipeline()
-    
-    # State Recovery Check
-    fetched_records = set()
-    if os.path.exists(HIST_OUTPUT_FILE) and os.path.getsize(HIST_OUTPUT_FILE) > 0:
-        try:
-            with open(HIST_OUTPUT_FILE, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                header = next(reader, None)
-                if header and 'Ticker' in header and 'Quarter_End_Date' in header:
-                    ticker_idx = header.index('Ticker')
-                    date_idx = header.index('Quarter_End_Date')
-                    for row in reader:
-                        if row:
-                            fetched_records.add((row[ticker_idx], row[date_idx]))
-            print(f"[OK] State Recovery: Found {len(fetched_records)} already written historical rows.")
-        except Exception as e:
-            print(f"Warning parsing existing historical_fundamental_data.csv: {e}")
-            
-    target_tickers = [t for t in ALL_TICKERS if t not in ('SPY', 'QQQ')]
-    
-    historical_rows = []
-    skipped_count = 0
-    
-    for ticker in target_tickers:
-        stock_data = aligned[aligned['Ticker'] == ticker]
-        if stock_data.empty:
-            continue
-        
-        print(f"Processing {ticker} ({len(stock_data)} weeks)...")
-        
-        for _, row_data in stock_data.iterrows():
-            date_str = row_data['Date'].strftime('%Y-%m-%d')
-            if (ticker, date_str) in fetched_records:
-                continue
+    if file_exists:
+        file_empty = (os.path.getsize(OUTPUT_FILE) == 0)
+        if not file_empty:
+            try:
+                with open(OUTPUT_FILE, 'r', newline='') as f:
+                    reader = csv.reader(f)
+                    header = next(reader, None)
+                    if header:
+                        try:
+                            ticker_idx = header.index('Ticker')
+                            longname_idx = header.index('LongName')
+                            sector_idx = header.index('Sector')
+                        except ValueError:
+                            ticker_idx = 0
+                            longname_idx = -1
+                            sector_idx = -1
+
+                        for r in reader:
+                            if not r or len(r) != len(CSV_HEADER):
+                                continue
+                            ticker = r[ticker_idx].upper().strip()
+                            
+                            has_longname = bool(r[longname_idx].strip()) if longname_idx != -1 and longname_idx < len(r) else False
+                            has_sector = bool(r[sector_idx].strip()) if sector_idx != -1 and sector_idx < len(r) else False
+                            
+                            if ticker and has_longname and has_sector:
+                                fetched_tickers.add(ticker)
+                                valid_rows.append(r)
+
+                print(f"  ✓ State Recovery: Found {len(valid_rows)} valid, fully-enriched records.")
                 
-            # Drop Missing Policy: skip if critical parameters are missing/invalid
-            if pd.isna(row_data['MarketCap']) or row_data['MarketCap'] <= 0 or \
-               pd.isna(row_data['EBITDA']) or row_data['EBITDA'] == 0 or \
-               pd.isna(row_data['CurrentRatio']) or row_data['CurrentRatio'] <= 0:
-                skipped_count += 1
-                continue
-                
-            row = [
-                ticker,
-                str(row_data['Sector']) if not pd.isna(row_data['Sector']) else '',
-                date_str,
-                round(float(row_data['ForwardPE']), 4) if not pd.isna(row_data['ForwardPE']) else 0.0,
-                round(float(row_data['EV_EBITDA']), 4) if not pd.isna(row_data['EV_EBITDA']) else 0.0,
-                round(float(row_data['FCFYield']), 6) if not pd.isna(row_data['FCFYield']) else 0.0,
-                round(float(row_data['RevenueGrowth']), 6) if not pd.isna(row_data['RevenueGrowth']) else 0.0,
-                round(float(row_data['EPSGrowth']), 6) if not pd.isna(row_data['EPSGrowth']) else 0.0,
-                round(float(row_data['GrossMargin']), 6) if not pd.isna(row_data['GrossMargin']) else 0.0,
-                round(float(row_data['OperatingMargin']), 6) if not pd.isna(row_data['OperatingMargin']) else 0.0,
-                round(float(row_data['ROIC']), 6) if not pd.isna(row_data['ROIC']) else 0.0,
-                round(float(row_data['DebtToEquity']), 4) if not pd.isna(row_data['DebtToEquity']) else 0.0,
-                round(float(row_data['ShareholderYield']), 6) if not pd.isna(row_data['ShareholderYield']) else 0.0,
-                round(float(row_data['FiveYDivGrowth']), 6) if not pd.isna(row_data['FiveYDivGrowth']) else 0.0,
-                round(float(row_data['PayoutRatio']), 6) if not pd.isna(row_data['PayoutRatio']) else 0.0,
-                round(float(row_data['Beta']), 4) if not pd.isna(row_data['Beta']) else 1.0,
-                round(float(row_data['RSI']), 4) if not pd.isna(row_data['RSI']) else 0.0,
-                round(float(row_data['PriceVs200SMA']), 6) if not pd.isna(row_data['PriceVs200SMA']) else 0.0,
-                round(float(row_data['RelativeStrength']), 6) if not pd.isna(row_data['RelativeStrength']) else 0.0,
-                round(float(row_data['CurrentRatio']), 4) if not pd.isna(row_data['CurrentRatio']) else 0.0,
-                round(float(row_data['MarketCap']), 2) if not pd.isna(row_data['MarketCap']) else 0.0,
-                round(float(row_data['EBITDA']), 2) if not pd.isna(row_data['EBITDA']) else 0.0,
-            ]
-            historical_rows.append(row)
-            
-    if not historical_rows:
-        print("[OK] No new historical records to write.")
+                # Overwrite/repair output file to contain only the fully-enriched valid rows
+                with open(OUTPUT_FILE, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(CSV_HEADER)
+                    if valid_rows:
+                        writer.writerows(valid_rows)
+                print(f"  ✓ Repaired {OUTPUT_FILE} (cleared {len(valid_rows)} complete rows, stripped incomplete ones)")
+            except Exception as e:
+                print(f"  Warning: Failed to parse and repair existing output file: {e}")
+
+    # Determine remaining delta
+    target_tickers = [t for t in ALL_TICKERS if t not in fetched_tickers]
+
+    print("=" * 60)
+    print(f"  23-Column Master Matrix (16 scored + 7 filter/metadata)")
+    print(f"  Total Universe: {len(ALL_TICKERS)} tickers | Already Fetched: {len(fetched_tickers)} | Remaining: {len(target_tickers)}")
+    print("=" * 60)
+
+    if not target_tickers:
+        print("  ✓ All tickers in the universe have already been processed and repaired. Nothing to do!")
         return
+
+    # Ensure CSV file is initialized with headers if it doesn't exist/is empty
+    if not file_exists or file_empty:
+        try:
+            with open(OUTPUT_FILE, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(CSV_HEADER)
+            print(f"  ✓ Created new {OUTPUT_FILE} with headers")
+        except Exception as e:
+            print(f"  Error creating file: {e}")
+            return
+
+    # ── Step 2: Fetch SPY benchmark return (once) ────────────────────────
+    spy_return = None
+    print("\n📡 Downloading SPY 1-year history as benchmark...")
+    try:
+        spy_hist = yf.Ticker('SPY').history(period='1y')
+        if len(spy_hist) >= 2:
+            spy_return = (spy_hist['Close'].iloc[-1] / spy_hist['Close'].iloc[0]) - 1.0
+            print(f"  ✓ SPY 1yr return: {spy_return:+.4f} ({spy_return * 100:+.2f}%)")
+        else:
+            print("  ✗ SPY history too short — RelativeStrength will be 0.0 for all tickers.")
+    except Exception as exc:
+        print(f"  ✗ SPY fetch failed: {exc} — RelativeStrength will be 0.0 for all tickers.")
+
+    # ── Step 3: Fetch remaining tickers with batching and safeguards ──────────
+    print(f"\n🔍 Processing {len(target_tickers)} remaining tickers (0.5s inter-ticker delay)...\n")
+    
+    buffer_list = []
+    consecutive_failures = 0
+
+    def write_batch(rows):
+        if not rows:
+            return
+        try:
+            with open(OUTPUT_FILE, mode='a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+        except Exception as e:
+            print(f"  Error writing batch to CSV: {e}")
+
+    for i, symbol in enumerate(target_tickers, start=1):
+        print(f"→ [{i:03d}/{len(target_tickers)}] {symbol}")
+        row_list, is_exception = fetch_ticker_data(symbol, spy_return)
+
+        if is_exception:
+            consecutive_failures += 1
+        else:
+            consecutive_failures = 0
+
+        buffer_list.append(row_list)
+
+        # Active Rate-Limit Safeguard (Early Exit)
+        if consecutive_failures >= 3:
+            write_batch(buffer_list)
+            buffer_list.clear()
+            print("\n❌ Throttling detected. System state saved safely. Please resume later.")
+            sys.exit(0)
+
+        # Chunk-Based Flushing (Size = 10)
+        if len(buffer_list) >= 10:
+            write_batch(buffer_list)
+            buffer_list.clear()
+            print(f"  💾 Flushed batch of 10 rows to disk")
+
+        time.sleep(INTER_TICKER_DELAY)
+
+    # Flush any remaining rows
+    if buffer_list:
+        write_batch(buffer_list)
+        print(f"  💾 Flushed final {len(buffer_list)} rows to disk")
+        buffer_list.clear()
+
+    # ── Step 4: Summary ───────────────────────────────────────────────────
+    final_count = 0
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, 'r', newline='') as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for r in reader:
+                    if r:
+                        final_count += 1
+        except Exception:
+            pass
+
+    print("\n" + "=" * 60)
+    print(f"  ✅ {OUTPUT_FILE} written successfully.")
+    print(f"     Total records in file: {final_count}")
+    print("=" * 60)
+
+
+# ─── Helper: find closest date column in statement DataFrame ─────────────────
+def find_closest_date_col(df, target_date_str):
+    if df is None or df.empty:
+        return None
+    try:
+        target_dt = pd.to_datetime(target_date_str)
+        best_col = None
+        min_diff = pd.Timedelta(days=7) # maximum difference of 7 days
+        for col in df.columns:
+            col_dt = pd.to_datetime(col)
+            diff = abs(col_dt - target_dt)
+            if diff <= min_diff:
+                min_diff = diff
+                best_col = col
+        return best_col
+    except Exception:
+        return None
+
+
+# ─── Helper: get statement row value at closest date ────────────────────────
+def get_statement_val(df, keys, target_date_str, default=0.0):
+    col = find_closest_date_col(df, target_date_str)
+    if col is None:
+        return default
+    for key in keys:
+        if key in df.index:
+            try:
+                val = df.loc[key, col]
+                if isinstance(val, pd.Series):
+                    val = val.iloc[0]
+                v = float(val)
+                return default if (v != v) else v
+            except (TypeError, ValueError):
+                pass
+    return default
+
+
+# ─── Helper: YoY growth calculation ──────────────────────────────────────────
+def get_yoy_growth(df, keys, q_date_str):
+    current_val = get_statement_val(df, keys, q_date_str, default=None)
+    if current_val is None or current_val == 0.0:
+        return 0.0
+    try:
+        target_dt = pd.to_datetime(q_date_str) - pd.DateOffset(years=1)
+        target_col = find_closest_date_col(df, target_dt.strftime('%Y-%m-%d'))
+        if target_col is None:
+            return 0.0
+        prior_val = get_statement_val(df, keys, target_col.strftime('%Y-%m-%d'), default=None)
+        if prior_val is None or prior_val <= 0.0:
+            return 0.0
+        return round((current_val - prior_val) / prior_val, 6)
+    except Exception:
+        return 0.0
+
+
+# ─── Helper: get historical price ─────────────────────────────────────────────
+def get_historical_price_on(price_series, date_str):
+    if price_series.empty:
+        return 0.0
+    try:
+        dt = pd.to_datetime(date_str)
+        valid_dates = price_series.index[price_series.index <= dt]
+        if len(valid_dates) == 0:
+            return float(price_series.iloc[0])
+        return float(price_series.loc[valid_dates[-1]])
+    except Exception:
+        return 0.0
+
+
+# ─── Helper: get shares outstanding at date with multiple fallbacks ─────────
+def get_shares_at(shares_series, balance_sheet, date_str, default_shares):
+    # Fallback 1: get_shares_outstanding timeline
+    if shares_series is not None and not shares_series.empty:
+        try:
+            dt = pd.to_datetime(date_str)
+            valid_dates = shares_series.index[shares_series.index <= dt]
+            if len(valid_dates) > 0:
+                v = float(shares_series.loc[valid_dates[-1]])
+                if v > 0:
+                    return v
+        except Exception:
+            pass
+
+    # Fallback 2: quarterly_balance_sheet rows
+    if balance_sheet is not None and not balance_sheet.empty:
+        v = get_statement_val(balance_sheet, ['Share Issued', 'Ordinary Shares Number', 'OrdinarySharesNumber', 'SharesIssued'], date_str, default=0.0)
+        if v > 0:
+            return v
+
+    # Fallback 3: Ternary default
+    return default_shares
+
+
+# ─── Helper: compute point-in-time quarterly row ───────────────────────────
+def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_sheet, price_hist, spy_hist, shares_series):
+    sector = str(info.get('sector', ''))
+    
+    # 1. ForwardPE
+    net_income = get_statement_val(financials, ['Net Income', 'NetIncome', 'Net Income Common Stockholders'], date_str, 0.0)
+    shares = get_shares_at(shares_series, balance_sheet, date_str, safe_float(info.get('sharesOutstanding')))
+    close_price = get_historical_price_on(price_hist['Close'], date_str) if 'Close' in price_hist else 0.0
+    
+    if net_income > 0 and shares > 0:
+        annualized_eps = (net_income * 4.0) / shares
+        forward_pe = close_price / annualized_eps if annualized_eps > 0 else 0.0
+    else:
+        forward_pe = 0.0
+
+    # 2. EV_EBITDA
+    ebitda = get_statement_val(financials, ['EBITDA'], date_str, 0.0)
+    if ebitda <= 0.0:
+        op_inc = get_statement_val(financials, ['Operating Income', 'OperatingIncome'], date_str, 0.0)
+        depr = get_statement_val(financials, ['DepreciationAndAmortization', 'Depreciation And Amortization', 'Reconciled Depreciation'], date_str, 0.0)
+        ebitda = op_inc + depr
         
-    write_rows_with_flushing(HIST_OUTPUT_FILE, HIST_HEADER, historical_rows, append=True)
-    print(f"[SUCCESS] Successfully wrote {len(historical_rows)} records to {HIST_OUTPUT_FILE} (skipped {skipped_count} invalid records).")
+    market_cap = close_price * shares
+    total_debt = get_statement_val(balance_sheet, ['Total Debt', 'TotalDebt'], date_str, 0.0)
+    cash = get_statement_val(balance_sheet, ['Cash And Cash Equivalents', 'CashAndCashEquivalents', 'Cash Cash Equivalents And Short Term Investments', 'CashCashEquivalentsAndShortTermInvestments'], date_str, 0.0)
+    ev = market_cap + total_debt - cash
+    
+    if ebitda > 0 and ev > 0:
+        ev_ebitda = ev / (ebitda * 4.0)
+    else:
+        ev_ebitda = 0.0
+
+    # 3. FCFYield
+    fcf = get_statement_val(cashflow, ['Free Cash Flow', 'FreeCashFlow'], date_str, 0.0)
+    if fcf == 0.0:
+        ops_cf = get_statement_val(cashflow, ['Operating Cash Flow', 'OperatingCashFlow', 'CashFlowFromContinuingOperatingActivities'], date_str, 0.0)
+        capex = get_statement_val(cashflow, ['Capital Expenditure', 'CapitalExpenditure', 'Capital Expenditures'], date_str, 0.0)
+        if capex > 0:
+            capex = -capex
+        fcf = ops_cf + capex
+    
+    fcf_yield = (fcf * 4.0) / market_cap if market_cap > 0 else 0.0
+
+    # 4. RevenueGrowth (YoY)
+    rev_growth = get_yoy_growth(financials, ['Total Revenue', 'Revenue'], date_str)
+
+    # 5. EPSGrowth (YoY)
+    eps_growth = get_yoy_growth(financials, ['Net Income', 'NetIncome', 'Net Income Common Stockholders'], date_str)
+
+    # 6. GrossMargin
+    gross_profit = get_statement_val(financials, ['Gross Profit', 'GrossProfit'], date_str, 0.0)
+    total_rev = get_statement_val(financials, ['Total Revenue', 'Revenue'], date_str, 0.0)
+    gross_margin = gross_profit / total_rev if total_rev > 0 else 0.0
+
+    # 7. OperatingMargin
+    op_income = get_statement_val(financials, ['Operating Income', 'OperatingIncome'], date_str, 0.0)
+    op_margin = op_income / total_rev if total_rev > 0 else 0.0
+
+    # 8. ROIC (Proxy: ROA)
+    total_assets = get_statement_val(balance_sheet, ['Total Assets', 'TotalAssets'], date_str, 0.0)
+    roic = net_income / total_assets if total_assets > 0 else 0.0
+
+    # 9. DebtToEquity
+    equity = get_statement_val(balance_sheet, ['Stockholders Equity', 'Total Stockholder Equity', 'StockholdersEquity', 'TotalStockholdersEquity'], date_str, 0.0)
+    debt_equity = total_debt / equity if equity > 0 else 0.0
+
+    # 10. ShareholderYield
+    divs = get_statement_val(cashflow, ['DividendsPaid', 'Cash Dividends Paid', 'CommonStockDividendsPaid', 'PaymentOfDividends'], date_str, 0.0)
+    if divs > 0: divs = -divs
+    
+    repurchases = get_statement_val(cashflow, ['RepurchaseOfCapitalStock', 'RepurchaseOfStock', 'CommonStockRepurchased', 'PurchaseOfBusiness', 'RepurchaseOfCommonStock'], date_str, 0.0)
+    if repurchases > 0: repurchases = -repurchases
+    
+    issuances = get_statement_val(cashflow, ['CommonStockIssuance', 'IssuanceOfStock', 'ProceedsFromIssuanceOfCommonStock', 'IssuanceOfCapitalStock'], date_str, 0.0)
+    if issuances < 0: issuances = -issuances
+    
+    net_stock_flow = issuances + repurchases
+    
+    net_debt_flow = get_statement_val(cashflow, ['NetIssuancePaymentsOfDebt', 'Net Issuance Payments Of Debt'], date_str, 0.0)
+    if net_debt_flow == 0.0:
+        debt_iss = get_statement_val(cashflow, ['ProceedsFromIssuanceOfLongTermDebt', 'LongTermDebtIssuance', 'IssuanceOfDebt'], date_str, 0.0)
+        if debt_iss < 0: debt_iss = -debt_iss
+        debt_rep = get_statement_val(cashflow, ['RepaymentOfLongTermDebt', 'LongTermDebtPayment', 'RepaymentsOfLongTermDebt', 'RepaymentOfDebt'], date_str, 0.0)
+        if debt_rep > 0: debt_rep = -debt_rep
+        net_debt_flow = debt_iss + debt_rep
+
+    total_returned = - (divs + net_stock_flow + net_debt_flow)
+    shareholder_yield = (total_returned * 4.0) / market_cap if market_cap > 0 else 0.0
+
+    # 11. FiveYDivGrowth
+    five_y_div = safe_float(info.get('fiveYearAvgDividendYield'))
+    if five_y_div > 1.0:
+        five_y_div = five_y_div / 100.0
+
+    # 12. PayoutRatio
+    payout_ratio = abs(divs) / net_income if net_income > 0 else 0.0
+
+    # 13. Beta
+    beta = safe_float(info.get('beta'))
+
+    # Technical series up to date_str
+    dt = pd.to_datetime(date_str)
+    close_series_hist = price_hist['Close'].loc[price_hist.index <= dt] if 'Close' in price_hist else pd.Series(dtype=float)
+
+    # 14. RSI (Wilder's 14-day)
+    rsi = compute_rsi(close_series_hist)
+
+    # 15. PriceVs200SMA
+    price_vs_200sma = compute_price_vs_200sma(close_series_hist)
+
+    # 16. RelativeStrength (vs SPY)
+    rel_strength = 0.0
+    if not close_series_hist.empty:
+        start_dt = dt - pd.DateOffset(years=1)
+        close_at_start = get_historical_price_on(price_hist['Close'], start_dt.strftime('%Y-%m-%d')) if 'Close' in price_hist else 0.0
+        close_at_q = float(close_series_hist.iloc[-1])
+        if close_at_start > 0:
+            stock_1yr_return = (close_at_q / close_at_start) - 1.0
+            
+            spy_series_hist = spy_hist['Close'].loc[spy_hist.index <= dt] if 'Close' in spy_hist else pd.Series(dtype=float)
+            if not spy_series_hist.empty:
+                spy_at_start = get_historical_price_on(spy_hist['Close'], start_dt.strftime('%Y-%m-%d')) if 'Close' in spy_hist else 0.0
+                spy_at_q = float(spy_series_hist.iloc[-1])
+                if spy_at_start > 0:
+                    spy_1yr_return = (spy_at_q / spy_at_start) - 1.0
+                    rel_strength = stock_1yr_return - spy_1yr_return
+
+    # 17. CurrentRatio
+    curr_assets = get_statement_val(balance_sheet, ['Current Assets', 'Total Current Assets', 'TotalCurrentAssets'], date_str, 0.0)
+    curr_liabs = get_statement_val(balance_sheet, ['Current Liabilities', 'Total Current Liabilities', 'TotalCurrentLiabilities'], date_str, 0.0)
+    current_ratio = curr_assets / curr_liabs if curr_liabs > 0 else 0.0
+
+    return [
+        symbol,
+        sector,
+        date_str,
+        round(forward_pe, 4),
+        round(ev_ebitda, 4),
+        round(fcf_yield, 6),
+        round(rev_growth, 6),
+        round(eps_growth, 6),
+        round(gross_margin, 6),
+        round(op_margin, 6),
+        round(roic, 6),
+        round(debt_equity, 4),
+        round(shareholder_yield, 6),
+        round(five_y_div, 6),
+        round(payout_ratio, 6),
+        round(beta, 4),
+        round(rsi, 4),
+        round(price_vs_200sma, 6),
+        round(rel_strength, 6),
+        round(current_ratio, 4),
+        round(market_cap, 2),
+        round(ebitda, 2)
+    ]
+
+
+# ─── Main driver for historical panel dataset ingestion ────────────────────
+def fetch_and_save_historical_fundamental_data():
+    HIST_OUTPUT_FILE = 'historical_fundamental_data.csv'
+    HIST_HEADER = [
+        'Ticker', 'GICS_Sector', 'Quarter_End_Date', 'ForwardPE', 'EV_EBITDA', 'FCFYield',
+        'RevenueGrowth', 'EPSGrowth', 'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity',
+        'ShareholderYield', 'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
+        'RelativeStrength', 'CurrentRatio', 'MarketCap', 'EBITDA'
+    ]
+
+    fetched_records = set()
+    valid_rows = []
+    file_exists = os.path.exists(HIST_OUTPUT_FILE)
+    file_empty = False
+
+    if file_exists:
+        file_empty = (os.path.getsize(HIST_OUTPUT_FILE) == 0)
+        if not file_empty:
+            try:
+                with open(HIST_OUTPUT_FILE, 'r', newline='') as f:
+                    reader = csv.reader(f)
+                    header = next(reader, None)
+                    if header:
+                        ticker_idx = header.index('Ticker')
+                        date_idx = header.index('Quarter_End_Date')
+                        for r in reader:
+                            if not r or len(r) != len(HIST_HEADER):
+                                continue
+                            ticker = r[ticker_idx].upper().strip()
+                            q_date = r[date_idx].strip()
+                            if ticker and q_date:
+                                fetched_records.add((ticker, q_date))
+                                valid_rows.append(r)
+                print(f"  ✓ State Recovery: Found {len(valid_rows)} valid historical records.")
+            except Exception as e:
+                print(f"  Warning: Failed to parse historical output file: {e}")
+
+    if not file_exists or file_empty:
+        try:
+            with open(HIST_OUTPUT_FILE, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(HIST_HEADER)
+            print(f"  ✓ Created new {HIST_OUTPUT_FILE} with headers")
+        except Exception as e:
+            print(f"  Error creating file: {e}")
+            return
+
+    print("\n📡 Downloading SPY 5-year history as benchmark...")
+    try:
+        spy_hist = yf.Ticker('SPY').history(period='5y')
+        if spy_hist.empty:
+            raise ValueError("SPY history fetch returned empty DataFrame.")
+        if hasattr(spy_hist.index, 'tz') and spy_hist.index.tz is not None:
+            spy_hist = spy_hist.tz_localize(None)
+        print(f"  ✓ Downloaded {len(spy_hist)} rows of SPY history.")
+    except Exception as e:
+        print(f"  ✗ SPY 5y download failed: {e}. Cannot compute Relative Strength properly.")
+        spy_hist = pd.DataFrame()
+
+    consecutive_failures = 0
+    buffer_list = []
+
+    def write_hist_batch(rows):
+        if not rows:
+            return
+        try:
+            with open(HIST_OUTPUT_FILE, mode='a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+        except Exception as e:
+            print(f"  Error writing batch to historical CSV: {e}")
+
+    print(f"\n🔍 Processing {len(ALL_TICKERS)} tickers for historical quarterly panel dataset...\n")
+
+    for idx, symbol in enumerate(ALL_TICKERS, start=1):
+        print(f"→ [{idx:03d}/{len(ALL_TICKERS)}] {symbol} (quarterly historical)")
+        
+        try:
+            t = yf.Ticker(symbol)
+            financials = t.quarterly_financials
+            cashflow = t.quarterly_cashflow
+            balance_sheet = t.quarterly_balance_sheet
+            
+            if financials is None or financials.empty:
+                print(f"  ✗ {symbol} has no quarterly financials data. Skipping.")
+                continue
+
+            price_hist = t.history(period='5y')
+            if price_hist.empty:
+                print(f"  ✗ {symbol} has no historical price data. Skipping.")
+                continue
+            if hasattr(price_hist.index, 'tz') and price_hist.index.tz is not None:
+                price_hist = price_hist.tz_localize(None)
+                
+            try:
+                shares_series = t.get_shares_outstanding(
+                    start=(pd.Timestamp.now() - pd.DateOffset(years=5)).strftime('%Y-%m-%d'),
+                    end=pd.Timestamp.now().strftime('%Y-%m-%d')
+                )
+                if shares_series is not None and not shares_series.empty:
+                    if hasattr(shares_series.index, 'tz') and shares_series.index.tz is not None:
+                        shares_series = shares_series.tz_localize(None)
+            except Exception:
+                shares_series = None
+
+            quarter_dates = sorted([col.strftime('%Y-%m-%d') for col in financials.columns])
+            info = t.info or {}
+            
+            ticker_rows_added = 0
+            for q_date in quarter_dates:
+                if (symbol, q_date) in fetched_records:
+                    continue
+
+                try:
+                    row = compute_quarterly_row(symbol, info, q_date, financials, cashflow, balance_sheet, price_hist, spy_hist, shares_series)
+                    buffer_list.append(row)
+                    ticker_rows_added += 1
+                except Exception as row_e:
+                    print(f"  ⚠️ Error processing {symbol} at {q_date}: {row_e}")
+                    
+            if ticker_rows_added > 0:
+                print(f"  ✓ Added {ticker_rows_added} historical quarters for {symbol}")
+                consecutive_failures = 0
+            else:
+                print(f"  • No new quarters added for {symbol}")
+
+            if buffer_list:
+                write_hist_batch(buffer_list)
+                buffer_list.clear()
+
+        except Exception as ticker_e:
+            consecutive_failures += 1
+            print(f"  ✗ Failed to fetch quarterly historical data for {symbol}: {ticker_e}")
+            
+            if consecutive_failures >= 5:
+                print("\n❌ Too many consecutive failures. Saving state and exiting.")
+                if buffer_list:
+                    write_hist_batch(buffer_list)
+                sys.exit(1)
+
+        time.sleep(INTER_TICKER_DELAY)
+
+    print("\n" + "=" * 60)
+    print(f"  ✅ {HIST_OUTPUT_FILE} written successfully.")
+    print("=" * 60)
+
 
 if __name__ == '__main__':
     if '--historical' in sys.argv:
         fetch_and_save_historical_fundamental_data()
     else:
         fetch_and_save_market_data()
+

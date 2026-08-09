@@ -3,24 +3,21 @@ import csv
 import os
 from financial_module import (
     run_financial_engine, normalize_stocks,
-    INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float
+    INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
+    load_latest_fundamental_snapshot
 )
 from backtest_engine import run_backtest
 
 app = Flask(__name__)
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), "market_data.csv")
+PRIMARY_CSV = os.path.join(os.path.dirname(__file__), "historical_fundamental_data.csv")
+FALLBACK_CSV = os.path.join(os.path.dirname(__file__), "market_data.csv")
+CSV_PATH = PRIMARY_CSV if os.path.exists(PRIMARY_CSV) else FALLBACK_CSV
 
 
 def _load_csv():
-    """Read market_data.csv and return a list of raw dicts."""
-    if not os.path.exists(CSV_PATH):
-        return None, "market_data.csv not found. Run fetch_static_data.py first."
-    try:
-        with open(CSV_PATH, "r", newline='') as f:
-            return list(csv.DictReader(f)), None
-    except Exception as e:
-        return None, f"Failed to parse CSV: {str(e)}"
+    """Read fundamental dataset and return the latest cross-sectional snapshot as raw dicts."""
+    return load_latest_fundamental_snapshot(CSV_PATH)
 
 
 @app.route('/')
