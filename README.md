@@ -98,7 +98,7 @@ If a stringent strategy knockout combined with sector filters eliminates all sto
 
 #### Rolling Point-in-Time Rebalancing Loop
 The backtest engine executes a discrete chronological time-loop over all historical quarter-end anchor dates $\{T_0, T_1, \ldots, T_n\}$:
-1. Slice the fundamental panel to the $T_k$ snapshot (no future data).
+1. Slice the historical fundamental panel at or prior to $T_k$ ($df[\text{Quarter\_End\_Date} \le T_k]$) and extract the latest available fundamental report per stock as of $T_k$ (Zero Look-Ahead Bias).
 2. Apply knock-out filters and normalize the cross-section.
 3. Score all assets via the C-engine and extract the Top 10.
 4. Assign the Top 10 as the active portfolio for $[T_k, T_{k+1})$.

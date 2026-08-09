@@ -79,19 +79,27 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         if idx % step == 0:
             selected_anchors.append(anchor)
 
-    # Load historical price series from local cache (Pure Offline Mode)
+    # Load historical price series from local cache or raw SimFin prices (Pure Offline Mode)
     cache_path = 'historical_prices_cache.pkl'
-    if not os.path.exists(cache_path):
-        raise FileNotFoundError("Local price cache 'historical_prices_cache.pkl' not found. Online network fallback is strictly prohibited under V3.2.1 Pure Offline mandate.")
+    simfin_prices_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
+    
+    price_data = None
+    if os.path.exists(cache_path):
+        try:
+            price_data = pd.read_pickle(cache_path)
+            print("[Backtest Engine] Loaded prices from local cache.")
+        except Exception as e:
+            print(f"[Backtest Engine] Notice: Could not load pickle cache ({e}). Loading from SimFin shareprices...")
 
-    try:
-        price_data = pd.read_pickle(cache_path)
-        print("[Backtest Engine] Loaded prices from local cache.")
-    except Exception as e:
-        raise ValueError(f"Failed to read local historical price cache '{cache_path}': {e}")
+    if price_data is None and os.path.exists(simfin_prices_path):
+        raw_p = pd.read_csv(simfin_prices_path, sep=";")
+        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close'])
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price')
+        print("[Backtest Engine] Loaded prices from SimFin daily shareprices CSV.")
 
     if price_data is None or price_data.empty:
-        raise ValueError(f"Historical price cache '{cache_path}' is empty or invalid.")
+        raise ValueError(f"Historical price data is missing or empty. Please ensure '{cache_path}' or '{simfin_prices_path}' exists.")
 
     # Extract adjusted close prices.
     if isinstance(price_data.columns, pd.MultiIndex):
@@ -144,7 +152,14 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     for p in periods:
         t_k = p['anchor']
-        snapshot_df = df[df['Quarter_End_Date'] == t_k]
+        # Slice historical fundamental panel at or prior to T_k (Zero Look-Ahead Bias)
+        panel_slice = df[df['Quarter_End_Date'] <= t_k]
+        if panel_slice.empty:
+            p['tickers'] = []
+            continue
+
+        # Extract the latest fundamental record per ticker available as of T_k
+        snapshot_df = panel_slice.sort_values('Quarter_End_Date').groupby('Ticker').last().reset_index()
         if snapshot_df.empty:
             p['tickers'] = []
             continue
