@@ -192,6 +192,13 @@ def compute_live_technical_indicators(unique_tickers):
     spy_path = next((p for p in spy_candidates if os.path.exists(p)), None)
 
     tech_map = {}
+    print(f"[DIAG] Technical indicator path resolution (base_dir='{base_dir}'):")
+    for p in simfin_parquet_candidates:
+        exists = os.path.exists(p)
+        sz = f"{os.path.getsize(p)/(1024*1024):.2f} MB" if exists else "N/A"
+        print(f"  - Candidate '{p}': exists={exists}, size={sz}")
+    print(f"[DIAG] Selected Parquet path: '{simfin_parquet_path}', SPY path: '{spy_path}'")
+
     if not simfin_parquet_path or not spy_path:
         print(f"CRITICAL PATH WARNING: Data files missing for technical indicator computation. Parquet: '{simfin_parquet_path}', SPY: '{spy_path}'")
         return tech_map
@@ -254,6 +261,13 @@ def compute_live_technical_indicators(unique_tickers):
         # 2. Vectorized Price vs 200-day Simple Moving Average
         sma_200 = price_df.tail(200).mean()
         price_vs_sma = (price_df.iloc[-1] / sma_200.replace(0, float('nan'))).astype('float32')
+
+        # Diagnostic log for PriceVs200SMA distribution
+        valid_sma = price_vs_sma.dropna()
+        pos_sma_c = int((valid_sma > 0.0).sum())
+        zero_sma_c = len(price_vs_sma) - pos_sma_c
+        sample_sma = [round(float(v), 4) for v in valid_sma.iloc[:5]] if not valid_sma.empty else []
+        print(f"[DIAG] PriceVs200SMA statistics: Total tickers={len(price_vs_sma)}, > 0.0 count={pos_sma_c}, <= 0.0 / NaN count={zero_sma_c}, Sample={sample_sma}")
 
         # 3. Vectorized 14-day RSI
         delta = price_df.diff()
@@ -340,10 +354,16 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
         del tech_indicators
         gc.collect()
 
-    # 5. Update in-memory cache & timestamp
+    # 5. Guard against caching stale or empty technical indicator data
+    valid_sma_in_snapshot = sum(1 for r in disk_records if _safe_float(r.get('PriceVs200SMA', 0.0)) > 0.0)
+    if valid_sma_in_snapshot == 0 and disk_records:
+        print(f"⚠️ [In-Memory Cache WARNING] All {len(disk_records)} records have PriceVs200SMA == 0.0 (technical indicators missing/failed). Bypassing cache update to force retry on next request.")
+        return [dict(r) for r in disk_records], None
+
+    # Update in-memory cache & timestamp
     _LIVE_DATA_CACHE['data'] = disk_records
     _LIVE_DATA_CACHE['timestamp'] = now
-    print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records (TTL {int(ttl_seconds)}s).")
+    print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records ({valid_sma_in_snapshot} valid PriceVs200SMA entries, TTL {int(ttl_seconds)}s).")
 
     # Return isolated copy to caller
     return [dict(r) for r in disk_records], None
@@ -406,6 +426,9 @@ class Stock(ctypes.Structure):
         ("final_score", ctypes.c_double),
     ]
 
+# Assert exact alignment and 80-byte size matching C struct (stock.h)
+assert ctypes.sizeof(Stock) == 80, f"Stock struct size mismatch: expected 80 bytes, got {ctypes.sizeof(Stock)}"
+
 
 # ─── 2. Library Loading & Function Signatures ──────────────────────────────────
 
@@ -446,6 +469,13 @@ def apply_knockout_filters(stocks_list, strategy):
     rules = KNOCKOUT_FILTERS.get(strategy)
     if not rules:
         return stocks_list   # no-op: 'custom' profile or unknown strategy
+
+    # Diagnostic audit for field values before applying rules
+    if strategy == 'momentum':
+        sma_vals = [_safe_float(s.get('PriceVs200SMA', 0.0)) for s in stocks_list]
+        pos_sma = sum(1 for v in sma_vals if v > 0.0)
+        zero_sma = sum(1 for v in sma_vals if v == 0.0)
+        print(f"[DIAG KnockoutFilter] Strategy 'momentum': total stocks={len(stocks_list)}, PriceVs200SMA > 0.0 count: {pos_sma}, == 0.0 count: {zero_sma}")
 
     # Per-rule diagnostic counters (for Render log tracing)
     rule_fail_counts = {f"{col}{op}{threshold}": 0 for col, op, threshold in rules}

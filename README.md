@@ -273,8 +273,23 @@ When selecting the **Momentum** investment strategy profile in the web dashboard
 
 ---
 
-### 3. Current Status & Diagnostic Findings
-Despite the architectural and algorithmic fixes above, cloud production environments (e.g., Render) continue to exhibit `3189 -> 0 stocks eliminated` under the Momentum profile. Local execution under Python 3.11/3.12 returns ~2,027 survivors for the exact same dataset, confirming an environmental divergence on Render (such as stale in-memory TTL cache persistence across deployments, PyArrow/Pandas version discrepancies, or C-FFI struct binary alignment under specific Linux libc runtimes). Further telemetry is being collected via per-rule diagnostic logs (`[KnockoutFilter] ... | Rule breakdown: ...`).
+### 3. Diagnostic Findings & Root Cause
+The fundamental root cause of the Render environment discrepancy was identified in `.gitignore`. The file contained a top-level directory rule `data/`, followed by an exception `!data/raw_simfin/us-shareprices-daily.parquet`. Under Git's path spec evaluation rules, **a file negation inside a globally excluded parent directory is ignored by Git**. Consequently:
+1. `us-shareprices-daily.parquet` (31.5 MB) was never committed or pushed to the GitHub remote repository.
+2. Render cloud deployments built without the Parquet data lake file.
+3. `compute_live_technical_indicators()` resolved no Parquet file path, returning `{}`.
+4. `PriceVs200SMA` defaulted to `0.0` for all 3,189 stocks.
+5. The knockout gate `PriceVs200SMA > 0.0` eliminated 100% of stocks (`3189 -> 0`).
+
+---
+
+### 4. Resolution & Core Architectural Fixes
+
+1. **`.gitignore` Restructuring**: Modified `.gitignore` to target specific file patterns (`data/raw_simfin/*.csv`, `data/*.pkl`) instead of excluding the parent directory node `data/`, allowing `!data/raw_simfin/us-shareprices-daily.parquet` to be tracked and deployed.
+2. **Granular Diagnostic Logging**: Injected path resolution logging (candidate path resolution, file existence, and byte size), Parquet date range inspection, and `PriceVs200SMA` distribution telemetry into `compute_live_technical_indicators()` and `apply_knockout_filters()`.
+3. **In-Memory Cache Guard**: Implemented a defensive check in `get_cached_fundamental_snapshot()`. If `PriceVs200SMA == 0.0` across all snapshot records (indicating technical indicator load failure), the engine bypasses TTL cache updating, forcing a retry on the next request instead of caching zero-value snapshots for 30 minutes.
+4. **C-FFI Struct Alignment Assertion**: Added a module-level assertion `assert ctypes.sizeof(Stock) == 80` in `financial_module.py` to continuously verify byte-for-byte binary alignment between Python `ctypes.Structure` and C `Stock` struct (`stock.h`).
+5. **Build Script Verification**: Added automated Parquet presence checking in `build.sh` to log data lake file status during cloud deployment build execution.
 
 ---
 

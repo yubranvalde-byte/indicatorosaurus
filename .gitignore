@@ -13,13 +13,14 @@ __pycache__/
 visualize_test
 
 # Data directories and large datasets / caches
-data/
-*.csv
-!historical_fundamental_data.csv
-!spy_historical.csv
+data/raw_simfin/*.csv
+data/*.pkl
 *.pkl
 *.parquet
 !data/raw_simfin/us-shareprices-daily.parquet
+*.csv
+!historical_fundamental_data.csv
+!spy_historical.csv
 
 # System and IDE files
 .DS_Store
