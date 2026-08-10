@@ -85,7 +85,7 @@ GOLDILOCKS_PARAMS = {
     'ShareholderYield': {'L': 0.04,  'U': 0.09,  'sigma_L': 0.03,  'sigma_R': 0.04},
 }
 
-# ─── In-Memory TTL Cache & Live API Ingestion ───────────────────────────────
+# ─── In-Memory TTL Cache & Tiingo API Ingestion ──────────────────────────────
 
 _LIVE_DATA_CACHE = {
     'data': None,
@@ -94,45 +94,64 @@ _LIVE_DATA_CACHE = {
 CACHE_TTL_SECONDS = 1800.0  # 30 minutes TTL
 
 
-def fetch_live_api_data(api_key):
+def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
     """
-    Attempts to fetch live stock prices/quotes from external API (FMP / Tiingo).
-    Returns list of dicts or None if request fails or rate-limited.
+    Fetches real-time stock prices from Tiingo API in chunks/batches of `batch_size` (default 50)
+    to prevent HTTP 414 URI Too Long errors when querying large universes.
+    Returns dictionary mapping upper-case ticker -> {'price': float, 'volume': float}.
     """
-    if not api_key:
-        return None
+    if not tiingo_key or not tickers_list:
+        return {}
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Token {tiingo_key}'
+    }
+
+    price_map = {}
+    total_tickers = len(tickers_list)
+
+    for i in range(0, total_tickers, batch_size):
+        batch = tickers_list[i:i + batch_size]
+        tickers_str = ",".join(batch)
+        url = f"https://api.tiingo.com/iex/?tickers={tickers_str}"
         
-    try:
-        url = f"https://financialmodelingprep.com/api/v3/quote-short?apikey={api_key}"
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list) and len(data) > 0:
-                print(f"[Live API] Successfully fetched {len(data)} live quotes via API_KEY.")
-                records = []
-                for item in data:
-                    ticker = str(item.get('symbol', '')).upper().strip()
-                    price = float(item.get('price', 0.0)) if item.get('price') else 0.0
-                    if ticker and price > 0:
-                        records.append({
-                            'Ticker': ticker,
-                            'LongName': ticker,
-                            'Sector': 'General',
-                            'MarketCap': float(item.get('volume', 1000000.0)),
-                            'EBITDA': 1000000.0,
-                            'Price': price
-                        })
-                return records if records else None
-    except Exception as e:
-        print(f"⚠️ [Live API Warning] Live API fetch encountered error: {e}. Falling back to disk CSV.")
-    return None
+        try:
+            resp = requests.get(url, headers=headers, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list):
+                    for item in data:
+                        t_sym = str(item.get('ticker', '')).upper().strip()
+                        p = item.get('last') or item.get('tngoLast') or item.get('prevClose')
+                        v = item.get('volume', 0.0)
+                        if t_sym and p is not None:
+                            try:
+                                price_map[t_sym] = {
+                                    'price': float(p),
+                                    'volume': float(v) if v else 0.0
+                                }
+                            except (ValueError, TypeError):
+                                pass
+            elif resp.status_code == 429:
+                print("[Tiingo API Warning] Rate limit (HTTP 429) hit. Returning accumulated batch quotes.")
+                break
+            else:
+                print(f"[Tiingo API Warning] Batch {i//batch_size + 1} returned status code {resp.status_code}.")
+        except Exception as e:
+            print(f"[Tiingo API Error] Batch {i//batch_size + 1} failed: {e}")
+
+    if price_map:
+        print(f"[Tiingo API] Successfully fetched real-time quotes for {len(price_map)} tickers in batches of {batch_size}.")
+    return price_map
 
 
 def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     """
-    Returns live fundamental dataset from In-Memory TTL Cache.
+    Returns live fundamental dataset from In-Memory TTL Cache (1800s / 30 mins).
     Sub-second response time (< 1ms) for C-FFI screener endpoint.
-    Hits API (if API_KEY is set) or disk CSV only when cache is expired or missing.
+    Fetches Tiingo API quotes in 50-ticker batches if TIINGO_API_KEY is present,
+    enriching the fundamental snapshot with real-time pricing data.
     """
     global _LIVE_DATA_CACHE
     now = time.time()
@@ -141,23 +160,31 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     if _LIVE_DATA_CACHE['data'] is not None and (now - _LIVE_DATA_CACHE['timestamp']) < ttl_seconds:
         return _LIVE_DATA_CACHE['data'], None
 
-    # 2. Cache Miss / Expired: Attempt Live API fetch if API_KEY is configured
-    api_key = os.getenv('API_KEY')
-    if api_key:
-        api_records = fetch_live_api_data(api_key)
-        if api_records:
-            _LIVE_DATA_CACHE['data'] = api_records
-            _LIVE_DATA_CACHE['timestamp'] = now
-            return api_records, None
-
-    # 3. Fallback: Load from local disk CSV (market_data.csv / historical_fundamental_data.csv)
+    # 2. Load baseline records from local disk CSV
     disk_records, err = load_latest_fundamental_snapshot(csv_path)
-    if disk_records:
-        _LIVE_DATA_CACHE['data'] = disk_records
-        _LIVE_DATA_CACHE['timestamp'] = now
-        print(f"[In-Memory Cache] Populated cache with {len(disk_records)} records from disk CSV.")
+    if not disk_records:
+        return None, err or "Failed to load base dataset."
 
-    return disk_records, err
+    # 3. Check for Tiingo API Key (TIINGO_API_KEY or API_KEY)
+    tiingo_key = os.getenv('TIINGO_API_KEY') or os.getenv('API_KEY')
+    if tiingo_key:
+        unique_tickers = [r['Ticker'] for r in disk_records if 'Ticker' in r]
+        tiingo_prices = fetch_tiingo_live_data(tiingo_key, unique_tickers, batch_size=50)
+        
+        if tiingo_prices:
+            for r in disk_records:
+                sym = r.get('Ticker', '').upper().strip()
+                if sym in tiingo_prices:
+                    live_p = tiingo_prices[sym]['price']
+                    if live_p > 0:
+                        r['Price'] = live_p
+
+    # 4. Update in-memory cache & timestamp
+    _LIVE_DATA_CACHE['data'] = disk_records
+    _LIVE_DATA_CACHE['timestamp'] = now
+    print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records (TTL {int(ttl_seconds)}s).")
+
+    return disk_records, None
 
 
 # ─── Data Ingestion Helper ───────────────────────────────────────────────────
