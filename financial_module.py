@@ -56,8 +56,10 @@ KNOCKOUT_FILTERS = {
         ('GrossMargin',      '>',  0.20  ),  # Baseline pricing power: >20%
     ],
     'momentum': [
-        ('PriceVs200SMA',    '>=',  0.0   ),  # Price must be at or above 200-day SMA
-        ('RelativeStrength', '>=', -0.20  ),  # Outperform benchmark gate (relaxed to >= -0.20 to include boundary benchmark performers)
+        ('PriceVs200SMA',    '>',   0.0   ),  # Stock must have valid SMA data (>0 = exists in Parquet)
+        # NOTE: RelativeStrength intentionally NOT used as knockout gate.
+        # It is a relative metric vs SPY; absolute thresholds cause total-elimination when
+        # SPY broadly outperforms (e.g. MAG-7 rally). RS is already scored as indicator[15].
     ],
     'income': [
         ('PayoutRatio',      '>',  0.0   ),  # Must have earnings (pays a dividend)
@@ -445,22 +447,31 @@ def apply_knockout_filters(stocks_list, strategy):
     if not rules:
         return stocks_list   # no-op: 'custom' profile or unknown strategy
 
+    # Per-rule diagnostic counters (for Render log tracing)
+    rule_fail_counts = {f"{col}{op}{threshold}": 0 for col, op, threshold in rules}
+
     survivors = []
     for stock in stocks_list:
         passed = True
         for col, op, threshold in rules:
             val = _safe_float(stock.get(col, 0.0))
-            if   op == '>'  and not (val >  threshold): passed = False; break
-            elif op == '<'  and not (val <  threshold): passed = False; break
-            elif op == '>=' and not (val >= threshold): passed = False; break
-            elif op == '<=' and not (val <= threshold): passed = False; break
+            rule_key = f"{col}{op}{threshold}"
+            failed_this_rule = False
+            if   op == '>'  and not (val >  threshold): failed_this_rule = True
+            elif op == '<'  and not (val <  threshold): failed_this_rule = True
+            elif op == '>=' and not (val >= threshold): failed_this_rule = True
+            elif op == '<=' and not (val <= threshold): failed_this_rule = True
+            if failed_this_rule:
+                rule_fail_counts[rule_key] += 1
+                passed = False
+                break
         if passed:
             survivors.append(stock)
 
     before = len(stocks_list)
     after  = len(survivors)
     print(f"[KnockoutFilter] '{strategy}': {before} -> {after} stocks "
-          f"({before - after} eliminated)")
+          f"({before - after} eliminated) | Rule breakdown: {rule_fail_counts}")
     return survivors
 
 
