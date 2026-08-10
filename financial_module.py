@@ -165,7 +165,7 @@ def compute_live_technical_indicators(unique_tickers):
     """
     Dynamically calculates momentum & technical indicators (RelativeStrength, PriceVs200SMA, RSI, Beta)
     from offline us-shareprices-daily.parquet and spy_historical.csv for the active stock universe.
-    Returns dict mapping ticker -> { RelativeStrength, PriceVs200SMA, RSI, Beta }.
+    Aggressively optimizes RAM lifecycle via date pre-filtering, 1D vectorization, and immediate matrix deletion.
     """
     if not unique_tickers:
         return {}
@@ -178,7 +178,7 @@ def compute_live_technical_indicators(unique_tickers):
         return tech_map
 
     try:
-        # Load trailing 260 trading days for the specified tickers
+        # Load trailing price history with PyArrow column isolation
         raw_p = pd.read_parquet(
             simfin_parquet_path,
             engine='pyarrow',
@@ -192,6 +192,11 @@ def compute_live_technical_indicators(unique_tickers):
         raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
         raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
         
+        # Pre-filter dates to trailing 370 calendar days before pivoting to reduce RAM allocation
+        max_date = raw_p['Date'].max()
+        min_date = max_date - pd.Timedelta(days=370)
+        raw_p = raw_p[raw_p['Date'] >= min_date]
+
         price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
         del raw_p
         gc.collect()
@@ -203,48 +208,51 @@ def compute_live_technical_indicators(unique_tickers):
         del spy_df
         gc.collect()
 
-        # 1. 1-Year Relative Strength vs SPY
+        # 1. Vectorized 1-Year Relative Strength vs SPY
         spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 else 0.0
         stk_1y_ret = (price_df.iloc[-1] - price_df.iloc[0]) / price_df.iloc[0].replace(0, float('nan'))
-        rel_strength = stk_1y_ret - spy_1y_ret
+        rel_strength = (stk_1y_ret - spy_1y_ret).astype('float32')
 
-        # 2. Price vs 200-day Simple Moving Average
+        # 2. Vectorized Price vs 200-day Simple Moving Average
         sma_200 = price_df.tail(200).mean()
-        price_vs_sma = price_df.iloc[-1] / sma_200.replace(0, float('nan'))
+        price_vs_sma = (price_df.iloc[-1] / sma_200.replace(0, float('nan'))).astype('float32')
 
-        # 3. 14-day RSI
+        # 3. Vectorized 14-day RSI
         delta = price_df.diff()
         gain = delta.where(delta > 0, 0.0).tail(14).mean()
         loss = (-delta.where(delta < 0, 0.0)).tail(14).mean()
         rs = gain / (loss + 1e-6)
-        rsi_14 = 100.0 - (100.0 / (1.0 + rs))
+        rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
 
-        # 4. 1-Year Beta vs SPY
+        # 4. Vectorized 1-Year Beta vs SPY
         stk_returns = price_df.pct_change()
         spy_returns = spy_s.pct_change()
         spy_var = float(spy_returns.var())
 
-        for ticker in price_df.columns:
-            rs_val = _safe_float(rel_strength.get(ticker, 0.0))
-            sma_val = _safe_float(price_vs_sma.get(ticker, 1.0))
-            rsi_val = _safe_float(rsi_14.get(ticker, 50.0))
+        cov_s = stk_returns.apply(lambda col: col.cov(spy_returns)).astype('float32')
+        beta_s = (cov_s / spy_var).fillna(1.0) if spy_var > 0 else pd.Series(1.0, index=price_df.columns)
 
-            beta_val = 1.0
-            if spy_var > 0 and ticker in stk_returns.columns:
-                cov = float(stk_returns[ticker].cov(spy_returns))
-                if not (math.isnan(cov) or math.isinf(cov)):
-                    beta_val = _safe_float(cov / spy_var)
+        # IMMEDIATELY ERASE ALL HEAVY 2D MATRICES AND FREE RAM BEFORE DICT GENERATION
+        del price_df, spy_s, delta, gain, loss, rs, stk_returns, spy_returns, cov_s
+        gc.collect()
+
+        # Construct dictionary mapping strictly from 1D Series vectors
+        for ticker in rel_strength.index:
+            rs_v = float(rel_strength[ticker]) if not math.isnan(rel_strength[ticker]) else 0.0
+            sma_v = float(price_vs_sma[ticker]) if not math.isnan(price_vs_sma[ticker]) else 1.0
+            rsi_v = float(rsi_14[ticker]) if not math.isnan(rsi_14[ticker]) else 50.0
+            beta_v = float(beta_s[ticker]) if not math.isnan(beta_s[ticker]) else 1.0
 
             tech_map[ticker] = {
-                'RelativeStrength': rs_val,
-                'PriceVs200SMA': sma_val,
-                'RSI': rsi_val,
-                'Beta': beta_val
+                'RelativeStrength': _safe_float(rs_v),
+                'PriceVs200SMA': _safe_float(sma_v),
+                'RSI': _safe_float(rsi_v),
+                'Beta': _safe_float(beta_v)
             }
 
-        del price_df, spy_s, stk_returns, spy_returns
+        del rel_strength, price_vs_sma, rsi_14, beta_s
         gc.collect()
-        print(f"[Technical Indicators] Computed dynamic momentum indicators for {len(tech_map)} tickers.")
+        print(f"[Technical Indicators] Ultra-fast computation completed for {len(tech_map)} tickers.")
     except Exception as e:
         print(f"⚠️ [Technical Indicators Warning] Failed to compute dynamic indicators: {e}")
 
