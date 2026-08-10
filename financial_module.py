@@ -221,11 +221,30 @@ def compute_live_technical_indicators(unique_tickers):
         # Load SPY benchmark history
         spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
         spy_df['Date'] = pd.to_datetime(spy_df['Date'])
-        spy_s = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index().tail(260)
+        spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
         del spy_df
         gc.collect()
 
-        # 1. Vectorized 1-Year Relative Strength vs SPY
+        # ── CRITICAL: Align SPY window to the SAME date range as price_df ───────
+        # price_df is built from Parquet which may be months/years older than spy_historical.csv.
+        # Using spy_s.tail(260) independently would pick up TODAY's dates while price_df
+        # uses dates from the Parquet window, making RS = stock(old) - spy(new) = garbage.
+        # Instead, we clip spy to price_df's exact start/end date boundaries.
+        price_start_date = price_df.index[0]
+        price_end_date = price_df.index[-1]
+        spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
+        if len(spy_s) < 2:
+            # Fallback: if no overlap (data gap), use full SPY tail(260) with a warning
+            spy_s = spy_full.tail(260)
+            print(f"[Technical Indicators WARNING] SPY date overlap with Parquet is insufficient. "
+                  f"Parquet window: {price_start_date.date()} -> {price_end_date.date()}, "
+                  f"SPY latest: {spy_full.index[-1].date()}. RS may be unreliable.")
+        del spy_full
+
+        print(f"[Technical Indicators] Date alignment: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
+              f"SPY aligned {spy_s.index[0].date()} -> {spy_s.index[-1].date()} ({len(spy_s)} rows)")
+
+        # 1. Vectorized 1-Year Relative Strength vs SPY (same time window as stocks)
         spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 else 0.0
         stk_1y_ret = (price_df.iloc[-1] - price_df.iloc[0]) / price_df.iloc[0].replace(0, float('nan'))
         rel_strength = (stk_1y_ret - spy_1y_ret).astype('float32')
@@ -241,9 +260,10 @@ def compute_live_technical_indicators(unique_tickers):
         rs = gain / (loss + 1e-6)
         rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
 
-        # 4. Vectorized 1-Year Beta vs SPY
+        # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns)
         stk_returns = price_df.pct_change()
-        spy_returns = spy_s.pct_change()
+        # Align spy daily returns to the price_df date index for covariance accuracy
+        spy_returns = spy_s.pct_change().reindex(price_df.index)
         spy_var = float(spy_returns.var())
 
         cov_s = stk_returns.apply(lambda col: col.cov(spy_returns)).astype('float32')
