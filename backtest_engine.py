@@ -118,31 +118,36 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         panel_slice = df[df['Quarter_End_Date'] <= t_k]
         if panel_slice.empty:
             p['tickers'] = []
+            del panel_slice
             continue
 
         snapshot_df = panel_slice.sort_values('Quarter_End_Date').groupby('Ticker').last().reset_index()
+        del panel_slice  # Free panel slice immediately
+
         if snapshot_df.empty:
             p['tickers'] = []
+            del snapshot_df
             continue
 
+        raw_records = snapshot_df.to_dict(orient='records')
+        del snapshot_df  # Free snapshot DataFrame immediately
+
         raw_snapshot = []
-        for _, row in snapshot_df.iterrows():
-            ticker = str(row.get('Ticker', '')).strip().upper()
-            if not ticker or pd.isna(row.get('Ticker')):
+        for r in raw_records:
+            ticker = str(r.get('Ticker', '')).strip().upper()
+            if not ticker or pd.isna(r.get('Ticker')):
                 continue
 
-            mkt_cap = _safe_float(row.get('MarketCap', 0.0))
+            mkt_cap = _safe_float(r.get('MarketCap', 0.0))
             if mkt_cap <= 0.0:
                 continue
 
-            d = {}
-            for col in snapshot_df.columns:
-                d[col] = row[col]
-            d['Ticker'] = ticker
-            d['Sector'] = str(d.get('GICS_Sector') or d.get('Sector') or '').strip()
-            d['MarketCap'] = mkt_cap
-            d['EBITDA'] = _safe_float(d.get('EBITDA', 0.0))
-            raw_snapshot.append(d)
+            r['Ticker'] = ticker
+            r['Sector'] = str(r.get('GICS_Sector') or r.get('Sector') or '').strip()
+            r['MarketCap'] = mkt_cap
+            r['EBITDA'] = _safe_float(r.get('EBITDA', 0.0))
+            raw_snapshot.append(r)
+        del raw_records
 
         try:
             normalized_snapshot = normalize_stocks(
@@ -179,9 +184,13 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             else:
                 scored_stocks = run_financial_engine(normalized_snapshot, weights)
                 top_10 = [s['Ticker'] for s in scored_stocks[:10]]
+                del scored_stocks
+            del normalized_snapshot
         except Exception as e:
             print(f"Error scoring portfolio at {t_k}: {e}")
             top_10 = []
+        finally:
+            del raw_snapshot
 
         if top_10:
             p['tickers'] = top_10
@@ -192,6 +201,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             p['tickers'] = ['SPY']
 
         needed_tickers.update(p['tickers'])
+        gc.collect()  # Explicit inner-loop garbage collection per quarter iteration
 
     needed_tickers.add('SPY')
     print(f"[Backtest Engine] Identified {len(needed_tickers)} unique target tickers for lazy price ingestion: {sorted(needed_tickers)}")
