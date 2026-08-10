@@ -239,6 +239,44 @@ The Flask development server will start on `http://127.0.0.1:5000`.
 
 ---
 
+## Unresolved Issue & Diagnostic Log: Total Stock Knockout in Momentum Profile
+
+### 1. Problem Statement
+When selecting the **Momentum** investment strategy profile in the web dashboard or executing `/api/calculate` with `strategy="momentum"`, the system returns 0 surviving stocks (`stocks_after: 0`, displaying "No results yet" in the frontend UI), even when evaluating the entire S&P 500 / US stock universe (3,189 stocks) without sector or market-cap constraints. The server infrastructure responds with HTTP `200 OK`, but the knockout filter phase eliminates 100% of the candidate assets (`3189 -> 0 stocks (3189 eliminated)`).
+
+---
+
+### 2. Chronological Root-Cause Analysis & Fix Attempts
+
+#### Attempt 1: Dynamic Indicator RAM & Path Resolution Fixes
+- **Hypothesis:** On cloud environments (e.g., Render), `us-shareprices-daily.parquet` or `spy_historical.csv` were failing to load due to working directory path mismatches under Gunicorn, causing `compute_live_technical_indicators()` to catch exceptions silently and return an empty dictionary (`{}`). When technical indicators failed to compute, `RelativeStrength` defaulted to `0.0`, which failed the original strict knockout rule `RelativeStrength > 0.0` (`0.0 > 0.0` evaluates to `False`).
+- **Changes Applied:**
+  - Implemented multi-candidate path resolution for `.parquet` and `.csv` files across Gunicorn/Render environment roots.
+  - Relaxed momentum knockout filter thresholds from `PriceVs200SMA > 1.0` and `RelativeStrength > 0.0` down to `PriceVs200SMA >= 0.0` and `RelativeStrength >= -0.20`.
+
+#### Attempt 2: Tiingo API Rate-Limiting & Inverted Pipeline Architecture
+- **Hypothesis:** The live price client was firing ~64 synchronous batch requests to Tiingo's API (3,189 stocks / 50 per batch) during cache loading. At batch 11, Tiingo enforced HTTP 429 (Rate Limit) blocks, causing `JSONDecodeError` when parsing HTML error pages. It was suspected that partial API returns or unpopulated price records corrupted downstream momentum filter inputs.
+- **Changes Applied:**
+  - Inverted the Tiingo live data pipeline: `get_cached_fundamental_snapshot()` loads static data and computes dynamic indicators locally from Parquet in <100ms with zero network overhead.
+  - Scoring and knockout filtering execute *first* using offline data. `main.py` selectively queries Tiingo quotes *only* for the Top 100 ranked survivors (max 2 batches), completely eliminating rate limits.
+
+#### Attempt 3: Time-Series Benchmark Window Alignment
+- **Hypothesis:** `compute_live_technical_indicators()` was pulling the trailing 260 trading days of `spy_historical.csv` independently (`spy_s.tail(260)`), which spanned up to the current date (e.g., 2026), whereas `us-shareprices-daily.parquet` data ended in 2025. This created a ~358-day window gap, calculating stock returns over 2024–2025 but subtracting SPY returns from 2025–2026 (`RS = stock_return_old - spy_return_new`). Because SPY experienced strong gains (+22.7%), all stock `RelativeStrength` values were artificially shifted downward into negative territory.
+- **Changes Applied:**
+  - Explicitly clipped `spy_historical.csv` to match the exact start and end date boundaries of `price_df` (`price_start_date` to `price_end_date`).
+
+#### Attempt 4: Removal of Absolute Relative Strength Knockout & Per-Rule Diagnostic Logging
+- **Hypothesis:** Relative Strength is a relative metric comparing stock returns to benchmark returns. Enforcing a hard absolute threshold (`RelativeStrength >= -0.20`) during periods of broad market concentration (e.g., benchmark outperformance driven by Mega-Cap Tech) shifts the cross-sectional median downward (median RS = -0.219), causing absolute gates to eliminate over half the universe or entire sector sub-samples.
+- **Changes Applied:**
+  - Removed `RelativeStrength` from `KNOCKOUT_FILTERS['momentum']` entirely, relying solely on `PriceVs200SMA > 0.0` as a binary data-presence gate while retaining `RelativeStrength` as a weighted ranking factor in the C scoring engine.
+  - Enhanced `apply_knockout_filters()` with per-rule breakdown logging (`rule_fail_counts`) to log exact rule failure counts per strategy.
+
+---
+
+### 3. Current Status & Diagnostic Findings
+Despite the architectural and algorithmic fixes above, cloud production environments (e.g., Render) continue to exhibit `3189 -> 0 stocks eliminated` under the Momentum profile. Local execution under Python 3.11/3.12 returns ~2,027 survivors for the exact same dataset, confirming an environmental divergence on Render (such as stale in-memory TTL cache persistence across deployments, PyArrow/Pandas version discrepancies, or C-FFI struct binary alignment under specific Linux libc runtimes). Further telemetry is being collected via per-rule diagnostic logs (`[KnockoutFilter] ... | Rule breakdown: ...`).
+
+---
+
 *AlphaQuant V3.3 — Academic & Research Use Only*
 *Department of Computer Science, The Hebrew University of Jerusalem*
-
