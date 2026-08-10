@@ -271,7 +271,9 @@ def compute_live_technical_indicators(unique_tickers):
         gc.collect()
         print(f"[Technical Indicators] Ultra-fast computation completed for {len(tech_map)} tickers.")
     except Exception as e:
-        print(f"⚠️ [Technical Indicators Warning] Failed to compute dynamic indicators: {e}")
+        import traceback
+        print(f"⚠️ [Technical Indicators Error] Failed to compute dynamic indicators: {e}")
+        traceback.print_exc()
 
     return tech_map
 
@@ -280,7 +282,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     """
     Returns live fundamental dataset from In-Memory TTL Cache (1800s / 30 mins).
     Sub-second response time (< 1ms) for C-FFI screener endpoint.
-    Returns copy-isolated records enriched with real-time Tiingo quotes & dynamic technical indicators.
+    Returns copy-isolated records enriched with dynamic technical indicators.
     """
     global _LIVE_DATA_CACHE
     now = time.time()
@@ -303,22 +305,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     unique_tickers = [r['Ticker'] for r in disk_records if 'Ticker' in r]
     tech_indicators = compute_live_technical_indicators(unique_tickers)
 
-    # 4. Check for Tiingo API Key (TIINGO_API_KEY or API_KEY)
-    tiingo_key = os.getenv('TIINGO_API_KEY') or os.getenv('API_KEY')
-    if tiingo_key:
-        tiingo_prices = fetch_tiingo_live_data(tiingo_key, unique_tickers, batch_size=50)
-        
-        if tiingo_prices:
-            for r in disk_records:
-                sym = r.get('Ticker', '').upper().strip()
-                if sym in tiingo_prices:
-                    live_p = tiingo_prices[sym]['price']
-                    if live_p > 0:
-                        r['Price'] = live_p
-            del tiingo_prices
-            gc.collect()
-
-    # 5. Merge dynamic technical indicators into snapshot records
+    # 4. Merge dynamic technical indicators into snapshot records
     if tech_indicators:
         for r in disk_records:
             sym = r.get('Ticker', '').upper().strip()
@@ -331,7 +318,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
         del tech_indicators
         gc.collect()
 
-    # 6. Update in-memory cache & timestamp
+    # 5. Update in-memory cache & timestamp
     _LIVE_DATA_CACHE['data'] = disk_records
     _LIVE_DATA_CACHE['timestamp'] = now
     print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records (TTL {int(ttl_seconds)}s).")

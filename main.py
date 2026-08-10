@@ -5,7 +5,8 @@ import gc
 from financial_module import (
     run_financial_engine, normalize_stocks,
     INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
-    load_latest_fundamental_snapshot, get_cached_fundamental_snapshot
+    load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
+    fetch_tiingo_live_data
 )
 from backtest_engine import run_backtest
 
@@ -122,6 +123,17 @@ def calculate():
 
         # ── Step 3: Fire C engine on the filtered list ───────────────────────────
         sorted_stocks     = run_financial_engine(normalized_stocks, weights_list)
+
+        # ── Step 4: Selective Tiingo Live Price Enrichment for Top Stocks ────────
+        tiingo_key = os.getenv('TIINGO_API_KEY') or os.getenv('API_KEY')
+        if tiingo_key and sorted_stocks:
+            # Only fetch real-time quotes for the top 100 ranked survivors (max 2 batches)
+            top_tickers = [s['Ticker'] for s in sorted_stocks[:100]]
+            tiingo_prices = fetch_tiingo_live_data(tiingo_key, top_tickers, batch_size=50)
+            if tiingo_prices:
+                for ticker, quote in tiingo_prices.items():
+                    if ticker in raw_by_ticker and quote.get('price', 0.0) > 0:
+                        raw_by_ticker[ticker]['Price'] = quote['price']
 
         # ── Build enriched JSON response ──────────────────────────────────────
         frontend_response = []
