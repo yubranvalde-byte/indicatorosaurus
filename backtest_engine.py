@@ -79,27 +79,26 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         if idx % step == 0:
             selected_anchors.append(anchor)
 
-    # Load historical price series from local cache or raw SimFin prices (Pure Offline Mode)
-    cache_path = 'historical_prices_cache.pkl'
-    simfin_prices_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
-    
-    price_data = None
-    if os.path.exists(cache_path):
-        try:
-            price_data = pd.read_pickle(cache_path)
-            print("[Backtest Engine] Loaded prices from local cache.")
-        except Exception as e:
-            print(f"[Backtest Engine] Notice: Could not load pickle cache ({e}). Loading from SimFin shareprices...")
+    # Load historical price series from Parquet (primary, cloud-ready) or CSV fallback (Pure Offline Mode)
+    simfin_parquet_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet')
+    simfin_csv_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
 
-    if price_data is None and os.path.exists(simfin_prices_path):
-        raw_p = pd.read_csv(simfin_prices_path, sep=";")
+    price_data = None
+    if os.path.exists(simfin_parquet_path):
+        raw_p = pd.read_parquet(simfin_parquet_path, engine='pyarrow')
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
         raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close'])
         price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price')
-        print("[Backtest Engine] Loaded prices from SimFin daily shareprices CSV.")
+        print("[Backtest Engine] Loaded prices from SimFin Parquet (offline, cloud-ready).")
+    elif os.path.exists(simfin_csv_path):
+        raw_p = pd.read_csv(simfin_csv_path, sep=";")
+        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close'])
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price')
+        print("[Backtest Engine] Loaded prices from SimFin daily shareprices CSV (fallback).")
 
     if price_data is None or price_data.empty:
-        raise ValueError(f"Historical price data is missing or empty. Please ensure '{cache_path}' or '{simfin_prices_path}' exists.")
+        raise ValueError(f"Historical price data is missing. Please ensure '{simfin_parquet_path}' exists (run compress_prices_to_parquet.py).")
 
     # Extract adjusted close prices.
     if isinstance(price_data.columns, pd.MultiIndex):

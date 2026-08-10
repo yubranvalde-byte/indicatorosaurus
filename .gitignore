@@ -18,6 +18,8 @@ data/
 !historical_fundamental_data.csv
 !spy_historical.csv
 *.pkl
+*.parquet
+!data/raw_simfin/us-shareprices-daily.parquet
 
 # System and IDE files
 .DS_Store
