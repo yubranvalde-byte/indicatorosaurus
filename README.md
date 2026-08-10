@@ -147,9 +147,19 @@ $$\text{Shareholder Yield} = \frac{-(\text{Dividends Paid} + \text{Net Stock Flo
 
 ## V3.3 Roadmap (Next Steps)
 
-1. **Offline Bulk Ingestion**: Transitioning from on-demand scraping to massive offline ETL pipelines ingesting datasets like Kaggle/SimFin.
-2. **Time-Series Forward-Fill Alignment**: Pinpointing exact corporate earnings reporting dates to align fundamentals directly to daily trading data without look-ahead bleed.
-3. **Total Return Integration**: Injecting historic dividend payments directly into adjusted close prices to reflect true compounded total return vs SPY benchmark.
+1. **Offline Bulk Ingestion & Parquet Data Lake Compression**: Transitioning from on-demand scraping to a 100% offline data lake. High-density daily price history (6.2M+ rows, originally 415MB CSV) is compressed to <30MB using Snappy-compressed Apache Parquet (`us-shareprices-daily.parquet`), tracked directly in Git for zero-dependency cloud deployment.
+2. **Pure Offline Backtesting Mandate**: All simulation runtime dependencies (fundamentals, stock price matrices, and benchmark SPY historical data) are stored statically within the repository (`data/spy_historical.csv` & `historical_fundamental_data.csv`). Zero network calls occur during backtest execution.
+3. **Time-Series Forward-Fill Alignment**: Pinpointing exact corporate earnings reporting dates to align fundamentals directly to daily trading data without look-ahead bleed.
+4. **Total Return Integration**: Injecting historic dividend payments directly into adjusted close prices to reflect true compounded total return vs SPY benchmark.
+
+---
+
+## Technical Notes & Rate-Limiting Resilience
+
+> [!IMPORTANT]
+> **API Rate Limiting & Web Scraper Resilience:**
+> - **Yahoo Finance & Wikipedia Scraper Throttling**: Auxiliary background scripts (e.g., `fetch_static_data.py`) that pull live market indicators from Yahoo Finance or Wikipedia may encounter HTTP 429 (*Too Many Requests*) rate limits or missing `lxml` warnings when executed on cloud server IP ranges (e.g., Render, AWS, Heroku).
+> - **Zero-Downtime Fallback Architecture**: The core simulation engine (`backtest_engine.py`) is **completely decoupled** from external network scrapers. If web scraping triggers throttling during build/startup, the web application seamlessly falls back to pre-built, cached static datasets (`market_data.csv`, `spy_historical.csv`, and `us-shareprices-daily.parquet`). This guarantees 100% server uptime and deterministic simulation execution regardless of third-party API availability.
 
 ---
 
@@ -161,14 +171,17 @@ $$\text{Shareholder Yield} = \frac{-(\text{Dividends Paid} + \text{Net Stock Flo
 | Python | ≥ 3.9 | Orchestration, Flask server |
 | GCC | ≥ 11 | C shared library compilation |
 | `make` | any | Build automation |
-| `pandas` | ≥ 1.5 | Data manipulation |
-| `flask` | ≥ 2.0 | HTTP server |
-| `numpy` | ≥ 1.23 | Numerical operations |
+| `pandas` | ≥ 2.2 | Data manipulation |
+| `pyarrow` | ≥ 15.0 | High-performance Parquet I/O |
+| `gunicorn` | ≥ 22.0 | WSGI HTTP Server for UNIX / Render deployment |
+| `lxml` | ≥ 5.0 | HTML parsing for Wikipedia scrapers |
+| `flask` | ≥ 3.0 | Web application framework |
+| `numpy` | ≥ 1.26 | Numerical array calculations |
 
 ### Step 1 — Clone the Repository
 ```bash
-git clone https://github.cs.huji.ac.il/cclab2-2025/ex2bonus-yuval.brande.git
-cd ex2bonus-yuval.brande/ex2_sp
+git clone https://github.com/yubranvalde-byte/finance-app.git
+cd finance-app
 ```
 
 ### Step 2 — Create and Activate a Python Virtual Environment (inside WSL/Linux)
@@ -178,23 +191,33 @@ source linux_env/bin/activate
 pip install -r requirements.txt
 ```
 
-### Step 3 — Compile the C Shared Library
+### Step 3 — Utility Offline Data Lake Scripts (Optional / Maintenance)
+If rebuilding offline datasets from scratch:
+```bash
+# 1. Fetch SPY benchmark history into local data lake (data/spy_historical.csv)
+python fetch_spy_offline.py
+
+# 2. Compress raw SimFin CSV (415MB) into high-efficiency Parquet (30MB)
+python compress_prices_to_parquet.py
+```
+
+### Step 4 — Compile the C Shared Library
 ```bash
 make clean && make
 ```
 > ⚠️ **WSL Required on Windows**: The `Makefile` uses GCC. On Windows, all compilation and Python execution must be performed inside WSL (Windows Subsystem for Linux).
 
-### Step 4 — Cloud Deployment (e.g., Render)
+### Step 5 — Cloud Deployment (e.g., Render)
 For automated cloud deployment (e.g., Render), set the **Build Command** to:
 ```bash
-./build.sh
+make && pip install -r requirements.txt
 ```
 and the **Start Command** to:
 ```bash
 gunicorn main:app
 ```
 
-### Step 5 — Launch the Application Locally
+### Step 6 — Launch the Application Locally
 ```bash
 python main.py
 ```
@@ -204,3 +227,4 @@ The Flask development server will start on `http://127.0.0.1:5000`.
 
 *AlphaQuant V3.3 — Academic & Research Use Only*
 *Department of Computer Science, The Hebrew University of Jerusalem*
+
