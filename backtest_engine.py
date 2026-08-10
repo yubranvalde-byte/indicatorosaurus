@@ -93,103 +93,33 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         if idx % step == 0:
             selected_anchors.append(anchor)
 
-    # Load historical price series from Parquet (primary, cloud-ready) or CSV fallback (Pure Offline Mode)
-    simfin_parquet_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet')
-    simfin_csv_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
-
-    price_data = None
-    if os.path.exists(simfin_parquet_path):
-        raw_p = pd.read_parquet(simfin_parquet_path, engine='pyarrow', columns=['Date', 'Ticker', 'Adj. Close', 'Close'])
-        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
-        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
-        del raw_p
-        gc.collect()
-        print("[Backtest Engine] Loaded prices from SimFin Parquet (offline, cloud-ready).")
-    elif os.path.exists(simfin_csv_path):
-        raw_p = pd.read_csv(simfin_csv_path, sep=";", usecols=['Date', 'Ticker', 'Adj. Close', 'Close'], dtype={'Close': 'float32', 'Adj. Close': 'float32'})
-        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
-        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
-        del raw_p
-        gc.collect()
-        print("[Backtest Engine] Loaded prices from SimFin daily shareprices CSV (fallback).")
-
-    if price_data is None or price_data.empty:
-        raise ValueError(f"Historical price data is missing. Please ensure '{simfin_parquet_path}' exists (run compress_prices_to_parquet.py).")
-
-    # Extract adjusted close prices.
-    if isinstance(price_data.columns, pd.MultiIndex):
-        lvl0 = price_data.columns.get_level_values(0).unique().tolist()
-        price_col = 'Close' if 'Close' in lvl0 else ('Adj Close' if 'Adj Close' in lvl0 else lvl0[0])
-        close_data = price_data[price_col]
-    else:
-        close_data = price_data
-
-    # Ensure close_data's index is timezone-naive
-    if hasattr(close_data.index, 'tz') and close_data.index.tz is not None:
-        close_data.index = close_data.index.tz_localize(None)
-
-    # Load SPY offline history and merge into close_data
-    spy_path = os.path.join('data', 'spy_historical.csv')
-    if not os.path.exists(spy_path):
-        raise ValueError(f"Benchmark SPY historical data is missing at {spy_path}. Please run fetch_spy_offline.py first.")
-    
-    spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'], dtype={'SPY_Adj_Close': 'float32'})
-    spy_df['Date'] = pd.to_datetime(spy_df['Date'])
-    spy_df = spy_df.set_index('Date')
-    if hasattr(spy_df.index, 'tz') and spy_df.index.tz is not None:
-        spy_df.index = spy_df.index.tz_localize(None)
-    
-    close_data['SPY'] = spy_df['SPY_Adj_Close'].astype('float32')
-    close_data['SPY'] = close_data['SPY'].ffill()
-    del spy_df
-    gc.collect()
-
-    # Drop columns that are entirely NaN across the whole window
-    all_nan_cols = [c for c in close_data.columns if close_data[c].isna().all() and c != 'SPY']
-    if all_nan_cols:
-        close_data = close_data.drop(columns=all_nan_cols)
-
-    trading_dates = close_data.index
-
-    # Clamp start_date to the first actual trading day present in price data.
-    effective_start = trading_dates[trading_dates >= start_date][0] if any(trading_dates >= start_date) else trading_dates[0]
-
-    # Establish interval holding periods (ensuring all dates are timezone-naive)
-    periods = []
+    # ── PHASE 1: Fundamental Screening & Portfolio Selection (FIRST) ─────────
+    prelim_periods = []
     for k, t_k in enumerate(selected_anchors):
-        t_k = pd.Timestamp(t_k).tz_localize(None)
-        hold_start = (t_k + pd.DateOffset(days=1)).tz_localize(None)
+        t_k_dt = pd.Timestamp(t_k).tz_localize(None)
+        hold_start = (t_k_dt + pd.DateOffset(days=1)).tz_localize(None)
         if hold_start < start_date:
             hold_start = start_date
             
-        if k < len(selected_anchors) - 1:
-            hold_end = pd.Timestamp(selected_anchors[k+1]).tz_localize(None)
-        else:
-            hold_end = pd.Timestamp(trading_dates[-1]).tz_localize(None)
-            
+        hold_end = pd.Timestamp(selected_anchors[k+1]).tz_localize(None) if k < len(selected_anchors) - 1 else pd.Timestamp(end_date).tz_localize(None)
         if hold_start <= hold_end:
-            periods.append({
-                'anchor': t_k,
+            prelim_periods.append({
+                'anchor': t_k_dt,
                 'start': hold_start,
-                'end': hold_end
+                'end': hold_end,
+                'tickers': []
             })
 
-    # Rank and select portfolios for each interval
     last_valid_top_10 = []
+    needed_tickers = set()
 
-    for p in periods:
+    for p in prelim_periods:
         t_k = p['anchor']
-        # Slice historical fundamental panel at or prior to T_k (Zero Look-Ahead Bias)
         panel_slice = df[df['Quarter_End_Date'] <= t_k]
         if panel_slice.empty:
             p['tickers'] = []
             continue
 
-        # Extract the latest fundamental record per ticker available as of T_k
         snapshot_df = panel_slice.sort_values('Quarter_End_Date').groupby('Ticker').last().reset_index()
         if snapshot_df.empty:
             p['tickers'] = []
@@ -201,7 +131,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             if not ticker or pd.isna(row.get('Ticker')):
                 continue
 
-            # Ensure valid non-zero market cap
             mkt_cap = _safe_float(row.get('MarketCap', 0.0))
             if mkt_cap <= 0.0:
                 continue
@@ -216,7 +145,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             raw_snapshot.append(d)
 
         try:
-            # 1. Primary scoring attempt with requested strategy & filters
             normalized_snapshot = normalize_stocks(
                 raw_snapshot,
                 strategy=strategy,
@@ -226,9 +154,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 global_stocks_list=raw_snapshot
             )
 
-            # 2. If strategy knockout filter dropped all stocks, fallback to relaxed strategy gates
             if not normalized_snapshot and strategy is not None:
-                print(f"[Backtest Engine] Strategy '{strategy}' knocked out all stocks at {t_k}. Relaxing strategy knockout filters.")
                 normalized_snapshot = normalize_stocks(
                     raw_snapshot,
                     strategy=None,
@@ -238,9 +164,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                     global_stocks_list=raw_snapshot
                 )
 
-            # 3. If dynamic filters (sector/cap) also resulted in 0 stocks, fallback to raw snapshot
             if not normalized_snapshot:
-                print(f"[Backtest Engine] Dynamic filters knocked out all stocks at {t_k}. Falling back to baseline snapshot.")
                 normalized_snapshot = normalize_stocks(
                     raw_snapshot,
                     strategy=None,
@@ -259,22 +183,105 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             print(f"Error scoring portfolio at {t_k}: {e}")
             top_10 = []
 
-        # Filter tickers present in price data
-        valid_tickers = [t for t in top_10 if t in close_data.columns]
-        if valid_tickers:
-            p['tickers'] = valid_tickers
-            last_valid_top_10 = valid_tickers
+        if top_10:
+            p['tickers'] = top_10
+            last_valid_top_10 = top_10
+        elif last_valid_top_10:
+            p['tickers'] = last_valid_top_10
         else:
-            if last_valid_top_10:
-                p['tickers'] = last_valid_top_10
-                print(f"[Backtest Engine] Warning: Empty portfolio at {t_k}. Falling back to previous quarter portfolio.")
-            else:
-                p['tickers'] = ['SPY']
-                print(f"[Backtest Engine] Warning: Empty portfolio at {t_k} with no previous history. Falling back to SPY.")
+            p['tickers'] = ['SPY']
 
-    # Reclaim fundamental DataFrame memory before starting daily price simulation
+        needed_tickers.update(p['tickers'])
+
+    needed_tickers.add('SPY')
+    print(f"[Backtest Engine] Identified {len(needed_tickers)} unique target tickers for lazy price ingestion: {sorted(needed_tickers)}")
+
+    # Reclaim fundamental DataFrame memory before price loading
     del df
     gc.collect()
+
+    # ── PHASE 2: Lazy Price Ingestion (Filtered SECOND - >99% RAM Saving) ──────
+    simfin_parquet_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet')
+    simfin_csv_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
+
+    price_data = None
+    if os.path.exists(simfin_parquet_path):
+        raw_p = pd.read_parquet(
+            simfin_parquet_path,
+            engine='pyarrow',
+            columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
+            filters=[('Ticker', 'in', list(needed_tickers))]
+        )
+        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
+        del raw_p
+        gc.collect()
+        print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin Parquet.")
+    elif os.path.exists(simfin_csv_path):
+        raw_p = pd.read_csv(
+            simfin_csv_path,
+            sep=";",
+            usecols=['Date', 'Ticker', 'Adj. Close', 'Close'],
+            dtype={'Close': 'float32', 'Adj. Close': 'float32'}
+        )
+        raw_p = raw_p[raw_p['Ticker'].isin(needed_tickers)]
+        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
+        del raw_p
+        gc.collect()
+        print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin CSV.")
+
+    if price_data is None or price_data.empty:
+        raise ValueError("Historical price data is missing for selected target universe.")
+
+    # Extract adjusted close prices
+    close_data = price_data
+
+    # Ensure close_data's index is timezone-naive
+    if hasattr(close_data.index, 'tz') and close_data.index.tz is not None:
+        close_data.index = close_data.index.tz_localize(None)
+
+    # Load SPY offline history and merge into close_data
+    spy_path = os.path.join('data', 'spy_historical.csv')
+    if not os.path.exists(spy_path):
+        raise ValueError(f"Benchmark SPY historical data is missing at {spy_path}.")
+    
+    spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'], dtype={'SPY_Adj_Close': 'float32'})
+    spy_df['Date'] = pd.to_datetime(spy_df['Date'])
+    spy_df = spy_df.set_index('Date')
+    if hasattr(spy_df.index, 'tz') and spy_df.index.tz is not None:
+        spy_df.index = spy_df.index.tz_localize(None)
+    
+    close_data['SPY'] = spy_df['SPY_Adj_Close'].astype('float32')
+    close_data['SPY'] = close_data['SPY'].ffill()
+    del spy_df
+    gc.collect()
+
+    trading_dates = close_data.index
+    effective_start = trading_dates[trading_dates >= start_date][0] if any(trading_dates >= start_date) else trading_dates[0]
+
+    # Finalize periods with exact trading_dates bounds and filter valid_tickers
+    periods = []
+    for k, p_pre in enumerate(prelim_periods):
+        t_k = p_pre['anchor']
+        hold_start = p_pre['start']
+        hold_end = pd.Timestamp(selected_anchors[k+1]).tz_localize(None) if k < len(selected_anchors) - 1 else pd.Timestamp(trading_dates[-1]).tz_localize(None)
+        
+        valid_tickers = [t for t in p_pre['tickers'] if t in close_data.columns]
+        if not valid_tickers:
+            valid_tickers = ['SPY']
+
+        if hold_start <= hold_end:
+            periods.append({
+                'anchor': t_k,
+                'start': hold_start,
+                'end': hold_end,
+                'tickers': valid_tickers
+            })
 
     # Daily simulation loop: compute percentage changes downcasted to float32
     daily_returns = close_data.pct_change().astype('float32')
@@ -386,7 +393,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         })
 
     # Cleanup temporary calculation objects before returning
-    del daily_returns, portfolio_daily_returns, spy_daily_returns, port_series, spy_series, portfolio_cumulative, spy_cumulative
+    del port_series, spy_series, portfolio_cumulative, spy_cumulative
     gc.collect()
 
     return {
