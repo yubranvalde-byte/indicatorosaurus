@@ -17,11 +17,16 @@ def fetch_spy_offline():
         print("Failed to download SPY data.")
         return
 
-    # Handle MultiIndex returned by newer yfinance versions
+    # Handle MultiIndex and SingleIndex returned by yfinance versions
     if isinstance(spy_data.columns, pd.MultiIndex):
-        spy_close = spy_data['Adj Close']['SPY']
+        lvl0 = spy_data.columns.get_level_values(0).unique().tolist()
+        col_name = 'Close' if 'Close' in lvl0 else ('Adj Close' if 'Adj Close' in lvl0 else lvl0[0])
+        spy_close = spy_data[col_name]
+        if isinstance(spy_close, pd.DataFrame):
+            spy_close = spy_close.iloc[:, 0]
     else:
-        spy_close = spy_data['Adj Close']
+        col_name = 'Close' if 'Close' in spy_data.columns else ('Adj Close' if 'Adj Close' in spy_data.columns else spy_data.columns[0])
+        spy_close = spy_data[col_name]
 
     # Remove timezone information to match the offline fundamentals format
     spy_close.index = spy_close.index.tz_localize(None)
