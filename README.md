@@ -164,11 +164,12 @@ $$\text{Shareholder Yield} = \frac{-(\text{Dividends Paid} + \text{Net Stock Flo
 > [!TIP]
 > **C-FFI Boundary, In-Memory TTL Cache & RAM Safety Architecture:**
 > - **In-Memory TTL Cache & Sub-Second Response**: The live screener endpoint (`/api/calculate`) reads fundamental datasets from an in-memory TTL cache (`get_cached_fundamental_snapshot`) with a 30-minute expiration window. Cache hits return in < 1ms, eliminating network latency for the C-FFI scoring engine.
+> - **Copy Isolation & Mutation Leak Prevention**: `get_cached_fundamental_snapshot` returns isolated copies of cached dictionary records (`[dict(r) for r in cached_data]`), preventing Flask requests from mutating or accumulating state on the global cache object.
 > - **Batched Tiingo API Integration**: When a `TIINGO_API_KEY` (or `API_KEY`) environment variable is configured, the system fetches real-time prices from the Tiingo IEX API in 50-ticker batches (`fetch_tiingo_live_data`), preventing HTTP 414 URI Too Long errors across large stock universes and falling back seamlessly to disk CSV (`historical_fundamental_data.csv`) if the key is absent or rate-limited.
 > - **C-FFI Null & Empty Universe Guards**: C exported functions (`compute_scores`, `sort_stocks_by_score`) and Python wrappers in `financial_module.py` explicitly validate pointers (`stocks != NULL`) and array lengths (`num_stocks > 0`). If strategy knockouts eliminate all stocks, the FFI call is safely bypassed and triggers intelligent fallback (`['SPY']`), preventing C-level Segmentation Faults.
 > - **Selective Column Projection (`usecols` / `columns`)**: CSV and Parquet readers load strictly necessary data columns, avoiding loading unused data fields into memory.
 > - **Float32 Downcasting**: All numeric time-series and financial indicator matrices are immediately downcasted from `float64` to `float32`, cutting RAM consumption by 50%.
-> - **Explicit Garbage Collection (`import gc`)**: Large intermediate DataFrames (e.g., raw Parquet tables, pivot structures, fundamental slices) are explicitly deleted (`del`) and garbage-collected (`gc.collect()`) at key pipeline milestones to maintain peak memory usage well below free-tier cloud limits (e.g., 512MB RAM on Render).
+> - **Explicit Garbage Collection (`import gc`)**: Large intermediate DataFrames, HTTP response buffers, and stale cache objects are explicitly deleted (`del`) and garbage-collected (`gc.collect()`) at key pipeline milestones to maintain peak memory usage well below free-tier cloud limits (e.g., 512MB RAM on Render).
 
 ---
 

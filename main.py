@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import csv
 import os
+import gc
 from financial_module import (
     run_financial_engine, normalize_stocks,
     INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
@@ -159,7 +160,7 @@ def calculate():
                 "indicators": indicators,
             })
 
-        return jsonify({
+        res_json = jsonify({
             "strategy":      strategy,
             "stocks_before": total_csv_count,
             "stocks_after":  len(sorted_stocks),
@@ -171,6 +172,9 @@ def calculate():
             },
             "results":       frontend_response,
         })
+        del stocks_data, sorted_stocks, normalized_stocks, raw_by_ticker, norm_by_ticker, frontend_response
+        gc.collect()
+        return res_json
 
     except Exception as e:
         return jsonify({"error": f"Engine execution failed: {str(e)}"}), 500

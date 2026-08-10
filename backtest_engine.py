@@ -323,6 +323,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     port_series = pd.Series(portfolio_daily_returns, index=simulation_dates, dtype='float32')
     spy_series = pd.Series(spy_daily_returns, index=simulation_dates, dtype='float32')
+    del daily_returns, portfolio_daily_returns, spy_daily_returns
+    gc.collect()
 
     if len(port_series) > 0:
         port_series.iloc[0] = 0.0

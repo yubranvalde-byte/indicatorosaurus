@@ -98,7 +98,8 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
     """
     Fetches real-time stock prices from Tiingo API in chunks/batches of `batch_size` (default 50)
     to prevent HTTP 414 URI Too Long errors when querying large universes.
-    Returns dictionary mapping upper-case ticker -> {'price': float, 'volume': float}.
+    Returns dictionary mapping upper-case ticker -> {'price': float32, 'volume': float32}.
+    Explicitly frees HTTP buffers to prevent RAM bloat on Render.
     """
     if not tiingo_key or not tickers_list:
         return {}
@@ -116,6 +117,7 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
         tickers_str = ",".join(batch)
         url = f"https://api.tiingo.com/iex/?tickers={tickers_str}"
         
+        resp = None
         try:
             resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
@@ -128,11 +130,12 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
                         if t_sym and p is not None:
                             try:
                                 price_map[t_sym] = {
-                                    'price': float(p),
-                                    'volume': float(v) if v else 0.0
+                                    'price': _safe_float(p),
+                                    'volume': _safe_float(v)
                                 }
                             except (ValueError, TypeError):
                                 pass
+                del data
             elif resp.status_code == 429:
                 print("[Tiingo API Warning] Rate limit (HTTP 429) hit. Returning accumulated batch quotes.")
                 break
@@ -140,7 +143,15 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
                 print(f"[Tiingo API Warning] Batch {i//batch_size + 1} returned status code {resp.status_code}.")
         except Exception as e:
             print(f"[Tiingo API Error] Batch {i//batch_size + 1} failed: {e}")
+        finally:
+            if resp is not None:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+                del resp
 
+    gc.collect()
     if price_map:
         print(f"[Tiingo API] Successfully fetched real-time quotes for {len(price_map)} tickers in batches of {batch_size}.")
     return price_map
@@ -150,15 +161,19 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     """
     Returns live fundamental dataset from In-Memory TTL Cache (1800s / 30 mins).
     Sub-second response time (< 1ms) for C-FFI screener endpoint.
-    Fetches Tiingo API quotes in 50-ticker batches if TIINGO_API_KEY is present,
-    enriching the fundamental snapshot with real-time pricing data.
+    Returns copy-isolated records to prevent Flask callers from mutating or leaking memory onto cached state.
     """
     global _LIVE_DATA_CACHE
     now = time.time()
 
-    # 1. Cache Hit: Return cached data instantly if fresh (< TTL)
+    # 1. Cache Hit: Return an isolated copy of cached data instantly if fresh (< TTL)
     if _LIVE_DATA_CACHE['data'] is not None and (now - _LIVE_DATA_CACHE['timestamp']) < ttl_seconds:
-        return _LIVE_DATA_CACHE['data'], None
+        return [dict(r) for r in _LIVE_DATA_CACHE['data']], None
+
+    # Explicitly release old cache memory before reloading
+    if _LIVE_DATA_CACHE['data'] is not None:
+        _LIVE_DATA_CACHE['data'] = None
+        gc.collect()
 
     # 2. Load baseline records from local disk CSV
     disk_records, err = load_latest_fundamental_snapshot(csv_path)
@@ -178,13 +193,16 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
                     live_p = tiingo_prices[sym]['price']
                     if live_p > 0:
                         r['Price'] = live_p
+            del tiingo_prices
+            gc.collect()
 
     # 4. Update in-memory cache & timestamp
     _LIVE_DATA_CACHE['data'] = disk_records
     _LIVE_DATA_CACHE['timestamp'] = now
     print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records (TTL {int(ttl_seconds)}s).")
 
-    return disk_records, None
+    # Return isolated copy to caller
+    return [dict(r) for r in disk_records], None
 
 
 # ─── Data Ingestion Helper ───────────────────────────────────────────────────
