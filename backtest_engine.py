@@ -1,4 +1,5 @@
 import bisect
+import gc
 import math
 import os
 import pandas as pd
@@ -31,9 +32,22 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if not os.path.exists(csv_path):
         raise ValueError("Historical fundamental data file not found. Please run the ingestion process first.")
         
-    df = pd.read_csv(csv_path)
+    needed_fund_cols = [
+        'Ticker', 'GICS_Sector', 'Sector', 'Quarter_End_Date', 'MarketCap', 'EBITDA',
+        'ForwardPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
+        'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
+        'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
+        'RelativeStrength', 'CurrentRatio'
+    ]
+
+    df = pd.read_csv(csv_path, usecols=lambda c: c in needed_fund_cols)
     if df.empty:
         raise ValueError("Historical fundamental data file is empty.")
+
+    # Downcast float64 to float32 immediately to cut memory footprint
+    float_cols = df.select_dtypes(include=['float64']).columns
+    if not float_cols.empty:
+        df[float_cols] = df[float_cols].astype('float32')
 
     # Parse dates and sort chronologically, ensuring timezone-naive
     df['Quarter_End_Date'] = pd.to_datetime(df['Quarter_End_Date']).dt.tz_localize(None)
@@ -85,16 +99,22 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     price_data = None
     if os.path.exists(simfin_parquet_path):
-        raw_p = pd.read_parquet(simfin_parquet_path, engine='pyarrow')
+        raw_p = pd.read_parquet(simfin_parquet_path, engine='pyarrow', columns=['Date', 'Ticker', 'Adj. Close', 'Close'])
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close'])
-        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price')
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
+        del raw_p
+        gc.collect()
         print("[Backtest Engine] Loaded prices from SimFin Parquet (offline, cloud-ready).")
     elif os.path.exists(simfin_csv_path):
-        raw_p = pd.read_csv(simfin_csv_path, sep=";")
+        raw_p = pd.read_csv(simfin_csv_path, sep=";", usecols=['Date', 'Ticker', 'Adj. Close', 'Close'], dtype={'Close': 'float32', 'Adj. Close': 'float32'})
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close'])
-        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price')
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+        price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
+        del raw_p
+        gc.collect()
         print("[Backtest Engine] Loaded prices from SimFin daily shareprices CSV (fallback).")
 
     if price_data is None or price_data.empty:
@@ -117,14 +137,16 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if not os.path.exists(spy_path):
         raise ValueError(f"Benchmark SPY historical data is missing at {spy_path}. Please run fetch_spy_offline.py first.")
     
-    spy_df = pd.read_csv(spy_path)
+    spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'], dtype={'SPY_Adj_Close': 'float32'})
     spy_df['Date'] = pd.to_datetime(spy_df['Date'])
     spy_df = spy_df.set_index('Date')
     if hasattr(spy_df.index, 'tz') and spy_df.index.tz is not None:
         spy_df.index = spy_df.index.tz_localize(None)
     
-    close_data['SPY'] = spy_df['SPY_Adj_Close']
+    close_data['SPY'] = spy_df['SPY_Adj_Close'].astype('float32')
     close_data['SPY'] = close_data['SPY'].ffill()
+    del spy_df
+    gc.collect()
 
     # Drop columns that are entirely NaN across the whole window
     all_nan_cols = [c for c in close_data.columns if close_data[c].isna().all() and c != 'SPY']
@@ -250,27 +272,28 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 p['tickers'] = ['SPY']
                 print(f"[Backtest Engine] Warning: Empty portfolio at {t_k} with no previous history. Falling back to SPY.")
 
-    # Daily simulation loop
-    daily_returns = close_data.pct_change()
+    # Reclaim fundamental DataFrame memory before starting daily price simulation
+    del df
+    gc.collect()
+
+    # Daily simulation loop: compute percentage changes downcasted to float32
+    daily_returns = close_data.pct_change().astype('float32')
+    del close_data
+    if price_data is not None:
+        del price_data
+    gc.collect()
+
     portfolio_daily_returns = []
     spy_daily_returns = []
 
     # Clamp effective_start forward to the first actual holding period start.
-    # Without this, days between effective_start and periods[0]['start'] have
-    # no active period and return 0.0 every day, locking the equity curve at 1.0
-    # for the entire early portion of the chart.
     if periods:
         first_period_start = periods[0]['start']
-        # Find the first real trading day >= first_period_start
         trading_on_or_after = trading_dates[trading_dates >= first_period_start]
         if len(trading_on_or_after) > 0:
             effective_start = max(effective_start, trading_on_or_after[0])
 
     simulation_dates = [d for d in trading_dates if d >= effective_start]
-
-    # Build a sorted list of (start, end) boundaries for O(log n) lookup.
-    # For each day d we binary-search to find which holding period it belongs to
-    # rather than doing an O(n) scan through `periods`.
     period_starts = [p['start'] for p in periods]
 
     for d in simulation_dates:
@@ -282,8 +305,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             tickers_for_day = active_period['tickers']
             day_slice = daily_returns.loc[d, tickers_for_day]
 
-            # Guard: if EVERY ticker in the portfolio has NaN for this day
-            # (e.g. market holiday, all assets pre-IPO), preserve capital at 0.0.
             valid_returns = day_slice.dropna()
             if valid_returns.empty:
                 port_ret = 0.0
@@ -300,8 +321,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         portfolio_daily_returns.append(port_ret)
         spy_daily_returns.append(spy_ret)
 
-    port_series = pd.Series(portfolio_daily_returns, index=simulation_dates)
-    spy_series = pd.Series(spy_daily_returns, index=simulation_dates)
+    port_series = pd.Series(portfolio_daily_returns, index=simulation_dates, dtype='float32')
+    spy_series = pd.Series(spy_daily_returns, index=simulation_dates, dtype='float32')
 
     if len(port_series) > 0:
         port_series.iloc[0] = 0.0
@@ -362,6 +383,10 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             "spy_return": round(float(spy_cumulative.iloc[idx]), 4)
         })
 
+    # Cleanup temporary calculation objects before returning
+    del daily_returns, portfolio_daily_returns, spy_daily_returns, port_series, spy_series, portfolio_cumulative, spy_cumulative
+    gc.collect()
+
     return {
         "performance_series": performance_series,
         "metrics": {
@@ -372,3 +397,4 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             "total_alpha": round(alpha, 4)
         }
     }
+

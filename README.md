@@ -154,12 +154,18 @@ $$\text{Shareholder Yield} = \frac{-(\text{Dividends Paid} + \text{Net Stock Flo
 
 ---
 
-## Technical Notes & Rate-Limiting Resilience
+## Technical Notes & Memory Optimization
 
 > [!IMPORTANT]
 > **API Rate Limiting & Web Scraper Resilience:**
 > - **Yahoo Finance & Wikipedia Scraper Throttling**: Auxiliary background scripts (e.g., `fetch_static_data.py`) that pull live market indicators from Yahoo Finance or Wikipedia may encounter HTTP 429 (*Too Many Requests*) rate limits or missing `lxml` warnings when executed on cloud server IP ranges (e.g., Render, AWS, Heroku).
 > - **Zero-Downtime Fallback Architecture**: The core simulation engine (`backtest_engine.py`) is **completely decoupled** from external network scrapers. If web scraping triggers throttling during build/startup, the web application seamlessly falls back to pre-built, cached static datasets (`market_data.csv`, `spy_historical.csv`, and `us-shareprices-daily.parquet`). This guarantees 100% server uptime and deterministic simulation execution regardless of third-party API availability.
+
+> [!TIP]
+> **Aggressive RAM & OOM Prevention Architecture:**
+> - **Selective Column Projection (`usecols` / `columns`)**: CSV and Parquet readers load strictly necessary data columns, avoiding loading unused data fields into memory.
+> - **Float32 Downcasting**: All numeric time-series and financial indicator matrices are immediately downcasted from `float64` to `float32`, cutting RAM consumption by 50%.
+> - **Explicit Garbage Collection (`import gc`)**: Large intermediate DataFrames (e.g., raw Parquet tables, pivot structures, fundamental slices) are explicitly deleted (`del`) and garbage-collected (`gc.collect()`) at key pipeline milestones to maintain peak memory usage well below free-tier cloud limits (e.g., 512MB RAM on Render).
 
 ---
 

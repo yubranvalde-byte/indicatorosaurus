@@ -3,6 +3,7 @@ import os
 import math
 import statistics
 import csv
+import gc
 import pandas as pd
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -111,7 +112,13 @@ def load_latest_fundamental_snapshot(csv_path):
         if "LongName" not in df.columns:
             df["LongName"] = df["Ticker"]
             
+        float_cols = df.select_dtypes(include=['float64']).columns
+        if not float_cols.empty:
+            df[float_cols] = df[float_cols].astype('float32')
+
         records = df.to_dict(orient="records")
+        del df
+        gc.collect()
         return records, None
     except Exception as e:
         return None, f"Failed to parse fundamental snapshot dataset: {str(e)}"
