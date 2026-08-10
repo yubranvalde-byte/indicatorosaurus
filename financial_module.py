@@ -121,23 +121,26 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
         try:
             resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
-                data = resp.json()
-                if isinstance(data, list):
-                    for item in data:
-                        t_sym = str(item.get('ticker', '')).upper().strip()
-                        p = item.get('last') or item.get('tngoLast') or item.get('prevClose')
-                        v = item.get('volume', 0.0)
-                        if t_sym and p is not None:
-                            try:
-                                price_map[t_sym] = {
-                                    'price': _safe_float(p),
-                                    'volume': _safe_float(v)
-                                }
-                            except (ValueError, TypeError):
-                                pass
-                del data
+                try:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            t_sym = str(item.get('ticker', '')).upper().strip()
+                            p = item.get('last') or item.get('tngoLast') or item.get('prevClose')
+                            v = item.get('volume', 0.0)
+                            if t_sym and p is not None:
+                                try:
+                                    price_map[t_sym] = {
+                                        'price': _safe_float(p),
+                                        'volume': _safe_float(v)
+                                    }
+                                except (ValueError, TypeError):
+                                    pass
+                    del data
+                except Exception as json_err:
+                    print(f"[Tiingo API Warning] Batch {i//batch_size + 1} JSON decode failed: {json_err}")
             elif resp.status_code == 429:
-                print("[Tiingo API Warning] Rate limit (HTTP 429) hit. Returning accumulated batch quotes.")
+                print("[Tiingo API Warning] Rate limit (HTTP 429) hit. Stopping API requests and returning accumulated quotes.")
                 break
             else:
                 print(f"[Tiingo API Warning] Batch {i//batch_size + 1} returned status code {resp.status_code}.")
@@ -150,6 +153,7 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
                 except Exception:
                     pass
                 del resp
+            time.sleep(0.15)  # Rate limit throttle delay (150ms) between batch HTTP requests
 
     gc.collect()
     if price_map:
