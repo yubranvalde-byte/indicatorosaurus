@@ -1,6 +1,8 @@
 #ifndef FINANCIAL_ENGINE_H
 #define FINANCIAL_ENGINE_H
 
+#include <stddef.h>
+#include <stdlib.h>
 #include "stock.h"
 
 // Computes the final_score for each stock using a pure weighted dot product.

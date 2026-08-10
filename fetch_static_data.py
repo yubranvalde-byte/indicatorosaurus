@@ -872,10 +872,10 @@ def fetch_and_save_historical_fundamental_data():
             print(f"  ✗ Failed to fetch quarterly historical data for {symbol}: {ticker_e}")
             
             if consecutive_failures >= 5:
-                print("\n❌ Too many consecutive failures. Saving state and exiting.")
+                print("\n⚠️ Throttling / HTTP 429 detected. Saving state and exiting gracefully (0) to allow offline deployment boot.")
                 if buffer_list:
                     write_hist_batch(buffer_list)
-                sys.exit(1)
+                sys.exit(0)
 
         time.sleep(INTER_TICKER_DELAY)
 

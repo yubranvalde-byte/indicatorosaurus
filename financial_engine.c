@@ -5,7 +5,7 @@
 // by the Python FFI layer before this function is called.
 // No Min-Max scan or direction inversion is performed here.
 void compute_scores(Stock* stocks, int num_stocks, const double* weights) {
-    if (num_stocks <= 0) return;
+    if (stocks == NULL || weights == NULL || num_stocks <= 0) return;
 
     // Sum all 16 weights for normalization
     double total_weight = 0.0;
@@ -78,7 +78,8 @@ static void quick_sort_stocks(Stock* arr, int low, int high) {
 
 // Public API to sort the stocks in descending order by final_score
 void sort_stocks_by_score(Stock* stocks, int num_stocks) {
-    if (num_stocks > 1) {
-        quick_sort_stocks(stocks, 0, num_stocks - 1);
+    if (stocks == NULL || num_stocks <= 1) {
+        return;
     }
+    quick_sort_stocks(stocks, 0, num_stocks - 1);
 }
