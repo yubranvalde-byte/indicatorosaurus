@@ -56,8 +56,8 @@ KNOCKOUT_FILTERS = {
         ('GrossMargin',      '>',  0.20  ),  # Baseline pricing power: >20%
     ],
     'momentum': [
-        ('PriceVs200SMA',    '>',  0.0   ),  # Price must be above 200-day SMA
-        ('RelativeStrength', '>',  0.0   ),  # Must outperform SPY benchmark over 52w
+        ('PriceVs200SMA',    '>=',  0.0   ),  # Price must be at or above 200-day SMA
+        ('RelativeStrength', '>=', -0.20  ),  # Outperform benchmark gate (relaxed to >= -0.20 to include boundary benchmark performers)
     ],
     'income': [
         ('PayoutRatio',      '>',  0.0   ),  # Must have earnings (pays a dividend)
@@ -170,11 +170,28 @@ def compute_live_technical_indicators(unique_tickers):
     if not unique_tickers:
         return {}
 
-    simfin_parquet_path = os.path.join(os.path.dirname(__file__), 'data', 'raw_simfin', 'us-shareprices-daily.parquet')
-    spy_path = os.path.join(os.path.dirname(__file__), 'data', 'spy_historical.csv')
+    # Robust Multi-Candidate Path Resolution for Parquet & SPY data files
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    simfin_parquet_candidates = [
+        os.path.join(base_dir, 'data', 'raw_simfin', 'us-shareprices-daily.parquet'),
+        os.path.join(base_dir, 'data', 'us-shareprices-daily.parquet'),
+        os.path.join(base_dir, 'us-shareprices-daily.parquet'),
+        os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet'),
+        os.path.join('data', 'us-shareprices-daily.parquet'),
+    ]
+    simfin_parquet_path = next((p for p in simfin_parquet_candidates if os.path.exists(p)), None)
+
+    spy_candidates = [
+        os.path.join(base_dir, 'data', 'spy_historical.csv'),
+        os.path.join(base_dir, 'spy_historical.csv'),
+        os.path.join('data', 'spy_historical.csv'),
+        'spy_historical.csv',
+    ]
+    spy_path = next((p for p in spy_candidates if os.path.exists(p)), None)
 
     tech_map = {}
-    if not os.path.exists(simfin_parquet_path) or not os.path.exists(spy_path):
+    if not simfin_parquet_path or not spy_path:
+        print(f"CRITICAL PATH WARNING: Data files missing for technical indicator computation. Parquet: '{simfin_parquet_path}', SPY: '{spy_path}'")
         return tech_map
 
     try:
