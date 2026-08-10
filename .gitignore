@@ -16,6 +16,7 @@ visualize_test
 data/
 *.csv
 !historical_fundamental_data.csv
+!spy_historical.csv
 *.pkl
 
 # System and IDE files

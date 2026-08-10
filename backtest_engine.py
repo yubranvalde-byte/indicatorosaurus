@@ -113,14 +113,24 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if hasattr(close_data.index, 'tz') and close_data.index.tz is not None:
         close_data.index = close_data.index.tz_localize(None)
 
+    # Load SPY offline history and merge into close_data
+    spy_path = os.path.join('data', 'spy_historical.csv')
+    if not os.path.exists(spy_path):
+        raise ValueError(f"Benchmark SPY historical data is missing at {spy_path}. Please run fetch_spy_offline.py first.")
+    
+    spy_df = pd.read_csv(spy_path)
+    spy_df['Date'] = pd.to_datetime(spy_df['Date'])
+    spy_df = spy_df.set_index('Date')
+    if hasattr(spy_df.index, 'tz') and spy_df.index.tz is not None:
+        spy_df.index = spy_df.index.tz_localize(None)
+    
+    close_data['SPY'] = spy_df['SPY_Adj_Close']
+    close_data['SPY'] = close_data['SPY'].ffill()
+
     # Drop columns that are entirely NaN across the whole window
-    # (delisted or bad tickers). Keep SPY unconditionally.
     all_nan_cols = [c for c in close_data.columns if close_data[c].isna().all() and c != 'SPY']
     if all_nan_cols:
         close_data = close_data.drop(columns=all_nan_cols)
-
-    if 'SPY' not in close_data.columns:
-        raise ValueError("Benchmark SPY is missing from local historical price cache.")
 
     trading_dates = close_data.index
 
