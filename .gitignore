@@ -15,6 +15,7 @@ visualize_test
 # Data directories and large datasets / caches
 data/
 *.csv
+!historical_fundamental_data.csv
 *.pkl
 
 # System and IDE files

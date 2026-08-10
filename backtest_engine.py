@@ -302,16 +302,16 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     spy_cumulative = (1.0 + spy_series).cumprod().fillna(1.0)
 
     # Compute final metrics
-    num_weeks = len(port_series)
-    if num_weeks > 1:
-        annual_factor = 52.0 / num_weeks
+    num_days = len(port_series)
+    if num_days > 1:
+        annual_factor = 252.0 / num_days
         p_last = max(0.0001, float(portfolio_cumulative.iloc[-1]))
         s_last = max(0.0001, float(spy_cumulative.iloc[-1]))
         port_ann_return = float(p_last ** annual_factor - 1.0)
         spy_ann_return = float(s_last ** annual_factor - 1.0)
 
-        port_vol = float(port_series.std() * math.sqrt(52))
-        spy_vol = float(spy_series.std() * math.sqrt(52))
+        port_vol = float(port_series.std() * math.sqrt(252))
+        spy_vol = float(spy_series.std() * math.sqrt(252))
 
         # 4% risk free hurdle
         port_sharpe = (port_ann_return - 0.04) / port_vol if port_vol > 0 else 0.0

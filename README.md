@@ -184,7 +184,17 @@ make clean && make
 ```
 > ⚠️ **WSL Required on Windows**: The `Makefile` uses GCC. On Windows, all compilation and Python execution must be performed inside WSL (Windows Subsystem for Linux).
 
-### Step 4 — Launch the Application
+### Step 4 — Cloud Deployment (e.g., Render)
+For automated cloud deployment (e.g., Render), set the **Build Command** to:
+```bash
+./build.sh
+```
+and the **Start Command** to:
+```bash
+gunicorn main:app
+```
+
+### Step 5 — Launch the Application Locally
 ```bash
 python main.py
 ```
@@ -192,5 +202,5 @@ The Flask development server will start on `http://127.0.0.1:5000`.
 
 ---
 
-*AlphaQuant V3.2.1 — Academic & Research Use Only*
+*AlphaQuant V3.3 — Academic & Research Use Only*
 *Department of Computer Science, The Hebrew University of Jerusalem*
