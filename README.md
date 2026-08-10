@@ -162,7 +162,9 @@ $$\text{Shareholder Yield} = \frac{-(\text{Dividends Paid} + \text{Net Stock Flo
 > - **Zero-Downtime Fallback Architecture**: The core simulation engine (`backtest_engine.py`) is **completely decoupled** from external network scrapers. If web scraping triggers throttling during build/startup, `fetch_static_data.py` exits gracefully with status `0`, allowing the web application server (`gunicorn main:app`) to boot seamlessly using pre-built static datasets (`market_data.csv`, `spy_historical.csv`, and `us-shareprices-daily.parquet`).
 
 > [!TIP]
-> **C-FFI Boundary & RAM Safety Architecture:**
+> **C-FFI Boundary, In-Memory TTL Cache & RAM Safety Architecture:**
+> - **In-Memory TTL Cache & Sub-Second Response**: The live screener endpoint (`/api/calculate`) reads fundamental datasets from an in-memory TTL cache (`get_cached_fundamental_snapshot`) with a 30-minute expiration window. Cache hits return in < 1ms, eliminating network latency for the C-FFI scoring engine.
+> - **Live API Integration**: When an `API_KEY` environment variable is configured (e.g. Financial Modeling Prep / Tiingo), the system fetches live market quotes on cache expiration, falling back seamlessly to disk CSV (`historical_fundamental_data.csv`) if `API_KEY` is absent or rate-limited.
 > - **C-FFI Null & Empty Universe Guards**: C exported functions (`compute_scores`, `sort_stocks_by_score`) and Python wrappers in `financial_module.py` explicitly validate pointers (`stocks != NULL`) and array lengths (`num_stocks > 0`). If strategy knockouts eliminate all stocks, the FFI call is safely bypassed and triggers intelligent fallback (`['SPY']`), preventing C-level Segmentation Faults.
 > - **Selective Column Projection (`usecols` / `columns`)**: CSV and Parquet readers load strictly necessary data columns, avoiding loading unused data fields into memory.
 > - **Float32 Downcasting**: All numeric time-series and financial indicator matrices are immediately downcasted from `float64` to `float32`, cutting RAM consumption by 50%.

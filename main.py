@@ -4,7 +4,7 @@ import os
 from financial_module import (
     run_financial_engine, normalize_stocks,
     INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
-    load_latest_fundamental_snapshot
+    load_latest_fundamental_snapshot, get_cached_fundamental_snapshot
 )
 from backtest_engine import run_backtest
 
@@ -16,8 +16,8 @@ CSV_PATH = PRIMARY_CSV if os.path.exists(PRIMARY_CSV) else FALLBACK_CSV
 
 
 def _load_csv():
-    """Read fundamental dataset and return the latest cross-sectional snapshot as raw dicts."""
-    return load_latest_fundamental_snapshot(CSV_PATH)
+    """Read fundamental dataset from In-Memory TTL Cache for sub-second screener C-FFI execution."""
+    return get_cached_fundamental_snapshot(CSV_PATH)
 
 
 @app.route('/')
