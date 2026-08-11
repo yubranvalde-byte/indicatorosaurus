@@ -187,7 +187,7 @@ Before scoring, assets must pass global Gatekeeper Matrix cut-offs and strategy-
   - `MarketCap > $500M`
   - `Price > $5.00`
   - `20-day ADTV > $5M`
-  - `Conditional Insolvency Gatekeeper`: If `Total_Equity <= 0`, asset is kept ONLY if `FCF > 0` AND Interest Coverage (`EBIT / Interest_Expense`) > 3.0.
+  - `Conditional Insolvency Gatekeeper`: Evaluates when `Total_Equity` field is present in the record. If `Total_Equity <= 0`, asset is kept ONLY if `FCF > 0` AND Interest Coverage (`EBIT / Interest_Expense`) > 3.0. Safe guard bypasses evaluation when column is absent in unregenerated legacy datasets.
 - **Strategy Knock-Out Gates**:
   - **`deep-value`**: `FCFYield > 0.0`, `OperatingMargin > 0.0`
   - **`hyper-growth`**: `RevenueGrowth > 0.0`, `GrossMargin > 0.20`
