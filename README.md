@@ -187,8 +187,8 @@ Where $\text{MAD} = \text{Median}(|x_i - \text{Median}(x)|)$. If lower values ar
 ### Gatekeeper Matrix & Knock-Out Filter Gates (`apply_dynamic_filters`, `KNOCKOUT_FILTERS`)
 Before scoring, assets must pass global Gatekeeper Matrix cut-offs and strategy-specific binary gates:
 - **Global Gatekeeper Matrix**:
-  - `MarketCap > $500M`
-  - `Price > $5.00`
+  - `MarketCap >= $1B` ($1,000,000,000)
+  - `Price >= $5.00`
   - `20-day ADTV > $5M`
   - `Conditional Insolvency Gatekeeper`: Evaluates when `Total_Equity` field is present in the record. If `Total_Equity <= 0`, asset is kept ONLY if `FCF > 0` AND Interest Coverage (`EBIT / Interest_Expense`) > 3.0. Safe guard bypasses evaluation when column is absent in unregenerated legacy datasets.
 - **Strategy Knock-Out Gates**:
@@ -246,8 +246,8 @@ The complete step-by-step lifecycle of a live screener request via `/api/calcula
        |
        v
 3. **Static Demographics & Gatekeeper Matrix**: Apply early-stage strict cutoff filters (`apply_dynamic_filters`) before statistical normalization:
-                                - **Market Cap**: > $500M
-                                - **Price**: > $5.00 (from cached daily price matrix)
+                                - **Market Cap**: >= $1B ($1,000,000,000)
+                                - **Price**: >= $5.00 (from cached daily price matrix)
                                 - **20-Day ADTV**: > $5M (vectorized 20-day mean of Price * Volume)
                                 - **Demographics**: GICS sector whitelisting and user-specified cap bounds
        |

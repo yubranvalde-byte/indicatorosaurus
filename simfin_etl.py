@@ -252,6 +252,12 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
             sh = shares_price[i] if (not pd.isna(shares_price[i]) and shares_price[i] > 0) else shares_bs[i]
             mkt_cap = price[i] * sh if (not pd.isna(price[i]) and not pd.isna(sh) and sh > 0) else 0.0
 
+            # Upstream Structural Gatekeeper Filter (Point-in-Time Row-Level):
+            # Permanently drop quarterly records with Market Cap < $1B ($1,000,000,000) or Price < $5.00
+            cur_price = float(price[i]) if not pd.isna(price[i]) else 0.0
+            if mkt_cap < 1_000_000_000.0 or cur_price < 5.00:
+                continue
+
             # 1. TrailingPE (Price / EPS_TTM = MarketCap / Net Income)
             eps_ttm = safe_div(net_inc[i], sh, default=0.0)
             trailing_pe = safe_div(price[i], eps_ttm, default=0.0) if eps_ttm > 0 else 0.0

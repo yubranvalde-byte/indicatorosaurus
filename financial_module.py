@@ -544,9 +544,9 @@ def apply_knockout_filters(stocks_list, strategy):
 def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
     """
     Apply strict Gatekeeper Matrix early in the data pipeline to filter out unqualified assets:
-      - Market Cap > $500M ($500,000,000)
+      - Market Cap >= $1B ($1,000,000,000)
       - 20-day Average Daily Trading Volume (ADTV) > $5M ($5,000,000)
-      - Price > $5.00
+      - Price >= $5.00
     Also applies user-specified demographic gates (allowed_sectors, min_market_cap, max_market_cap).
     Returns a new list of dicts. If no filters are provided, returns the list unchanged.
     """
@@ -555,9 +555,9 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
         return []
 
     # ── Gatekeeper Cut-Off Constants ─────────────────────────────────────────
-    GATEKEEPER_MIN_MARKET_CAP = 500_000_000.0  # $500M
-    GATEKEEPER_MIN_PRICE = 5.00                # $5.00
-    GATEKEEPER_MIN_ADTV = 5_000_000.0          # $5M 20-day ADTV
+    GATEKEEPER_MIN_MARKET_CAP = 1_000_000_000.0  # $1B
+    GATEKEEPER_MIN_PRICE = 5.00                  # $5.00
+    GATEKEEPER_MIN_ADTV = 5_000_000.0            # $5M 20-day ADTV
 
     # Access pre-hydrated technical data cache (without triggering synchronous I/O)
     price_df = _TECH_DATA_CACHE.get('price_df')
@@ -598,7 +598,7 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
         # Coerce market cap to safe float
         mkt_cap = _safe_float(stock.get('MarketCap', 0.0))
 
-        # 2. Gatekeeper Matrix Filter 1: Market Cap > $500M
+        # 2. Gatekeeper Matrix Filter 1: Market Cap >= $1B
         if mkt_cap < GATEKEEPER_MIN_MARKET_CAP:
             rule_fail_counts['MarketCap'] += 1
             continue
