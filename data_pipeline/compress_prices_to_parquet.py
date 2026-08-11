@@ -7,8 +7,8 @@ import pandas as pd
 import os
 
 def compress_prices_to_parquet():
-    csv_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
-    parquet_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet')
+    csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw_simfin', 'us-shareprices-daily.csv')
+    parquet_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw_simfin', 'us-shareprices-daily.parquet')
 
     print(f"Reading {csv_path} ...")
     df = pd.read_csv(

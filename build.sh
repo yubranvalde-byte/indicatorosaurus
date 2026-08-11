@@ -8,8 +8,8 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 echo "=== 2. Compiling C-FFI Kernel (libsortbuslines.so) ==="
-make clean
-make
+make -C c_kernel clean
+make -C c_kernel
 
 echo "=== 3. Verifying Parquet Data Lake Presence ==="
 if [ -f "data/raw_simfin/us-shareprices-daily.parquet" ]; then

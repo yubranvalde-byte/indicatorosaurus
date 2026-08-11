@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 
 # Directory paths
-RAW_DIR = os.path.join(os.path.dirname(__file__), "data", "raw_simfin")
-OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "historical_fundamental_data.csv")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw_simfin")
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "historical_fundamental_data.csv")
 
 # Expected schema (+ Ticker header match)
 FINAL_COLUMNS = [

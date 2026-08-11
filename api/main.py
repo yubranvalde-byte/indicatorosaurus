@@ -2,18 +2,25 @@ from flask import Flask, request, jsonify, render_template
 import csv
 import os
 import gc
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'core_logic')))
+
+import pandas as pd
+import numpy as np
+
 from financial_module import (
-    run_financial_engine, normalize_stocks, apply_dynamic_filters, apply_knockout_filters,
+    run_financial_engine, normalize_stocks, apply_early_pruning_vectorized, apply_derived_knockouts_vectorized,
     compute_live_technical_indicators, ensure_tech_cache, INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
     load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
     fetch_tiingo_live_data
 )
 from backtest_engine import run_backtest
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../frontend/templates', static_folder='../frontend/static')
 
-PRIMARY_CSV = os.path.join(os.path.dirname(__file__), "historical_fundamental_data.csv")
-FALLBACK_CSV = os.path.join(os.path.dirname(__file__), "market_data.csv")
+PRIMARY_CSV = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "historical_fundamental_data.csv"))
+FALLBACK_CSV = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "market_data.csv"))
 CSV_PATH = PRIMARY_CSV if os.path.exists(PRIMARY_CSV) else FALLBACK_CSV
 
 # Optional Startup Cache Warmup gated strictly behind WARM_CACHE_ON_STARTUP env var
@@ -86,23 +93,19 @@ def calculate():
             return jsonify({"error": "min_market_cap cannot be greater than max_market_cap"}), 400
 
     # ── Load CSV baseline dataset ─────────────────────────────────────────────
-    stocks_data, err = _load_csv()
+    stocks_df, err = _load_csv()
     if err:
         return jsonify({"error": err}), (404 if "not found" in err else 500)
 
-    total_csv_count = len(stocks_data)
+    total_csv_count = len(stocks_df)
 
     # ── Explicit Pre-Flight Cache Management ──────────────────────────────────
     ensure_tech_cache()
 
     # ── Step 1: Pre-Filtering — Apply static filters FIRST to reduce universe ─
-    stocks_data = apply_dynamic_filters(stocks_data, allowed_sectors, min_market_cap, max_market_cap)
+    stocks_df = apply_early_pruning_vectorized(stocks_df, strategy, allowed_sectors, min_market_cap, max_market_cap, specific_tickers)
 
-    if specific_tickers:
-        ticker_set = {t.upper().strip() for t in specific_tickers}
-        stocks_data = [s for s in stocks_data if s['Ticker'].upper().strip() in ticker_set]
-
-    if not stocks_data:
+    if stocks_df.empty:
         return jsonify({
             "strategy": strategy,
             "stocks_before": total_csv_count,
@@ -118,30 +121,27 @@ def calculate():
 
     try:
         # ── Step 2: Strategy-Conditional Technical Indicator Computation ─────
-        # For non-momentum strategies, run knockout filters FIRST to shrink universe before computing technicals
-        if strategy and strategy != 'momentum':
-            stocks_data = apply_knockout_filters(stocks_data, strategy)
-
-        surviving_tickers = [s['Ticker'] for s in stocks_data if 'Ticker' in s]
+        surviving_tickers = stocks_df['Ticker'].tolist()
         tech_map = compute_live_technical_indicators(surviving_tickers)
 
         if tech_map:
-            for s in stocks_data:
-                sym = s.get('Ticker', '').upper().strip()
-                if sym in tech_map:
-                    t_data = tech_map[sym]
-                    for field in ['RelativeStrength', 'PriceVs200SMA', 'RSI', 'Beta']:
-                        cur_val = _safe_float(s.get(field, 0.0))
-                        if cur_val == 0.0 or field in ['RelativeStrength', 'PriceVs200SMA']:
-                            s[field] = t_data[field]
+            tech_df = pd.DataFrame.from_dict(tech_map, orient='index')
+            tech_df.index.name = 'Ticker'
+            
+            stocks_df.set_index('Ticker', inplace=True)
+            for col in ['RelativeStrength', 'PriceVs200SMA', 'RSI', 'Beta']:
+                if col in tech_df.columns:
+                    stocks_df[col] = tech_df[col]
+            stocks_df.reset_index(inplace=True)
+            
             del tech_map
+            del tech_df
             gc.collect()
 
-        # For momentum strategy, run knockout filter AFTER technical indicators are computed
-        if strategy == 'momentum':
-            stocks_data = apply_knockout_filters(stocks_data, strategy)
+        # ── Step 3: Derived Knockouts ────────────────────────────────────────
+        stocks_df = apply_derived_knockouts_vectorized(stocks_df, strategy)
 
-        if not stocks_data:
+        if stocks_df.empty:
             return jsonify({
                 "strategy": strategy,
                 "stocks_before": total_csv_count,
@@ -162,10 +162,20 @@ def calculate():
                 'sector': s.get('Sector', ''),
                 'marketCap': _safe_float(s.get('MarketCap', 0.0)),
             }
-            for s in stocks_data
+            for s in stocks_df.to_dict(orient='records')
         }
 
-        # ── Step 3: Normalize filtered & enriched universe ─────────────────────
+        # ── Type Serialization & NaN Safety ──────────────────────────────────
+        stocks_df = stocks_df.fillna(0.0).replace([np.inf, -np.inf], 0.0)
+        
+        for col in stocks_df.select_dtypes(include=['float32', 'float64']).columns:
+            stocks_df[col] = stocks_df[col].astype(float)
+        for col in stocks_df.select_dtypes(include=['int32', 'int64']).columns:
+            stocks_df[col] = stocks_df[col].astype(int)
+
+        stocks_data = stocks_df.to_dict(orient='records')
+
+        # ── Step 4: Normalization (Python) ────────────────────────────────────
         normalized_stocks = normalize_stocks(
             stocks_data,
             strategy=None,               # Already applied conditionally above

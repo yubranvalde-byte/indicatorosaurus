@@ -29,7 +29,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if not weights or len(weights) != 16:
         weights = [1.0] * 16
 
-    csv_path = 'historical_fundamental_data.csv'
+    csv_path = os.path.join('data', 'historical_fundamental_data.csv')
     if not os.path.exists(csv_path):
         raise ValueError("Historical fundamental data file not found. Please run the ingestion process first.")
         

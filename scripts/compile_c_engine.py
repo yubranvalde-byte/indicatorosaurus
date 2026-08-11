@@ -12,8 +12,8 @@ import subprocess
 import ctypes
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-C_SOURCE = os.path.join(PROJECT_ROOT, "financial_engine.c")
-SO_OUTPUT = os.path.join(PROJECT_ROOT, "libsortbuslines.so")
+C_SOURCE = os.path.join(PROJECT_ROOT, "c_kernel", "financial_engine.c")
+SO_OUTPUT = os.path.join(PROJECT_ROOT, "c_kernel", "libsortbuslines.so")
 
 
 def compile_c_engine():
@@ -26,7 +26,7 @@ def compile_c_engine():
 
     compilers_to_try = [
         ["gcc", "-O3", "-shared", "-fPIC", C_SOURCE, "-o", SO_OUTPUT],
-        ["wsl", "gcc", "-O3", "-shared", "-fPIC", "financial_engine.c", "-o", "libsortbuslines.so"],
+        ["wsl", "gcc", "-O3", "-shared", "-fPIC", "c_kernel/financial_engine.c", "-o", "c_kernel/libsortbuslines.so"],
     ]
 
     success = False
@@ -47,7 +47,7 @@ def compile_c_engine():
         sys.exit(1)
 
     # Verify FFI Stock struct alignment
-    sys.path.insert(0, PROJECT_ROOT)
+    sys.path.insert(0, os.path.join(PROJECT_ROOT, "core_logic"))
     try:
         from financial_module import Stock
         expected_size = 80

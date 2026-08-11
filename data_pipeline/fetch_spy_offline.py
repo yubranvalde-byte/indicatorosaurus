@@ -7,7 +7,7 @@ def fetch_spy_offline():
     Utility script to download the SPY benchmark history once and save it
     to the offline data lake.
     """
-    output_path = os.path.join('data', 'spy_historical.csv')
+    output_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'spy_historical.csv')
     print(f"Downloading SPY history to {output_path}...")
     
     # Download SPY data from 2012 to today to match the longest possible window

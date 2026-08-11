@@ -35,7 +35,7 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
                                           | JSON Payload
                                           v
                       +-------------------+-------------------+
-                      |      Flask Application (main.py)      |
+                      |      Flask Application (api/main.py)  |
                       | Explicit Pre-Flight ensure_tech_cache()|
                       +-------------------+-------------------+
                                           |
@@ -44,8 +44,8 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
         v                                                                   v
 +-------+-----------------------+                         +-----------------+-----------------------+
 |  In-Memory TTL Cache System   |                         |   Offline ETL & Data Lake Storage     |
-| _LIVE_DATA_CACHE  (30m TTL)   |                         | historical_fundamental_data.csv       |
-| _TECH_DATA_CACHE  (30m TTL)   |                         | us-shareprices-daily.parquet (PyArrow)|
+| _LIVE_DATA_CACHE  (30m TTL)   |                         | data/historical_fundamental_data.csv  |
+| _TECH_DATA_CACHE  (30m TTL)   |                         | data/raw_simfin/...                   |
 +-------+-----------------------+                         +-----------------+-----------------------+
         |                                                                   |
         +---------------------------------+---------------------------------+
@@ -53,14 +53,15 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
                                           v
                       +-------------------+-------------------+
                       |  Financial Orchestration Module       |
-                      |  (financial_module.py)                |
-                      |  Vectorized Normalization & Knockouts  |
+                      |  (core_logic/financial_module.py)     |
+                      |  Vectorized Normalization & Knockouts |
                       +-------------------+-------------------+
                                           |
                                           v (ctypes zero-copy FFI)
                       +-------------------+-------------------+
                       |    Compiled C Engine (libsortbuslines)|
                       |  Stock Struct [80B] | QuickSort Kernel|
+                      |  (c_kernel/)                          |
                       +---------------------------------------+
 ```
 
@@ -76,25 +77,26 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
 | **Frontend UI** | HTML5, Tailwind CSS, Chart.js, Vanilla JS | Async single-page dashboard with real-time performance charting |
 
 ### Frontend Architecture
-The single-page web client (`templates/index.html`) provides interactive analytics:
+The single-page web client (`frontend/templates/index.html`) provides interactive analytics:
 - **Async Polling & DOM Streaming**: Non-blocking `fetch()` requests submit 16-element weight vectors and strategy parameters to `/api/calculate` and `/api/backtest`.
 - **Chart.js Compounding Growth Visualizer**: Dynamic canvas rendering comparing strategy portfolio NAV against the SPY benchmark over 3Y and 5Y windows.
 - **16-Factor Weight Sliders & Filter Panels**: Dynamic UI control over factor weights, GICS sector filters, and market capitalization boundaries.
 
 ### Memory & Latency Optimizations
-1. **Vectorized NumPy Normalization Pipeline**: Replaced element-wise list comprehensions and scalar scoring loops with `_vectorized_goldilocks` and `_vectorized_sigmoid`, operating on `(N, 16)` float32 NumPy matrices in ~50ms.
-2. **Two-Tier In-Memory TTL Cache & Pre-Flight Management (`financial_module.py`)**:
-   - `_LIVE_DATA_CACHE` (30-minute TTL): Retains baseline raw fundamental snapshots in RAM, returning `<1ms` cache hits.
-   - `_TECH_DATA_CACHE` (30-minute TTL): Retains global price/volume matrices. Hydrated explicitly via route pre-flight calls (`ensure_tech_cache()`), removing synchronous I/O from `apply_dynamic_filters`. Optional boot-time hydration gated by `WARM_CACHE_ON_STARTUP`.
-3. **Selective Live Quote Enrichment**: Inverts live data calls to query Tiingo's API *only* for the top 100 surviving stocks after scoring, reducing HTTP batches from 64 down to 2 and avoiding rate limits (HTTP 429).
-4. **Lazy Price Ingestion in Backtest**: Screener identifies surviving tickers (~10-50 tickers) *first*, then loads daily prices from Parquet using PyArrow predicates (`Ticker` whitelist + `Date` bounds).
-5. **Memory Footprint Control**: Explicit `float32` downcasting, pre-sorting DataFrames to use `drop_duplicates(subset=['Ticker'], keep='last')` instead of memory-heavy `groupby().last()`, and inner-loop `gc.collect()`.
+1. **Vectorized Early Pruning & Filter Hoisting (`apply_early_pruning_vectorized`)**: Hoists fundamental strategy knockouts (`INTRINSIC_KNOCKOUTS`), GICS sector bounds, and Gatekeeper Matrix cutoffs (`MarketCap >= $1B`, `Price >= $5.00`, `20-day ADTV >= $5M`) to execute immediately on a `pandas.DataFrame` in-memory cache via boolean masking *before* technical indicator hydration and *before* Z-score/Goldilocks normalization. Shrinks dataset matrix ($N$) in ~1ms.
+2. **DataFrame In-Memory TTL Cache (`core_logic/financial_module.py`)**:
+   - `_LIVE_DATA_CACHE` (30-minute TTL): Retains baseline raw fundamental snapshots natively as a `pandas.DataFrame`, returning isolated deep copies (`df.copy()`) in `<1ms` for fast sub-second vectorized masking without cache mutation.
+   - `_TECH_DATA_CACHE` (30-minute TTL): Retains global price/volume matrices. Hydrated explicitly via route pre-flight calls (`ensure_tech_cache()`), removing synchronous I/O. Optional boot-time hydration gated by `WARM_CACHE_ON_STARTUP`.
+3. **Decoupled Strategy Knockouts (`INTRINSIC_KNOCKOUTS` vs `DERIVED_KNOCKOUTS`)**: Fundamental gates (`FCFYield`, `ROIC`, `RevenueGrowth`, `GrossMargin`, `PayoutRatio`, `CurrentRatio`) run during early pruning; technical gates (`DERIVED_KNOCKOUTS` like `PriceVs200SMA > 0`) run post-hydration on the surviving asset subset.
+4. **Selective Live Quote Enrichment**: Inverts live data calls to query Tiingo's API *only* for the top 100 surviving stocks after scoring, reducing HTTP batches from 64 down to 2 and avoiding rate limits (HTTP 429).
+5. **Lazy Price Ingestion in Backtest**: Screener identifies surviving tickers (~10-50 tickers) *first*, then loads daily prices from Parquet using PyArrow predicates (`Ticker` whitelist + `Date` bounds).
+6. **Memory Footprint Control & NaN Safety**: Explicit `float32` downcasting, pre-sorting DataFrames to use `drop_duplicates(subset=['Ticker'], keep='last')` instead of memory-heavy `groupby().last()`, inner-loop `gc.collect()`, and strict `.fillna(0.0).replace([np.inf, -np.inf], 0.0)` coercion prior to C-FFI / JSON serialization.
 
 ---
 
 ## 3. Data Provenance & ETL Pipeline
 
-AlphaQuant operates under a **Pure Offline Mandate** for simulation and fundamental screening. Raw market data is ingested, transformed, and cached via dedicated offline ETL scripts (`simfin_etl.py`).
+AlphaQuant operates under a **Pure Offline Mandate** for simulation and fundamental screening. Raw market data is ingested, transformed, and cached via dedicated offline ETL scripts (`data_pipeline/simfin_etl.py`).
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -186,19 +188,20 @@ Where $\text{MAD} = \text{Median}(|x_i - \text{Median}(x)|)$. If lower values ar
 
 ---
 
-### Gatekeeper Matrix & Knock-Out Filter Gates (`apply_dynamic_filters`, `KNOCKOUT_FILTERS`)
-Before scoring, assets must pass global Gatekeeper Matrix cut-offs and strategy-specific binary gates:
+### Vectorized Gatekeeper Matrix & Decoupled Knock-Out Filter Gates (`apply_early_pruning_vectorized`, `apply_derived_knockouts_vectorized`)
+Before scoring, assets must pass global Gatekeeper Matrix cut-offs and strategy-specific binary gates implemented via vectorized DataFrame boolean masking:
 - **Global Gatekeeper Matrix**:
   - `MarketCap >= $1B` ($1,000,000,000)
   - `Price >= $5.00`
-  - `20-day ADTV > $5M`
-  - `Conditional Insolvency Gatekeeper`: Evaluates when `Total_Equity` field is present in the record. If `Total_Equity <= 0`, asset is kept ONLY if `FCF > 0` AND Interest Coverage (`EBIT / Interest_Expense`) > 3.0. Safe guard bypasses evaluation when column is absent in unregenerated legacy datasets.
-- **Strategy Knock-Out Gates**:
+  - `20-day ADTV >= $5M` (vectorized 20-day mean of Price * Volume)
+  - `NetDebt_EBITDA <= 15.0` insolvency safety net.
+- **Intrinsic Knock-Out Gates (`INTRINSIC_KNOCKOUTS` — Applied early in data flow)**:
   - **`deep-value`**: `FCFYield > 0.0`, `OperatingMargin > 0.0`
   - **`hyper-growth`**: `RevenueGrowth > 0.0`, `GrossMargin > 0.20`
-  - **`momentum`**: `PriceVs200SMA > 0.0` (verifies valid historical SMA data)
   - **`income`**: `PayoutRatio > 0.0`, `PayoutRatio < 0.85`, `ShareholderYield > 0.015`
   - **`quality`**: `ROIC > 0.08`, `CurrentRatio > 1.0`
+- **Derived Knock-Out Gates (`DERIVED_KNOCKOUTS` — Applied post-technical indicator hydration)**:
+  - **`momentum`**: `PriceVs200SMA > 0.0` (verifies valid historical SMA data)
 
 ---
 
@@ -244,34 +247,36 @@ The complete step-by-step lifecycle of a live screener request via `/api/calcula
 1. Payload Validation -------> Verify weights[16], validate strategy & filters
        |
        v
-2. Baseline Data Load -------> Fetch raw snapshot from _LIVE_DATA_CACHE (<1ms)
+2. Baseline Data Load -------> Fetch raw snapshot DataFrame from _LIVE_DATA_CACHE (df.copy(), <1ms)
        |
        v
-3. **Static Demographics & Gatekeeper Matrix**: Apply early-stage strict cutoff filters (`apply_dynamic_filters`) before statistical normalization:
-                                - **Market Cap**: >= $1B ($1,000,000,000)
-                                - **Price**: >= $5.00 (from cached daily price matrix)
-                                - **20-Day ADTV**: > $5M (vectorized 20-day mean of Price * Volume)
-                                - **Demographics**: GICS sector whitelisting and user-specified cap bounds
+3. Vectorized Early Pruning -> Apply apply_early_pruning_vectorized() using vectorized pandas boolean masking:
+                                - Gatekeeper Matrix: MarketCap >= $1B, Price >= $5.00, 20-Day ADTV >= $5M
+                                - Demographics: GICS sector whitelisting and user-specified cap bounds
+                                - Intrinsic Knockouts: Fundamental strategy rules (e.g. FCFYield > 0)
        |
        v
-4. Technical Indicators ------> Fetch technicals from _TECH_DATA_CACHE (RelativeStrength, SMA, RSI, Beta)
-                                - Non-momentum: Knockouts apply BEFORE technical calculation
-                                - Momentum: Technicals compute BEFORE SMA knockout gate
+4. Technical Indicators ------> Fetch technicals for surviving tickers via compute_live_technical_indicators()
+                                - Merge RelativeStrength, SMA, RSI, Beta onto surviving DataFrame
+                                - Execute apply_derived_knockouts_vectorized() (e.g. PriceVs200SMA > 0)
        |
        v
-5. Statistical Normalization -> Execute normalize_stocks (Goldilocks + Sector-Neutral Sigmoid Z-Scores)
+5. Serialization & Safety ----> Coerce np.nan -> 0.0, replace inf, and cast NumPy types to Python scalars
        |
        v
-6. C Engine Execution --------> Pack into Stock array, call compute_scores & sort_stocks_by_score via ctypes
+6. Statistical Normalization -> Execute normalize_stocks (Goldilocks + Sector-Neutral Sigmoid Z-Scores)
        |
        v
-7. Hard Truncation ----------> Truncate universe strictly to Top 100 assets
+7. C Engine Execution --------> Pack into Stock array, call compute_scores & sort_stocks_by_score via ctypes
        |
        v
-8. Live Price Enrichment ----> Fetch real-time quotes via fetch_tiingo_live_data for Top 100
+8. Hard Truncation ----------> Truncate universe strictly to Top 100 assets
        |
        v
-9. JSON Serialization -------> Return JSON with raw metrics, normalized scores, and final scores
+9. Live Price Enrichment ----> Fetch real-time quotes via fetch_tiingo_live_data for Top 100
+       |
+       v
+10. JSON Serialization ------> Return JSON with raw metrics, normalized scores, and final scores
 ```
 
 ---
@@ -340,13 +345,13 @@ python scripts/run_rolling_backtest.py --strategy momentum --window 3y
 
 ### Step 4 — Run the Development Server
 ```bash
-python main.py
+python api/main.py
 ```
 *Access dashboard at `http://127.0.0.1:5000`.*
 
 ### Step 5 — Production Cloud Deployment (e.g. Render)
 - **Build Command**: `python scripts/compile_c_engine.py && pip install -r requirements.txt`
-- **Start Command**: `gunicorn main:app`
+- **Start Command**: `gunicorn api.main:app`
 - **Environment Variables**: `TIINGO_API_KEY` (Optional for live quote enrichment).
 
 ---

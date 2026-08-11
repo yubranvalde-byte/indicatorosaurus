@@ -71,7 +71,8 @@ CSV_HEADER = [
     'Total_Equity', 'FCF', 'EBIT', 'Interest_Expense'
 ]
 
-OUTPUT_FILE = 'market_data.csv'
+import os
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'market_data.csv')
 MAX_RETRIES = 3
 INTER_TICKER_DELAY = 0.5   # seconds between successful tickers
 
@@ -746,7 +747,7 @@ def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_
 
 # ─── Main driver for historical panel dataset ingestion ────────────────────
 def fetch_and_save_historical_fundamental_data():
-    HIST_OUTPUT_FILE = 'historical_fundamental_data.csv'
+    HIST_OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'historical_fundamental_data.csv')
     HIST_HEADER = [
         'Ticker', 'GICS_Sector', 'Quarter_End_Date', 'TrailingPE', 'EV_EBITDA', 'FCFYield',
         'RevenueGrowth', 'EPSGrowth', 'GrossMargin', 'OperatingMargin', 'ROIC', 'NetDebt_EBITDA',

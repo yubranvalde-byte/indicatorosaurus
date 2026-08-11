@@ -47,7 +47,7 @@ LOWER_IS_BETTER = {
 # Stocks failing ANY rule in their strategy's list are dropped entirely.
 # 'CurrentRatio' is read from the CSV but is NOT in INDICATOR_COLUMNS —
 # it acts as a pure filter gate and is never packed into the C struct.
-KNOCKOUT_FILTERS = {
+INTRINSIC_KNOCKOUTS = {
     'deep-value': [
         ('FCFYield',         '>',  0.0   ),  # Must generate positive free cash flow
         ('OperatingMargin',  '>',  0.0   ),  # Must be profitable from core operations
@@ -55,12 +55,6 @@ KNOCKOUT_FILTERS = {
     'hyper-growth': [
         ('RevenueGrowth',    '>',  0.0   ),  # Top-line must not be shrinking
         ('GrossMargin',      '>',  0.20  ),  # Baseline pricing power: >20%
-    ],
-    'momentum': [
-        ('PriceVs200SMA',    '>',   0.0   ),  # Stock must have valid SMA data (>0 = exists in Parquet)
-        # NOTE: RelativeStrength intentionally NOT used as knockout gate.
-        # It is a relative metric vs SPY; absolute thresholds cause total-elimination when
-        # SPY broadly outperforms (e.g. MAG-7 rally). RS is already scored as indicator[15].
     ],
     'income': [
         ('PayoutRatio',      '>',  0.0   ),  # Must have earnings (pays a dividend)
@@ -73,7 +67,13 @@ KNOCKOUT_FILTERS = {
     ],
 }
 
-VALID_STRATEGIES = frozenset(KNOCKOUT_FILTERS.keys())
+DERIVED_KNOCKOUTS = {
+    'momentum': [
+        ('PriceVs200SMA',    '>',   0.0   ),  # Stock must have valid SMA data (>0 = exists in Parquet)
+    ],
+}
+
+VALID_STRATEGIES = frozenset(list(INTRINSIC_KNOCKOUTS.keys()) + list(DERIVED_KNOCKOUTS.keys()))
 
 # ─── Statistical Normalization Config (Phase 1) ────────────────────────────────
 # Optimal bounds [L, U] and decay rates (sigma_L, sigma_R) for piecewise gaussian metrics.
@@ -190,19 +190,13 @@ def ensure_tech_cache():
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     simfin_parquet_candidates = [
-        os.path.join(base_dir, 'data', 'raw_simfin', 'us-shareprices-daily.parquet'),
-        os.path.join(base_dir, 'data', 'us-shareprices-daily.parquet'),
-        os.path.join(base_dir, 'us-shareprices-daily.parquet'),
-        os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet'),
-        os.path.join('data', 'us-shareprices-daily.parquet'),
+        os.path.join(base_dir, '..', 'data', 'us-shareprices-daily.parquet'),
+        os.path.join(base_dir, '..', 'data', 'raw_simfin', 'us-shareprices-daily.parquet'),
     ]
     simfin_parquet_path = next((p for p in simfin_parquet_candidates if os.path.exists(p)), None)
 
     spy_candidates = [
-        os.path.join(base_dir, 'data', 'spy_historical.csv'),
-        os.path.join(base_dir, 'spy_historical.csv'),
-        os.path.join('data', 'spy_historical.csv'),
-        'spy_historical.csv',
+        os.path.join(base_dir, '..', 'data', 'spy_historical.csv'),
     ]
     spy_path = next((p for p in spy_candidates if os.path.exists(p)), None)
 
@@ -381,7 +375,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
 
     # 1. Cache Hit: Return an isolated copy of cached data instantly if fresh (< TTL)
     if _LIVE_DATA_CACHE['data'] is not None and (now - _LIVE_DATA_CACHE['timestamp']) < ttl_seconds:
-        return [dict(r) for r in _LIVE_DATA_CACHE['data']], None
+        return _LIVE_DATA_CACHE['data'].copy(), None
 
     # Explicitly release old cache memory before reloading
     if _LIVE_DATA_CACHE['data'] is not None:
@@ -399,7 +393,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     print(f"[In-Memory Cache] Updated baseline cache with {len(disk_records)} raw records (TTL {int(ttl_seconds)}s).")
 
     # Return isolated copy to caller
-    return [dict(r) for r in disk_records], None
+    return _LIVE_DATA_CACHE['data'].copy(), None
 
 
 # ─── Data Ingestion Helper ───────────────────────────────────────────────────
@@ -407,7 +401,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
 def load_latest_fundamental_snapshot(csv_path):
     """
     Ingests historical_fundamental_data.csv (or market_data.csv as fallback),
-    extracts the latest cross-sectional snapshot per Ticker, and returns a list of raw dicts.
+    extracts the latest cross-sectional snapshot per Ticker, and returns a pandas DataFrame.
     """
     if not os.path.exists(csv_path):
         return None, f"Dataset not found at {csv_path}"
@@ -415,7 +409,7 @@ def load_latest_fundamental_snapshot(csv_path):
     try:
         df = pd.read_csv(csv_path)
         if df.empty:
-            return [], None
+            return pd.DataFrame(), None
             
         if "Quarter_End_Date" in df.columns:
             df["Quarter_End_Date"] = pd.to_datetime(df["Quarter_End_Date"])
@@ -435,10 +429,7 @@ def load_latest_fundamental_snapshot(csv_path):
         if not float_cols.empty:
             df[float_cols] = df[float_cols].astype('float32')
 
-        records = df.to_dict(orient="records")
-        del df
-        gc.collect()
-        return records, None
+        return df, None
     except Exception as e:
         return None, f"Failed to parse fundamental snapshot dataset: {str(e)}"
 
@@ -465,7 +456,7 @@ assert ctypes.sizeof(Stock) == 80, f"Stock struct size mismatch: expected 80 byt
 
 # ─── 2. Library Loading & Function Signatures ──────────────────────────────────
 
-lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libsortbuslines.so")
+lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'c_kernel', 'libsortbuslines.so')
 
 try:
     lib = ctypes.CDLL(lib_path)
@@ -481,182 +472,106 @@ except OSError as e:
     lib = None
 
 
-# ─── 3. Knock-out Filter Engine ──────────────────────────────────────────────
-
-def apply_knockout_filters(stocks_list, strategy):
+def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_market_cap=None, max_market_cap=None, specific_tickers=None):
     """
-    Apply strategy-specific Boolean gates to drop ineligible stocks.
-
-    Runs BEFORE Min-Max normalization so that extreme outlier values from
-    knocked-out stocks do not anchor the column min/max and compress scores
-    for the surviving, strategy-eligible universe.
-
-    Args:
-        stocks_list: list of raw CSV dicts (pre-normalization).
-        strategy:    one of VALID_STRATEGIES, or None for no filtering.
-
-    Returns:
-        Filtered list (original is not mutated). If strategy is None or
-        unrecognised, returns the original list unchanged.
-    """
-    t0_ko = time.perf_counter()
-    rules = KNOCKOUT_FILTERS.get(strategy)
-    if not rules:
-        return stocks_list   # no-op: 'custom' profile or unknown strategy
-
-    # Diagnostic audit for field values before applying rules
-    if strategy == 'momentum':
-        sma_vals = [_safe_float(s.get('PriceVs200SMA', 0.0)) for s in stocks_list]
-        pos_sma = sum(1 for v in sma_vals if v > 0.0)
-        zero_sma = sum(1 for v in sma_vals if v == 0.0)
-        print(f"[DIAG KnockoutFilter] Strategy 'momentum': total stocks={len(stocks_list)}, PriceVs200SMA > 0.0 count: {pos_sma}, == 0.0 count: {zero_sma}")
-
-    # Per-rule diagnostic counters (for Render log tracing)
-    rule_fail_counts = {f"{col}{op}{threshold}": 0 for col, op, threshold in rules}
-
-    survivors = []
-    for stock in stocks_list:
-        passed = True
-        for col, op, threshold in rules:
-            val = _safe_float(stock.get(col, 0.0))
-            rule_key = f"{col}{op}{threshold}"
-            failed_this_rule = False
-            if   op == '>'  and not (val >  threshold): failed_this_rule = True
-            elif op == '<'  and not (val <  threshold): failed_this_rule = True
-            elif op == '>=' and not (val >= threshold): failed_this_rule = True
-            elif op == '<=' and not (val <= threshold): failed_this_rule = True
-            if failed_this_rule:
-                rule_fail_counts[rule_key] += 1
-                passed = False
-                break
-        if passed:
-            survivors.append(stock)
-
-    before = len(stocks_list)
-    after  = len(survivors)
-    t1_ko = time.perf_counter()
-    print(f"[PROFILER] Knockout Filtering ({strategy}): {t1_ko - t0_ko:.3f}s")
-    print(f"[KnockoutFilter] '{strategy}': {before} -> {after} stocks "
-          f"({before - after} eliminated) | Rule breakdown: {rule_fail_counts}")
-    return survivors
-
-
-def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
-    """
-    Apply strict Gatekeeper Matrix early in the data pipeline to filter out unqualified assets:
-      - Market Cap >= $1B ($1,000,000,000)
-      - 20-day Average Daily Trading Volume (ADTV) > $5M ($5,000,000)
-      - Price >= $5.00
-    Also applies user-specified demographic gates (allowed_sectors, min_market_cap, max_market_cap).
-    Returns a new list of dicts. If no filters are provided, returns the list unchanged.
+    Vectorized early pruning of the DataFrame universe.
+    Applies Intrinsic strategy knockouts, sector/demographic bounds, and the Gatekeeper matrix.
     """
     t0_dyn = time.perf_counter()
-    if not stocks_list:
-        return []
+    if df.empty:
+        return df
 
-    # ── Gatekeeper Cut-Off Constants ─────────────────────────────────────────
+    before = len(df)
+
+    if specific_tickers:
+        ticker_set = {t.upper().strip() for t in specific_tickers}
+        df = df[df['Ticker'].str.upper().str.strip().isin(ticker_set)]
+
+    if allowed_sectors is not None:
+        if isinstance(allowed_sectors, str):
+            sector_set = {allowed_sectors.strip().lower()}
+        else:
+            sector_set = {str(s).strip().lower() for s in allowed_sectors if s}
+        df = df[df['Sector'].str.strip().str.lower().isin(sector_set)]
+
+    # Gatekeeper Cut-Off Constants
     GATEKEEPER_MIN_MARKET_CAP = 1_000_000_000.0  # $1B
     GATEKEEPER_MIN_PRICE = 5.00                  # $5.00
     GATEKEEPER_MIN_ADTV = 5_000_000.0            # $5M 20-day ADTV
 
-    # Access pre-hydrated technical data cache (without triggering synchronous I/O)
+    # Market Cap Filter
+    m_cap_min = max(min_market_cap if min_market_cap is not None else 0.0, GATEKEEPER_MIN_MARKET_CAP)
+    df = df[df['MarketCap'].fillna(0.0) >= m_cap_min]
+    if max_market_cap is not None:
+        df = df[df['MarketCap'].fillna(0.0) <= max_market_cap]
+
+    # Price and ADTV from tech cache
     price_df = _TECH_DATA_CACHE.get('price_df')
     volume_df = _TECH_DATA_CACHE.get('volume_df')
-    latest_prices = {}
-    adtv_map = {}
     if price_df is not None and volume_df is not None:
+        latest_prices = price_df.iloc[-1].rename('LatestPrice')
+        
         tail_price = price_df.tail(20)
         tail_volume = volume_df.tail(20)
-        daily_dollar_vol = tail_price * tail_volume
-        adtv_series = daily_dollar_vol.mean(axis=0)
-        latest_price_series = price_df.iloc[-1]
+        adtv_series = (tail_price * tail_volume).mean(axis=0).rename('ADTV')
 
-        adtv_map = adtv_series.to_dict()
-        latest_prices = latest_price_series.to_dict()
+        df = df.merge(latest_prices, left_on='Ticker', right_index=True, how='left')
+        df = df.merge(adtv_series, left_on='Ticker', right_index=True, how='left')
 
-    # Process allowed_sectors into a set of lowercased stripped strings for robust matching
-    sector_set = None
-    if allowed_sectors is not None:
-        if isinstance(allowed_sectors, str):
-            sector_set = {allowed_sectors.strip().lower()}
-        elif hasattr(allowed_sectors, '__iter__'):
-            sector_set = {str(s).strip().lower() for s in allowed_sectors if s}
+        df = df[df['LatestPrice'].fillna(0.0) > GATEKEEPER_MIN_PRICE]
+        df = df[df['ADTV'].fillna(0.0) >= GATEKEEPER_MIN_ADTV]
 
-    rule_fail_counts = {'MarketCap': 0, 'Price': 0, 'ADTV': 0, 'Insolvency': 0, 'Sector': 0, 'UserMarketCap': 0}
-    survivors = []
+        df = df.drop(columns=['LatestPrice', 'ADTV'])
 
-    for stock in stocks_list:
-        stk_ticker = str(stock.get('Ticker', '')).upper().strip()
+    # Insolvency rule
+    if 'NetDebt_EBITDA' in df.columns:
+        df = df[~(df['NetDebt_EBITDA'].isna() | (df['NetDebt_EBITDA'] > 15.0))]
 
-        # 1. Sector filter
-        if sector_set is not None:
-            sector = str(stock.get('Sector', stock.get('GICS_Sector', ''))).strip().lower()
-            if sector not in sector_set:
-                rule_fail_counts['Sector'] += 1
+    # Intrinsic Knockouts
+    rules = INTRINSIC_KNOCKOUTS.get(strategy)
+    if rules:
+        for col, op, threshold in rules:
+            if col not in df.columns:
                 continue
+            val_col = df[col].fillna(0.0)
+            if op == '>':   df = df[val_col > threshold]
+            elif op == '<':  df = df[val_col < threshold]
+            elif op == '>=': df = df[val_col >= threshold]
+            elif op == '<=': df = df[val_col <= threshold]
 
-        # Coerce market cap to safe float
-        mkt_cap = _safe_float(stock.get('MarketCap', 0.0))
-
-        # 2. Gatekeeper Matrix Filter 1: Market Cap >= $1B
-        if mkt_cap < GATEKEEPER_MIN_MARKET_CAP:
-            rule_fail_counts['MarketCap'] += 1
-            continue
-
-        # 3. Gatekeeper Matrix Filter 2: Price > $5.00
-        stk_price = latest_prices.get(stk_ticker, _safe_float(stock.get('Price', 0.0)))
-        if stk_price > 0 and stk_price <= GATEKEEPER_MIN_PRICE:
-            rule_fail_counts['Price'] += 1
-            continue
-
-        # 4. Gatekeeper Matrix Filter 3: 20-day ADTV > $5M
-        if adtv_map:
-            stk_adtv = adtv_map.get(stk_ticker, 0.0)
-            if stk_adtv <= GATEKEEPER_MIN_ADTV:
-                rule_fail_counts['ADTV'] += 1
-                continue
-
-        # 5. Gatekeeper Matrix Filter 4: Conditional Insolvency Gatekeeper
-        raw_equity = stock.get('Total_Equity', stock.get('Total Equity'))
-        if raw_equity is not None:
-            total_equity = _safe_float(raw_equity)
-            if total_equity <= 0.0:
-                fcf = _safe_float(stock.get('FCF', 0.0))
-                ebit = _safe_float(stock.get('EBIT', stock.get('Operating Income (Loss)', 0.0)))
-                int_exp = _safe_float(stock.get('Interest_Expense', stock.get('Interest Expense, Net', 0.0)))
-                int_cov = ebit / int_exp if int_exp > 0 else 0.0
-                if fcf <= 0.0 or int_cov <= 3.0:
-                    rule_fail_counts['Insolvency'] += 1
-                    continue
-
-        # User-defined Min market cap filter
-        if min_market_cap is not None:
-            try:
-                min_val = float(min_market_cap)
-                if mkt_cap < min_val:
-                    rule_fail_counts['UserMarketCap'] += 1
-                    continue
-            except (ValueError, TypeError):
-                pass
-
-        # User-defined Max market cap filter
-        if max_market_cap is not None:
-            try:
-                max_val = float(max_market_cap)
-                if mkt_cap > max_val:
-                    rule_fail_counts['UserMarketCap'] += 1
-                    continue
-            except (ValueError, TypeError):
-                pass
-
-        survivors.append(stock)
-
-    before = len(stocks_list)
-    after = len(survivors)
     t1_dyn = time.perf_counter()
-    print(f"[PROFILER] Gatekeeper Matrix & Sector/Cap Filtering: {t1_dyn - t0_dyn:.3f}s")
-    print(f"[GatekeeperMatrix] {before} -> {after} stocks ({before - after} eliminated) | Fail breakdown: {rule_fail_counts}")
-    return survivors
+    print(f"[PROFILER] Vectorized Early Pruning ({strategy}): {t1_dyn - t0_dyn:.3f}s")
+    print(f"[EarlyPruning] {before} -> {len(df)} stocks ({before - len(df)} eliminated).")
+    return df
+
+
+def apply_derived_knockouts_vectorized(df, strategy):
+    """
+    Vectorized pruning based on technical/derived metrics (e.g. PriceVs200SMA)
+    that are populated AFTER tech hydration.
+    """
+    if df.empty:
+        return df
+
+    before = len(df)
+    rules = DERIVED_KNOCKOUTS.get(strategy)
+    if rules:
+        for col, op, threshold in rules:
+            if col not in df.columns:
+                continue
+            val_col = df[col].fillna(0.0)
+            if op == '>':   df = df[val_col > threshold]
+            elif op == '<':  df = df[val_col < threshold]
+            elif op == '>=': df = df[val_col >= threshold]
+            elif op == '<=': df = df[val_col <= threshold]
+
+    after = len(df)
+    if rules:
+        print(f"[DerivedKnockouts] '{strategy}': {before} -> {after} stocks ({before - after} eliminated)")
+    return df
+
+
+
 
 
 # ─── 4. Min-Max Normalization Layer ───────────────────────────────────────────
@@ -824,15 +739,13 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
     # Sector-Neutral Baseline Stabilization: Use the entire global population prior to filtering
     baseline_list = global_stocks_list if global_stocks_list is not None else list(stocks_list)
 
-    # Step 1: Apply dynamic user gates (sectors, cap ranges)
-    stocks_list = apply_dynamic_filters(stocks_list, allowed_sectors, min_market_cap, max_market_cap)
-    if not stocks_list:
-        return []
-
-    # Step 2: Apply knock-out gates (no-op when strategy is None)
-    stocks_list = apply_knockout_filters(stocks_list, strategy)
-    if not stocks_list:
-        return []   # all stocks knocked out — guard against empty universe
+    if strategy or allowed_sectors or min_market_cap or max_market_cap:
+        df = pd.DataFrame(stocks_list)
+        df = apply_early_pruning_vectorized(df, strategy, allowed_sectors, min_market_cap, max_market_cap)
+        df = apply_derived_knockouts_vectorized(df, strategy)
+        if df.empty:
+            return []
+        stocks_list = df.to_dict(orient='records')
 
     n = len(stocks_list)
     t0_norm = time.perf_counter()
