@@ -297,6 +297,7 @@ The fundamental root cause of the Render environment discrepancy was identified 
    - **Vectorized Median & MAD**: Replaced slow `statistics.median` and list comprehensions in `normalize_stocks()` with NumPy array operations (`np.median`), accelerating sector-neutral Z-score computations by >50x while preserving full cross-sectional statistical integrity.
    - **Strategy-Conditional Execution**: Implemented conditional ordering in `/api/calculate`: for non-momentum strategies (Quality, Income, Deep-Value, Hyper-Growth), knockout filters execute *before* technical indicator computation to minimize Parquet read volume; for Momentum strategy, indicators compute *before* the `PriceVs200SMA > 0.0` gate.
    - **Backtest Fallback Cascade Flattening & In-Place Returns**: Flattened `normalize_stocks()` fallback cascade in `backtest_engine.py` to a maximum of 2 attempts, and optimized daily return computation using `close_data.pct_change(fill_method=None).astype('float32', copy=False)` to prevent RAM bloat and memory recycling during multi-year simulations.
+9. **Production Micro-Profiling Telemetry**: Injected lightweight high-resolution timing instrumentation (`time.perf_counter()`) across discreet execution blocks (`[PROFILER] Block Name: 0.000s`) in `financial_module.py` and `backtest_engine.py` to continuously profile I/O, filtering, math normalization, and C-FFI scoring in production log streams.
 
 ---
 

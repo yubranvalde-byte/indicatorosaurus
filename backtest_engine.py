@@ -2,6 +2,7 @@ import bisect
 import gc
 import math
 import os
+import time
 import pandas as pd
 from financial_module import normalize_stocks, run_financial_engine, _safe_float
 
@@ -40,7 +41,10 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         'RelativeStrength', 'CurrentRatio'
     ]
 
+    t0_csv = time.perf_counter()
     df = pd.read_csv(csv_path, usecols=lambda c: c in needed_fund_cols)
+    t1_csv = time.perf_counter()
+    print(f"[PROFILER] Backtest Fundamental CSV Loading: {t1_csv - t0_csv:.3f}s")
     if df.empty:
         raise ValueError("Historical fundamental data file is empty.")
 
@@ -113,7 +117,9 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     last_valid_top_10 = []
     needed_tickers = set()
 
+    t0_phase1 = time.perf_counter()
     for p in prelim_periods:
+        t0_q = time.perf_counter()
         t_k = p['anchor']
         panel_slice = df[df['Quarter_End_Date'] <= t_k]
         if panel_slice.empty:
@@ -192,8 +198,12 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             p['tickers'] = ['SPY']
 
         needed_tickers.update(p['tickers'])
+        t1_q = time.perf_counter()
+        print(f"[PROFILER] Quarter {t_k.date()} Processing: {t1_q - t0_q:.3f}s")
         gc.collect()  # Explicit inner-loop garbage collection per quarter iteration
 
+    t1_phase1 = time.perf_counter()
+    print(f"[PROFILER] Phase 1 Total Fundamental Screening: {t1_phase1 - t0_phase1:.3f}s")
     needed_tickers.add('SPY')
     print(f"[Backtest Engine] Identified {len(needed_tickers)} unique target tickers for lazy price ingestion: {sorted(needed_tickers)}")
 
@@ -202,6 +212,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     gc.collect()
 
     # ── PHASE 2: Lazy Price Ingestion (Filtered SECOND - >99% RAM Saving) ──────
+    t0_p2 = time.perf_counter()
     simfin_parquet_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.parquet')
     simfin_csv_path = os.path.join('data', 'raw_simfin', 'us-shareprices-daily.csv')
 
@@ -225,6 +236,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
         del raw_p
         gc.collect()
+        t1_p2 = time.perf_counter()
+        print(f"[PROFILER] Phase 2 Price Parquet I/O: {t1_p2 - t0_p2:.3f}s")
         print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin Parquet (date filtered {start_date.date()} to {end_date.date()}).")
     elif os.path.exists(simfin_csv_path):
         raw_p = pd.read_csv(
@@ -240,6 +253,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
         del raw_p
         gc.collect()
+        t1_p2 = time.perf_counter()
+        print(f"[PROFILER] Phase 2 Price CSV I/O: {t1_p2 - t0_p2:.3f}s")
         print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin CSV.")
 
     if price_data is None or price_data.empty:

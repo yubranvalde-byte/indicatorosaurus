@@ -205,6 +205,7 @@ def compute_live_technical_indicators(unique_tickers):
         return tech_map
 
     try:
+        t0_io = time.perf_counter()
         # Load trailing price history with PyArrow column isolation
         raw_p = pd.read_parquet(
             simfin_parquet_path,
@@ -234,17 +235,15 @@ def compute_live_technical_indicators(unique_tickers):
         spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
         del spy_df
         gc.collect()
+        t1_io = time.perf_counter()
+        print(f"[PROFILER] Technical Indicator Parquet/CSV I/O: {t1_io - t0_io:.3f}s")
 
+        t0_calc = time.perf_counter()
         # ── CRITICAL: Align SPY window to the SAME date range as price_df ───────
-        # price_df is built from Parquet which may be months/years older than spy_historical.csv.
-        # Using spy_s.tail(260) independently would pick up TODAY's dates while price_df
-        # uses dates from the Parquet window, making RS = stock(old) - spy(new) = garbage.
-        # Instead, we clip spy to price_df's exact start/end date boundaries.
         price_start_date = price_df.index[0]
         price_end_date = price_df.index[-1]
         spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
         if len(spy_s) < 2:
-            # Fallback: if no overlap (data gap), use full SPY tail(260) with a warning
             spy_s = spy_full.tail(260)
             print(f"[Technical Indicators WARNING] SPY date overlap with Parquet is insufficient. "
                   f"Parquet window: {price_start_date.date()} -> {price_end_date.date()}, "
@@ -315,6 +314,8 @@ def compute_live_technical_indicators(unique_tickers):
 
         del rel_strength, price_vs_sma, rsi_14, beta_s
         gc.collect()
+        t1_calc = time.perf_counter()
+        print(f"[PROFILER] Technical Indicator Computation Math: {t1_calc - t0_calc:.3f}s")
         print(f"[Technical Indicators] Ultra-fast computation completed for {len(tech_map)} tickers.")
     except Exception as e:
         import traceback
@@ -453,6 +454,7 @@ def apply_knockout_filters(stocks_list, strategy):
         Filtered list (original is not mutated). If strategy is None or
         unrecognised, returns the original list unchanged.
     """
+    t0_ko = time.perf_counter()
     rules = KNOCKOUT_FILTERS.get(strategy)
     if not rules:
         return stocks_list   # no-op: 'custom' profile or unknown strategy
@@ -487,6 +489,8 @@ def apply_knockout_filters(stocks_list, strategy):
 
     before = len(stocks_list)
     after  = len(survivors)
+    t1_ko = time.perf_counter()
+    print(f"[PROFILER] Knockout Filtering ({strategy}): {t1_ko - t0_ko:.3f}s")
     print(f"[KnockoutFilter] '{strategy}': {before} -> {after} stocks "
           f"({before - after} eliminated) | Rule breakdown: {rule_fail_counts}")
     return survivors
@@ -497,6 +501,7 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
     Apply optional user-defined demographic gates (sectors and market cap range).
     Returns a new list of dicts. If no filters are provided, returns the list unchanged.
     """
+    t0_dyn = time.perf_counter()
     if not stocks_list:
         return []
 
@@ -541,6 +546,8 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
 
     before = len(stocks_list)
     after = len(survivors)
+    t1_dyn = time.perf_counter()
+    print(f"[PROFILER] Static Sector/Cap Filtering: {t1_dyn - t0_dyn:.3f}s")
     print(f"[DynamicFilter] Sector/Cap: {before} -> {after} stocks ({before - after} eliminated)")
     return survivors
 
@@ -686,6 +693,7 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
 
     n = len(stocks_list)
 
+    t0_norm = time.perf_counter()
     # Step 3: Extract raw float columns (only scored indicators)
     raw = {}
     for col in INDICATOR_COLUMNS:
@@ -780,6 +788,9 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
             norm_stock[col] = normalized[col][i]
         result.append(norm_stock)
 
+    t1_norm = time.perf_counter()
+    print(f"[PROFILER] Normalization Math (Median/MAD): {t1_norm - t0_norm:.3f}s")
+
     return result
 
 
@@ -790,6 +801,7 @@ def run_financial_engine(normalized_stocks, weights_list):
     Surgical Patch: Accepts pre-normalized stocks directly to bypass duplicate normalization.
     Populates ctypes array → C dot-product → QuickSort.
     """
+    t0_ffi = time.perf_counter()
     num_stocks = len(normalized_stocks)
     if num_stocks == 0:
         return []
@@ -802,6 +814,8 @@ def run_financial_engine(normalized_stocks, weights_list):
             score = sum(float(stock_data.get(col, 0.0)) * float(w) for col, w in zip(INDICATOR_COLUMNS, weights_list))
             results.append({'Ticker': stock_data['Ticker'], 'FinalScore': round(score, 4)})
         results.sort(key=lambda x: x['FinalScore'], reverse=True)
+        t1_ffi = time.perf_counter()
+        print(f"[PROFILER] C-FFI Scoring Execution (Python Fallback): {t1_ffi - t0_ffi:.3f}s")
         return results
 
     # ── Step 1: Populate ctypes Stock array ──────────────────────────────────
@@ -830,11 +844,13 @@ def run_financial_engine(normalized_stocks, weights_list):
     lib.compute_scores(start_ptr, num_stocks, weights_ptr)
     lib.sort_stocks_by_score(start_ptr, num_stocks)
 
-    # ── Step 4: Reconstruct sorted Python list ───────────────────────────────
-    return [
+    res = [
         {
             'Ticker':     c_stocks[i].ticker.decode('utf-8'),
             'FinalScore': round(c_stocks[i].final_score, 4),
         }
         for i in range(num_stocks)
     ]
+    t1_ffi = time.perf_counter()
+    print(f"[PROFILER] C-FFI Scoring Execution: {t1_ffi - t0_ffi:.3f}s")
+    return res
