@@ -7,6 +7,7 @@ import gc
 import time
 import requests
 import pandas as pd
+import numpy as np
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -276,14 +277,23 @@ def compute_live_technical_indicators(unique_tickers):
         rs = gain / (loss + 1e-6)
         rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
 
-        # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns)
+        # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns via NumPy dot-product)
         stk_returns = price_df.pct_change()
-        # Align spy daily returns to the price_df date index for covariance accuracy
         spy_returns = spy_s.pct_change().reindex(price_df.index)
-        spy_var = float(spy_returns.var())
 
-        cov_s = stk_returns.apply(lambda col: col.cov(spy_returns)).astype('float32')
-        beta_s = (cov_s / spy_var).fillna(1.0) if spy_var > 0 else pd.Series(1.0, index=price_df.columns)
+        spy_valid = spy_returns.dropna()
+        spy_var = float(spy_valid.var()) if len(spy_valid) > 1 else 0.0
+
+        if spy_var > 0.0:
+            spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).values
+            stk_dm = (stk_returns - stk_returns.mean()).fillna(0.0).values
+            n_obs = max(1, len(spy_returns) - 1)
+            cov_vals = np.dot(stk_dm.T, spy_dm) / n_obs
+            cov_s = pd.Series(cov_vals, index=price_df.columns, dtype='float32')
+            beta_s = (cov_s / spy_var).fillna(1.0)
+        else:
+            cov_s = pd.Series(0.0, index=price_df.columns, dtype='float32')
+            beta_s = pd.Series(1.0, index=price_df.columns, dtype='float32')
 
         # IMMEDIATELY ERASE ALL HEAVY 2D MATRICES AND FREE RAM BEFORE DICT GENERATION
         del price_df, spy_s, delta, gain, loss, rs, stk_returns, spy_returns, cov_s
@@ -724,24 +734,21 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
             # Monotonic Sigmoid Z-score route
             invert = LOWER_IS_BETTER.get(col, False)
             if col in ('RevenueGrowth', 'EPSGrowth'):
-                # Sector-Neutral Sigmoid Z-score
-                # 1. Group values from baseline_list by sector
-                sector_vals = {}
-                for stock in baseline_list:
-                    sect = str(stock.get('Sector', '')).strip().lower()
-                    val = _safe_float(stock.get(col, 0.0))
-                    if sect not in sector_vals:
-                        sector_vals[sect] = []
-                    sector_vals[sect].append(val)
-                
-                # 2. Compute median and MAD per sector using baseline
+                # Sector-Neutral Sigmoid Z-score (Vectorized via NumPy)
+                base_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in baseline_list])
+                base_vals = np.array([_safe_float(s.get(col, 0.0)) for s in baseline_list], dtype=np.float32)
+
                 sector_stats = {}
-                for sect, vals in sector_vals.items():
-                    med = statistics.median(vals) if vals else 0.0
-                    mad = statistics.median([abs(x - med) for x in vals]) if vals else 0.0
+                for sect in np.unique(base_sects):
+                    mask = (base_sects == sect)
+                    s_vals = base_vals[mask]
+                    if len(s_vals) > 0:
+                        med = float(np.median(s_vals))
+                        mad = float(np.median(np.abs(s_vals - med)))
+                    else:
+                        med, mad = 0.0, 0.0
                     sector_stats[sect] = (med, mad)
-                
-                # 3. Calculate scores for surviving stocks
+
                 scores = []
                 for i, stock in enumerate(stocks_list):
                     sect = str(stock.get('Sector', '')).strip().lower()
@@ -750,9 +757,13 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
                     scores.append(_calculate_sigmoid_zscore(val, med, mad, invert))
                 normalized[col] = scores
             else:
-                # Global Sigmoid Z-score
-                median_val = statistics.median(col_vals) if col_vals else 0.0
-                mad_val = statistics.median([abs(x - median_val) for x in col_vals]) if col_vals else 0.0
+                # Global Sigmoid Z-score (Vectorized via NumPy)
+                arr_vals = np.array(col_vals, dtype=np.float32)
+                if len(arr_vals) > 0:
+                    median_val = float(np.median(arr_vals))
+                    mad_val = float(np.median(np.abs(arr_vals - median_val)))
+                else:
+                    median_val, mad_val = 0.0, 0.0
                 scores = []
                 for val in col_vals:
                     if col in OVERRIDE_COLUMNS and val < 0.0:

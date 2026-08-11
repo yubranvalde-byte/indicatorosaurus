@@ -3,7 +3,7 @@ import csv
 import os
 import gc
 from financial_module import (
-    run_financial_engine, normalize_stocks, apply_dynamic_filters,
+    run_financial_engine, normalize_stocks, apply_dynamic_filters, apply_knockout_filters,
     compute_live_technical_indicators, INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
     load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
     fetch_tiingo_live_data
@@ -106,7 +106,11 @@ def calculate():
         })
 
     try:
-        # ── Step 2: Delayed Computation — Compute Heavy Technical Indicators ON SURVIVORS ─
+        # ── Step 2: Strategy-Conditional Technical Indicator Computation ─────
+        # For non-momentum strategies, run knockout filters FIRST to shrink universe before computing technicals
+        if strategy and strategy != 'momentum':
+            stocks_data = apply_knockout_filters(stocks_data, strategy)
+
         surviving_tickers = [s['Ticker'] for s in stocks_data if 'Ticker' in s]
         tech_map = compute_live_technical_indicators(surviving_tickers)
 
@@ -122,6 +126,24 @@ def calculate():
             del tech_map
             gc.collect()
 
+        # For momentum strategy, run knockout filter AFTER technical indicators are computed
+        if strategy == 'momentum':
+            stocks_data = apply_knockout_filters(stocks_data, strategy)
+
+        if not stocks_data:
+            return jsonify({
+                "strategy": strategy,
+                "stocks_before": total_csv_count,
+                "stocks_after": 0,
+                "filters_applied": {
+                    "specific_tickers": specific_tickers,
+                    "allowed_sectors": allowed_sectors,
+                    "min_market_cap": min_market_cap,
+                    "max_market_cap": max_market_cap,
+                },
+                "results": [],
+            })
+
         # Build metadata lookup for surviving universe
         meta_by_ticker = {
             s['Ticker']: {
@@ -135,7 +157,7 @@ def calculate():
         # ── Step 3: Normalize filtered & enriched universe ─────────────────────
         normalized_stocks = normalize_stocks(
             stocks_data,
-            strategy=strategy,
+            strategy=None,               # Already applied conditionally above
             allowed_sectors=None,       # Already filtered in Step 1
             min_market_cap=None,        # Already filtered in Step 1
             max_market_cap=None,        # Already filtered in Step 1

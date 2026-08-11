@@ -159,16 +159,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 global_stocks_list=raw_snapshot
             )
 
-            if not normalized_snapshot and strategy is not None:
-                normalized_snapshot = normalize_stocks(
-                    raw_snapshot,
-                    strategy=None,
-                    allowed_sectors=allowed_sectors,
-                    min_market_cap=min_market_cap,
-                    max_market_cap=max_market_cap,
-                    global_stocks_list=raw_snapshot
-                )
-
+            # Max 2 attempts: if empty, fall back directly to baseline unfiltered snapshot
             if not normalized_snapshot:
                 normalized_snapshot = normalize_stocks(
                     raw_snapshot,
@@ -300,7 +291,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             })
 
     # Daily simulation loop: compute percentage changes downcasted to float32
-    daily_returns = close_data.pct_change().astype('float32')
+    daily_returns = close_data.pct_change(fill_method=None).astype('float32', copy=False)
     del close_data
     if price_data is not None:
         del price_data
