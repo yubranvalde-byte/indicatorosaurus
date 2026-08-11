@@ -328,6 +328,25 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     simulation_dates = [d for d in trading_dates if d >= effective_start]
     period_starts = [p['start'] for p in periods]
 
+    def _scalar_float(val, default=0.0):
+        if val is None:
+            return default
+        if hasattr(val, 'squeeze'):
+            val = val.squeeze()
+        if hasattr(val, 'item'):
+            try:
+                val = val.item()
+            except ValueError:
+                if hasattr(val, 'iloc'):
+                    val = val.iloc[0]
+        elif hasattr(val, 'iloc'):
+            val = val.iloc[0]
+        try:
+            f = float(val)
+            return default if (math.isnan(f) or math.isinf(f)) else f
+        except (ValueError, TypeError):
+            return default
+
     for d in simulation_dates:
         # Binary-search: find the rightmost period whose start <= d
         idx = bisect.bisect_right(period_starts, d) - 1
@@ -341,14 +360,12 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             if valid_returns.empty:
                 port_ret = 0.0
             else:
-                port_ret = float(valid_returns.mean())
-                if math.isnan(port_ret) or math.isinf(port_ret):
-                    port_ret = 0.0
+                port_ret = _scalar_float(valid_returns.mean())
         else:
             port_ret = 0.0
 
         spy_ret_raw = daily_returns.loc[d, 'SPY']
-        spy_ret = float(spy_ret_raw) if not (math.isnan(float(spy_ret_raw)) or math.isinf(float(spy_ret_raw))) else 0.0
+        spy_ret = _scalar_float(spy_ret_raw)
 
         portfolio_daily_returns.append(port_ret)
         spy_daily_returns.append(spy_ret)
@@ -369,16 +386,16 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     num_days = len(port_series)
     if num_days > 1:
         annual_factor = 252.0 / num_days
-        p_last = max(0.0001, float(portfolio_cumulative.iloc[-1]))
-        s_last = max(0.0001, float(spy_cumulative.iloc[-1]))
+        p_last = max(0.0001, _scalar_float(portfolio_cumulative.iloc[-1]))
+        s_last = max(0.0001, _scalar_float(spy_cumulative.iloc[-1]))
         port_ann_return = float(p_last ** annual_factor - 1.0)
         spy_ann_return = float(s_last ** annual_factor - 1.0)
 
         valid_port = port_series.dropna()
         valid_spy = spy_series.dropna()
 
-        port_vol = float(valid_port.std() * math.sqrt(252)) if len(valid_port) > 1 else 0.0
-        spy_vol = float(valid_spy.std() * math.sqrt(252)) if len(valid_spy) > 1 else 0.0
+        port_vol = _scalar_float(valid_port.std()) * math.sqrt(252) if len(valid_port) > 1 else 0.0
+        spy_vol = _scalar_float(valid_spy.std()) * math.sqrt(252) if len(valid_spy) > 1 else 0.0
 
         if math.isnan(port_vol) or math.isinf(port_vol):
             port_vol = 0.0
@@ -396,11 +413,11 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
         port_peak = portfolio_cumulative.cummax()
         port_dd = (portfolio_cumulative - port_peak) / port_peak
-        port_max_dd = float(port_dd.min())
+        port_max_dd = _scalar_float(port_dd.min())
 
         spy_peak = spy_cumulative.cummax()
         spy_dd = (spy_cumulative - spy_peak) / spy_peak
-        spy_max_dd = float(spy_dd.min())
+        spy_max_dd = _scalar_float(spy_dd.min())
     else:
         port_ann_return, spy_ann_return = 0.0, 0.0
         port_vol, spy_vol = 0.0, 0.0
@@ -421,8 +438,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         date_str = date.strftime('%Y-%m-%d')
         performance_series.append({
             "date": date_str,
-            "portfolio_return": round(float(portfolio_cumulative.iloc[idx]), 4),
-            "spy_return": round(float(spy_cumulative.iloc[idx]), 4)
+            "portfolio_return": round(_scalar_float(portfolio_cumulative.iloc[idx]), 4),
+            "spy_return": round(_scalar_float(spy_cumulative.iloc[idx]), 4)
         })
 
     # Cleanup temporary calculation objects before returning

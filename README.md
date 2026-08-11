@@ -301,6 +301,7 @@ The fundamental root cause of the Render environment discrepancy was identified 
 10. **In-Memory Technical Indicator Cache (O(1) I/O)**: Implemented a global Singleton cache (`_TECH_DATA_CACHE`) for dynamic technical indicators, pre-loading a trailing 370-day pivot table of the entire universe on the first request. Subsequent requests skip disk I/O entirely, reducing latency by 9.2s per request.
 11. **Sanitized Matrix Operations**: Enforced `np.nan_to_num` strict sanitization on demeaned stock and benchmark arrays prior to `np.dot` covariance computations, eliminating Numpy runtime warnings for NaN/Inf inputs.
 12. **Backtest Quarter Loop Memory Leak Patch**: Refactored the fundamental screening loop in `backtest_engine.py` to pre-sort the global DataFrame chronologically outside the loop and utilize memory-efficient `drop_duplicates(subset=['Ticker'], keep='last')` instead of volatile `groupby.last()`. Prevented in-place memory fragmentations during SPY concatenation (`pd.concat`) and added explicit `gc.collect()` steps to strictly adhere to the 512MB RAM constraint.
+13. **Robust Scalar KPI Extraction**: Added safe scalar extraction (`_scalar_float`) across daily return aggregation and Phase 3 performance metrics (Volatility, Sharpe, Max Drawdown, Alpha) to prevent `TypeError: float() argument must be a string or a real number, not 'Series'` on 1D/2D Pandas series outputs.
 
 ---
 
