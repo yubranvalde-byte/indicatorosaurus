@@ -4,7 +4,7 @@ import os
 import gc
 from financial_module import (
     run_financial_engine, normalize_stocks, apply_dynamic_filters, apply_knockout_filters,
-    compute_live_technical_indicators, INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
+    compute_live_technical_indicators, ensure_tech_cache, INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
     load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
     fetch_tiingo_live_data
 )
@@ -15,6 +15,14 @@ app = Flask(__name__)
 PRIMARY_CSV = os.path.join(os.path.dirname(__file__), "historical_fundamental_data.csv")
 FALLBACK_CSV = os.path.join(os.path.dirname(__file__), "market_data.csv")
 CSV_PATH = PRIMARY_CSV if os.path.exists(PRIMARY_CSV) else FALLBACK_CSV
+
+# Optional Startup Cache Warmup gated strictly behind WARM_CACHE_ON_STARTUP env var
+if os.getenv('WARM_CACHE_ON_STARTUP', '').strip().lower() in ('1', 'true', 'yes'):
+    print("[Startup Warmup] WARM_CACHE_ON_STARTUP set. Hydrating technical data cache on boot...")
+    try:
+        ensure_tech_cache()
+    except Exception as _e:
+        print(f"[Startup Warmup] Warning: Boot cache hydration failed: {_e}")
 
 
 def _load_csv():
@@ -83,6 +91,9 @@ def calculate():
         return jsonify({"error": err}), (404 if "not found" in err else 500)
 
     total_csv_count = len(stocks_data)
+
+    # ── Explicit Pre-Flight Cache Management ──────────────────────────────────
+    ensure_tech_cache()
 
     # ── Step 1: Pre-Filtering — Apply static filters FIRST to reduce universe ─
     stocks_data = apply_dynamic_filters(stocks_data, allowed_sectors, min_market_cap, max_market_cap)

@@ -16,9 +16,10 @@ The platform bridges raw corporate fundamental filings and daily market price da
 
 ### Primary Capabilities
 - **High-Speed C-FFI Scoring Engine**: Contiguous 80-byte memory layout and QuickSort algorithm in C linked via `ctypes` for zero-copy scoring.
+- **Vectorized NumPy Normalization Pipeline**: `_vectorized_goldilocks` and `_vectorized_sigmoid` utilizing NumPy array operations (`np.where`, `np.exp`, `np.clip`) to process column matrices in ~50ms, replacing element-wise Python loops.
 - **Cross-Sectional Sector-Neutral Normalization**: Outlier-resistant Sigmoid Z-score normalizations using sector medians and Median Absolute Deviation (MAD), alongside piecewise Gaussian Goldilocks decay curves.
 - **Zero Look-Ahead Bias Backtesting**: Point-in-time fundamental screening combined with PyArrow Parquet pushdown lazy price ingestion.
-- **Two-Tier In-Memory TTL Cache**: Sub-millisecond fundamental data access and cached technical indicator calculation to bypass disk I/O.
+- **Two-Tier In-Memory TTL Cache & Pre-Flight State Management**: Sub-millisecond fundamental data access and explicit route pre-flight technical indicator cache hydration to prevent cold-start I/O tax during requests.
 
 ---
 
@@ -35,6 +36,7 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
                                           v
                       +-------------------+-------------------+
                       |      Flask Application (main.py)      |
+                      | Explicit Pre-Flight ensure_tech_cache()|
                       +-------------------+-------------------+
                                           |
         +---------------------------------+---------------------------------+
@@ -52,7 +54,7 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
                       +-------------------+-------------------+
                       |  Financial Orchestration Module       |
                       |  (financial_module.py)                |
-                      |  Normalization & Knockout Filters     |
+                      |  Vectorized Normalization & Knockouts  |
                       +-------------------+-------------------+
                                           |
                                           v (ctypes zero-copy FFI)
@@ -78,12 +80,13 @@ The single-page web client (`templates/index.html`) provides interactive analyti
 - **16-Factor Weight Sliders & Filter Panels**: Dynamic UI control over factor weights, GICS sector filters, and market capitalization boundaries.
 
 ### Memory & Latency Optimizations
-1. **Two-Tier In-Memory TTL Cache (`financial_module.py`)**:
+1. **Vectorized NumPy Normalization Pipeline**: Replaced element-wise list comprehensions and scalar scoring loops with `_vectorized_goldilocks` and `_vectorized_sigmoid`, operating on `(N, 16)` float32 NumPy matrices in ~50ms.
+2. **Two-Tier In-Memory TTL Cache & Pre-Flight Management (`financial_module.py`)**:
    - `_LIVE_DATA_CACHE` (30-minute TTL): Retains baseline raw fundamental snapshots in RAM, returning `<1ms` cache hits.
-   - `_TECH_DATA_CACHE` (30-minute TTL): Retains the global 370-day pivoted price matrix (`price_df`), volume matrix (`volume_df`), and aligned SPY series (`spy_s`), eliminating disk reads and enabling vectorized sub-second 20-day ADTV and price calculations.
-2. **Selective Live Quote Enrichment**: Inverts live data calls to query Tiingo's API *only* for the top 100 surviving stocks after scoring, reducing HTTP batches from 64 down to 2 and avoiding rate limits (HTTP 429).
-3. **Lazy Price Ingestion in Backtest**: Screener identifies surviving tickers (~10-50 tickers) *first*, then loads daily prices from Parquet using PyArrow predicates (`Ticker` whitelist + `Date` bounds).
-4. **Memory Footprint Control**: Explicit `float32` downcasting, pre-sorting DataFrames to use `drop_duplicates(subset=['Ticker'], keep='last')` instead of memory-heavy `groupby().last()`, and inner-loop `gc.collect()`.
+   - `_TECH_DATA_CACHE` (30-minute TTL): Retains global price/volume matrices. Hydrated explicitly via route pre-flight calls (`ensure_tech_cache()`), removing synchronous I/O from `apply_dynamic_filters`. Optional boot-time hydration gated by `WARM_CACHE_ON_STARTUP`.
+3. **Selective Live Quote Enrichment**: Inverts live data calls to query Tiingo's API *only* for the top 100 surviving stocks after scoring, reducing HTTP batches from 64 down to 2 and avoiding rate limits (HTTP 429).
+4. **Lazy Price Ingestion in Backtest**: Screener identifies surviving tickers (~10-50 tickers) *first*, then loads daily prices from Parquet using PyArrow predicates (`Ticker` whitelist + `Date` bounds).
+5. **Memory Footprint Control**: Explicit `float32` downcasting, pre-sorting DataFrames to use `drop_duplicates(subset=['Ticker'], keep='last')` instead of memory-heavy `groupby().last()`, and inner-loop `gc.collect()`.
 
 ---
 

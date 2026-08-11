@@ -183,7 +183,10 @@ def ensure_tech_cache():
         _TECH_DATA_CACHE['volume_df'] is not None and 
         _TECH_DATA_CACHE['spy_s'] is not None and 
         (now - _TECH_DATA_CACHE['timestamp']) < CACHE_TTL_SECONDS):
+        print(f"[CACHE HIT] Technical Data Cache valid ({int(now - _TECH_DATA_CACHE['timestamp'])}s old).")
         return _TECH_DATA_CACHE['price_df'], _TECH_DATA_CACHE['volume_df'], _TECH_DATA_CACHE['spy_s']
+
+    print("[CACHE MISS] Technical Data Cache expired or uninitialized. Reading Parquet/CSV...")
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     simfin_parquet_candidates = [
@@ -556,8 +559,9 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
     GATEKEEPER_MIN_PRICE = 5.00                # $5.00
     GATEKEEPER_MIN_ADTV = 5_000_000.0          # $5M 20-day ADTV
 
-    # Pre-compute vectorized ADTV & latest Prices via cached technical matrix
-    price_df, volume_df, _ = ensure_tech_cache()
+    # Access pre-hydrated technical data cache (without triggering synchronous I/O)
+    price_df = _TECH_DATA_CACHE.get('price_df')
+    volume_df = _TECH_DATA_CACHE.get('volume_df')
     latest_prices = {}
     adtv_map = {}
     if price_df is not None and volume_df is not None:
@@ -613,8 +617,6 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
                 continue
 
         # 5. Gatekeeper Matrix Filter 4: Conditional Insolvency Gatekeeper
-        # If Total_Equity <= 0, keep asset if FCF > 0 AND Interest Coverage (EBIT / Interest Expense) > 3.0
-        # Safe Guard: Only evaluate if Total_Equity column is actually present in the dataset record
         raw_equity = stock.get('Total_Equity', stock.get('Total Equity'))
         if raw_equity is not None:
             total_equity = _safe_float(raw_equity)
@@ -668,7 +670,6 @@ def _safe_float(val):
         return 0.0
     try:
         result = float(s)
-        # Guard against IEEE nan/inf that slipped through
         if math.isnan(result) or math.isinf(result):
             return 0.0
         return result
@@ -677,14 +678,7 @@ def _safe_float(val):
 
 
 def _calculate_piecewise_gaussian(val, params):
-    """
-    Institutional-grade piecewise Gaussian normalizer for Goldilocks indicators.
-    Scoring:
-      - If val < L: Score = 100 * exp( -((val - L)^2) / (2 * sigma_L^2) )
-      - If L <= val <= U: Score = 100
-      - If val > U: Score = 100 * exp( -((val - U)^2) / (2 * sigma_R^2) )
-    Returns a score in [0.0, 100.0]. Gracefully handles bad inputs and math overflows.
-    """
+    """Scalar piecewise Gaussian normalizer (retained for backward compatibility)."""
     if val is None:
         return 0.0
     try:
@@ -723,15 +717,38 @@ def _calculate_piecewise_gaussian(val, params):
         return 100.0
 
 
+def _vectorized_goldilocks(arr, params):
+    """
+    Vectorized piecewise Gaussian normalizer for Goldilocks indicators using NumPy array operations.
+    Returns a float32 ndarray of scores in [0.0, 100.0].
+    """
+    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+    L = float(params['L'])
+    U = float(params['U'])
+    sigma_L = float(params['sigma_L'])
+    sigma_R = float(params['sigma_R'])
+
+    scores = np.full(arr.shape, 100.0, dtype=np.float32)
+
+    mask_left = arr < L
+    if sigma_L > 0.0:
+        exponent_l = -((arr - L) ** 2) / (2.0 * (sigma_L ** 2))
+        scores = np.where(mask_left, 100.0 * np.exp(np.clip(exponent_l, -87.0, 87.0)), scores)
+    else:
+        scores = np.where(mask_left, 0.0, scores)
+
+    mask_right = arr > U
+    if sigma_R > 0.0:
+        exponent_r = -((arr - U) ** 2) / (2.0 * (sigma_R ** 2))
+        scores = np.where(mask_right, 100.0 * np.exp(np.clip(exponent_r, -87.0, 87.0)), scores)
+    else:
+        scores = np.where(mask_right, 0.0, scores)
+
+    return scores.astype(np.float32)
+
+
 def _calculate_sigmoid_zscore(val, median_val, mad_val, invert=False):
-    """
-    Institutional-grade Monotonic Normalizer utilizing a Sigmoid over Robust Z-Scores.
-    Scoring:
-      - z = (val - median_val) / max(mad_val, 10^-4)
-      - If invert is True (Lower is Better): z = -z
-      - Score = 100 / (1 + exp(-1.5 * z))
-    Gracefully handles division by zero and outliers using a strict floor.
-    """
+    """Scalar Sigmoid Z-score normalizer (retained for backward compatibility)."""
     if val is None or median_val is None or mad_val is None:
         return 50.0
     try:
@@ -754,7 +771,6 @@ def _calculate_sigmoid_zscore(val, median_val, mad_val, invert=False):
 
     try:
         exponent = -1.5 * z
-        # Bound exponent to prevent OverflowError in math.exp
         if exponent > 700.0:
             return 0.0
         if exponent < -700.0:
@@ -764,13 +780,35 @@ def _calculate_sigmoid_zscore(val, median_val, mad_val, invert=False):
         return 0.0 if z < 0.0 else 100.0
 
 
+def _vectorized_sigmoid(arr, median_val, mad_val, invert=False):
+    """
+    Vectorized Monotonic Normalizer utilizing a Sigmoid over Robust Z-Scores.
+    Returns a float32 ndarray of scores in [0.0, 100.0].
+    """
+    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+    if median_val is None or mad_val is None or math.isnan(median_val) or math.isinf(median_val):
+        return np.full(arr.shape, 50.0, dtype=np.float32)
+
+    if math.isnan(mad_val) or math.isinf(mad_val):
+        mad_val = 0.0
+
+    denominator = max(float(mad_val), 1e-4)
+    z = (arr - float(median_val)) / denominator
+    if invert:
+        z = -z
+
+    exponent = np.clip(-1.5 * z, -87.0, 87.0)
+    scores = 100.0 / (1.0 + np.exp(exponent))
+    return scores.astype(np.float32)
+
+
 OVERRIDE_COLUMNS = frozenset({'PayoutRatio', 'TrailingPE', 'NetDebt_EBITDA', 'EV_EBITDA'})
 
 
 def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None):
     """
     Apply dynamic filters, strategy knock-out filters, then normalize the surviving universe
-    using piecewise Gaussian (Goldilocks) or robust Sigmoid Z-score curves.
+    using vectorized piecewise Gaussian (Goldilocks) or robust Sigmoid Z-score curves.
 
     Args:
         stocks_list:     list of raw CSV dicts.
@@ -797,64 +835,58 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
         return []   # all stocks knocked out — guard against empty universe
 
     n = len(stocks_list)
-
     t0_norm = time.perf_counter()
-    # Step 3: Extract raw float columns (only scored indicators)
-    raw = {}
-    for col in INDICATOR_COLUMNS:
-        raw[col] = [_safe_float(stocks_list[i].get(col, 0.0)) for i in range(n)]
 
-    # Step 4: Normalize each column dynamically using the configuration router
-    normalized = {}
+    # Step 3: Vectorized extraction of raw indicator float matrix (N x 16)
+    df_stocks = pd.DataFrame(stocks_list)
     for col in INDICATOR_COLUMNS:
-        col_vals = raw[col]
-        
-        # Check if this metric uses Goldilocks config
+        if col not in df_stocks.columns:
+            df_stocks[col] = 0.0
+
+    raw_matrix = df_stocks[INDICATOR_COLUMNS].apply(pd.to_numeric, errors='coerce').fillna(0.0).to_numpy(dtype=np.float32)
+    raw_matrix = np.nan_to_num(raw_matrix, nan=0.0, posinf=0.0, neginf=0.0)
+
+    norm_matrix = np.zeros((n, len(INDICATOR_COLUMNS)), dtype=np.float32)
+
+    # Pre-extract sector array for baseline and current stocks_list for sector-neutral metrics
+    base_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in baseline_list])
+    stock_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in stocks_list])
+
+    # Step 4: Normalize each column dynamically using vectorized math
+    for j, col in enumerate(INDICATOR_COLUMNS):
+        col_arr = raw_matrix[:, j]
+
         if col == 'EV_EBITDA':
             params = GOLDILOCKS_PARAMS[col]
-            scores = []
-            for i, val in enumerate(col_vals):
-                ebitda = _safe_float(stocks_list[i].get('EBITDA', 0.0))
-                # Strict Pre-Scoring Gatekeeper Overrides:
-                # EBITDA <= 0 -> 0.0, or negative EV/EBITDA multiple -> 0.0
-                if ebitda <= 0.0 or val < 0.0:
-                    scores.append(0.0)
-                else:
-                    scores.append(_calculate_piecewise_gaussian(val, params))
-            normalized[col] = scores
+            ebitda_arr = np.array([_safe_float(s.get('EBITDA', 0.0)) for s in stocks_list], dtype=np.float32)
+            scores = _vectorized_goldilocks(col_arr, params)
+            scores = np.where((ebitda_arr <= 0.0) | (col_arr < 0.0), 0.0, scores)
+            norm_matrix[:, j] = scores
+
         elif col == 'ShareholderYield':
             params = GOLDILOCKS_PARAMS[col]
-            scores = []
-            for val in col_vals:
-                # Strict Pre-Scoring Gatekeeper Override:
-                # Shareholder Yield < -0.02 -> 0.0
-                if val < -0.02:
-                    scores.append(0.0)
-                else:
-                    scores.append(_calculate_piecewise_gaussian(val, params))
-            normalized[col] = scores
+            scores = _vectorized_goldilocks(col_arr, params)
+            scores = np.where(col_arr < -0.02, 0.0, scores)
+            norm_matrix[:, j] = scores
+
         elif col in GOLDILOCKS_PARAMS:
             params = GOLDILOCKS_PARAMS[col]
-            scores = []
-            for val in col_vals:
-                # Apply Institutional Overrides
-                if col in OVERRIDE_COLUMNS and val < 0.0:
-                    scores.append(0.0)
-                else:
-                    scores.append(_calculate_piecewise_gaussian(val, params))
-            normalized[col] = scores
+            scores = _vectorized_goldilocks(col_arr, params)
+            if col in OVERRIDE_COLUMNS:
+                scores = np.where(col_arr < 0.0, 0.0, scores)
+            norm_matrix[:, j] = scores
+
         else:
-            # Monotonic Sigmoid Z-score route
             invert = LOWER_IS_BETTER.get(col, False)
             if col in ('RevenueGrowth', 'EPSGrowth'):
-                # Sector-Neutral Sigmoid Z-score (Vectorized via NumPy)
-                base_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in baseline_list])
-                base_vals = np.array([_safe_float(s.get(col, 0.0)) for s in baseline_list], dtype=np.float32)
+                df_base = pd.DataFrame(baseline_list)
+                base_col_vals = pd.to_numeric(df_base.get(col, pd.Series(0, index=df_base.index)), errors='coerce').fillna(0.0).to_numpy(dtype=np.float32)
+                base_col_vals = np.nan_to_num(base_col_vals, nan=0.0, posinf=0.0, neginf=0.0)
 
                 sector_stats = {}
                 for sect in np.unique(base_sects):
                     mask = (base_sects == sect)
-                    s_vals = base_vals[mask]
+                    s_vals = base_col_vals[mask]
                     if len(s_vals) > 0:
                         med = float(np.median(s_vals))
                         mad = float(np.median(np.abs(s_vals - med)))
@@ -862,39 +894,40 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
                         med, mad = 0.0, 0.0
                     sector_stats[sect] = (med, mad)
 
-                scores = []
-                for i, stock in enumerate(stocks_list):
-                    sect = str(stock.get('Sector', '')).strip().lower()
-                    med, mad = sector_stats.get(sect, (0.0, 0.0))
-                    val = col_vals[i]
-                    scores.append(_calculate_sigmoid_zscore(val, med, mad, invert))
-                normalized[col] = scores
+                meds = np.zeros(n, dtype=np.float32)
+                mads = np.zeros(n, dtype=np.float32)
+                for sect, (med, mad) in sector_stats.items():
+                    s_mask = (stock_sects == sect)
+                    meds[s_mask] = med
+                    mads[s_mask] = mad
+
+                denominators = np.maximum(mads, 1e-4)
+                z = (col_arr - meds) / denominators
+                if invert:
+                    z = -z
+                exponent = np.clip(-1.5 * z, -87.0, 87.0)
+                scores = (100.0 / (1.0 + np.exp(exponent))).astype(np.float32)
+                norm_matrix[:, j] = scores
             else:
-                # Global Sigmoid Z-score (Vectorized via NumPy)
-                arr_vals = np.array(col_vals, dtype=np.float32)
-                if len(arr_vals) > 0:
-                    median_val = float(np.median(arr_vals))
-                    mad_val = float(np.median(np.abs(arr_vals - median_val)))
+                if len(col_arr) > 0:
+                    median_val = float(np.median(col_arr))
+                    mad_val = float(np.median(np.abs(col_arr - median_val)))
                 else:
                     median_val, mad_val = 0.0, 0.0
-                scores = []
-                for val in col_vals:
-                    if col in OVERRIDE_COLUMNS and val < 0.0:
-                        scores.append(0.0)
-                    else:
-                        scores.append(_calculate_sigmoid_zscore(val, median_val, mad_val, invert))
-                normalized[col] = scores
 
-    # Step 5: Rebuild stock dicts with normalized values
-    result = []
-    for i in range(n):
-        norm_stock = {'Ticker': stocks_list[i].get('Ticker', '')}
-        for col in INDICATOR_COLUMNS:
-            norm_stock[col] = normalized[col][i]
-        result.append(norm_stock)
+                scores = _vectorized_sigmoid(col_arr, median_val, mad_val, invert)
+                if col in OVERRIDE_COLUMNS:
+                    scores = np.where(col_arr < 0.0, 0.0, scores)
+                norm_matrix[:, j] = scores
+
+    # Step 5: Rebuild stock dicts with normalized values using vectorized DataFrame export
+    norm_df = pd.DataFrame(norm_matrix, columns=INDICATOR_COLUMNS)
+    tickers = [s.get('Ticker', '') for s in stocks_list]
+    norm_df.insert(0, 'Ticker', tickers)
+    result = norm_df.to_dict(orient='records')
 
     t1_norm = time.perf_counter()
-    print(f"[PROFILER] Normalization Math (Median/MAD): {t1_norm - t0_norm:.3f}s")
+    print(f"[PROFILER] Normalization Math (Vectorized NumPy): {t1_norm - t0_norm:.3f}s")
 
     return result
 
