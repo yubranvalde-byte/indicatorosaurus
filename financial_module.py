@@ -614,15 +614,18 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
 
         # 5. Gatekeeper Matrix Filter 4: Conditional Insolvency Gatekeeper
         # If Total_Equity <= 0, keep asset if FCF > 0 AND Interest Coverage (EBIT / Interest Expense) > 3.0
-        total_equity = _safe_float(stock.get('Total_Equity', stock.get('Total Equity', 0.0)))
-        if total_equity <= 0.0:
-            fcf = _safe_float(stock.get('FCF', 0.0))
-            ebit = _safe_float(stock.get('EBIT', stock.get('Operating Income (Loss)', 0.0)))
-            int_exp = _safe_float(stock.get('Interest_Expense', stock.get('Interest Expense, Net', 0.0)))
-            int_cov = ebit / int_exp if int_exp > 0 else 0.0
-            if fcf <= 0.0 or int_cov <= 3.0:
-                rule_fail_counts['Insolvency'] += 1
-                continue
+        # Safe Guard: Only evaluate if Total_Equity column is actually present in the dataset record
+        raw_equity = stock.get('Total_Equity', stock.get('Total Equity'))
+        if raw_equity is not None:
+            total_equity = _safe_float(raw_equity)
+            if total_equity <= 0.0:
+                fcf = _safe_float(stock.get('FCF', 0.0))
+                ebit = _safe_float(stock.get('EBIT', stock.get('Operating Income (Loss)', 0.0)))
+                int_exp = _safe_float(stock.get('Interest_Expense', stock.get('Interest Expense, Net', 0.0)))
+                int_cov = ebit / int_exp if int_exp > 0 else 0.0
+                if fcf <= 0.0 or int_cov <= 3.0:
+                    rule_fail_counts['Insolvency'] += 1
+                    continue
 
         # User-defined Min market cap filter
         if min_market_cap is not None:
