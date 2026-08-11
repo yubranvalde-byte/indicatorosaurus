@@ -55,6 +55,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     # Parse dates and sort chronologically, ensuring timezone-naive
     df['Quarter_End_Date'] = pd.to_datetime(df['Quarter_End_Date']).dt.tz_localize(None)
+    df.sort_values('Quarter_End_Date', inplace=True)
     unique_dates = sorted(df['Quarter_End_Date'].unique())
     if not unique_dates:
         raise ValueError("No historical quarter dates found in data.")
@@ -127,7 +128,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             del panel_slice
             continue
 
-        snapshot_df = panel_slice.sort_values('Quarter_End_Date').groupby('Ticker').last().reset_index()
+        # Memory Optimization: df is pre-sorted, so drop_duplicates('last') is identical to groupby('last') but O(N) faster and avoids RAM copies
+        snapshot_df = panel_slice.drop_duplicates(subset=['Ticker'], keep='last')
         del panel_slice  # Free panel slice immediately
 
         if snapshot_df.empty:
@@ -278,7 +280,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
     if hasattr(spy_df.index, 'tz') and spy_df.index.tz is not None:
         spy_df.index = spy_df.index.tz_localize(None)
     
-    close_data['SPY'] = spy_df['SPY_Adj_Close'].astype('float32')
+    # Memory Optimization: Use pd.concat instead of in-place assignment to avoid memory block reallocation spikes
+    close_data = pd.concat([close_data, spy_df['SPY_Adj_Close'].rename('SPY').astype('float32')], axis=1)
     close_data['SPY'] = close_data['SPY'].ffill()
     del spy_df
     gc.collect()

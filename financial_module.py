@@ -94,6 +94,12 @@ _LIVE_DATA_CACHE = {
     'data': None,
     'timestamp': 0.0
 }
+
+_TECH_DATA_CACHE = {
+    'price_df': None,
+    'spy_s': None,
+    'timestamp': 0.0
+}
 CACHE_TTL_SECONDS = 1800.0  # 30 minutes TTL
 
 
@@ -205,54 +211,73 @@ def compute_live_technical_indicators(unique_tickers):
         return tech_map
 
     try:
+        global _TECH_DATA_CACHE
+        now = time.time()
         t0_io = time.perf_counter()
-        # Load trailing price history with PyArrow column isolation
-        raw_p = pd.read_parquet(
-            simfin_parquet_path,
-            engine='pyarrow',
-            columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
-            filters=[('Ticker', 'in', list(unique_tickers))]
-        )
-        if raw_p.empty:
-            return tech_map
-
-        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
         
-        # Pre-filter dates to trailing 370 calendar days before pivoting to reduce RAM allocation
-        max_date = raw_p['Date'].max()
-        min_date = max_date - pd.Timedelta(days=370)
-        raw_p = raw_p[raw_p['Date'] >= min_date]
+        if _TECH_DATA_CACHE['price_df'] is not None and (now - _TECH_DATA_CACHE['timestamp']) < CACHE_TTL_SECONDS:
+            full_price_df = _TECH_DATA_CACHE['price_df']
+            full_spy_s = _TECH_DATA_CACHE['spy_s']
+            t1_io = time.perf_counter()
+            print(f"[PROFILER] Technical Indicator Cache Hit (O(1) I/O): {t1_io - t0_io:.3f}s")
+        else:
+            # Pre-filter dates to trailing 370 calendar days using PyArrow pushdown to reduce RAM
+            min_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=370)
+            
+            # Load trailing price history with Date pushdown filter
+            raw_p = pd.read_parquet(
+                simfin_parquet_path,
+                engine='pyarrow',
+                columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
+                filters=[('Date', '>=', min_date)]
+            )
+            if raw_p.empty:
+                return tech_map
 
-        price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
-        del raw_p
-        gc.collect()
+            raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+            raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+            raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
 
-        # Load SPY benchmark history
-        spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
-        spy_df['Date'] = pd.to_datetime(spy_df['Date'])
-        spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
-        del spy_df
-        gc.collect()
-        t1_io = time.perf_counter()
-        print(f"[PROFILER] Technical Indicator Parquet/CSV I/O: {t1_io - t0_io:.3f}s")
+            full_price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
+            del raw_p
+            gc.collect()
 
+            # Load SPY benchmark history
+            spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
+            spy_df['Date'] = pd.to_datetime(spy_df['Date'])
+            spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
+            del spy_df
+            gc.collect()
+
+            # ── CRITICAL: Align SPY window to the SAME date range as full_price_df ───────
+            price_start_date = full_price_df.index[0]
+            price_end_date = full_price_df.index[-1]
+            full_spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
+            if len(full_spy_s) < 2:
+                full_spy_s = spy_full.tail(260)
+                print(f"[Technical Indicators WARNING] SPY date overlap with Parquet is insufficient. "
+                      f"Parquet window: {price_start_date.date()} -> {price_end_date.date()}, "
+                      f"SPY latest: {spy_full.index[-1].date()}. RS may be unreliable.")
+            del spy_full
+            
+            # Save to global cache
+            _TECH_DATA_CACHE['price_df'] = full_price_df
+            _TECH_DATA_CACHE['spy_s'] = full_spy_s
+            _TECH_DATA_CACHE['timestamp'] = now
+            
+            t1_io = time.perf_counter()
+            print(f"[PROFILER] Technical Indicator Parquet/CSV I/O (Cache Miss): {t1_io - t0_io:.3f}s")
+            print(f"[Technical Indicators] Cache hydrated: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
+                  f"SPY aligned {full_spy_s.index[0].date()} -> {full_spy_s.index[-1].date()} ({len(full_spy_s)} rows)")
+
+        # Subset for the currently requested unique universe
         t0_calc = time.perf_counter()
-        # ── CRITICAL: Align SPY window to the SAME date range as price_df ───────
-        price_start_date = price_df.index[0]
-        price_end_date = price_df.index[-1]
-        spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
-        if len(spy_s) < 2:
-            spy_s = spy_full.tail(260)
-            print(f"[Technical Indicators WARNING] SPY date overlap with Parquet is insufficient. "
-                  f"Parquet window: {price_start_date.date()} -> {price_end_date.date()}, "
-                  f"SPY latest: {spy_full.index[-1].date()}. RS may be unreliable.")
-        del spy_full
-
-        print(f"[Technical Indicators] Date alignment: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
-              f"SPY aligned {spy_s.index[0].date()} -> {spy_s.index[-1].date()} ({len(spy_s)} rows)")
-
+        valid_tickers = [t for t in unique_tickers if t in full_price_df.columns]
+        if not valid_tickers:
+            return tech_map
+            
+        price_df = full_price_df[valid_tickers]
+        spy_s = full_spy_s
         # 1. Vectorized 1-Year Relative Strength vs SPY (same time window as stocks)
         spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 else 0.0
         stk_1y_ret = (price_df.iloc[-1] - price_df.iloc[0]) / price_df.iloc[0].replace(0, float('nan'))
@@ -286,6 +311,11 @@ def compute_live_technical_indicators(unique_tickers):
         if spy_var > 0.0:
             spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).values
             stk_dm = (stk_returns - stk_returns.mean()).fillna(0.0).values
+            
+            # Explicitly sanitize arrays to prevent 'invalid value encountered in dot' RuntimeWarnings
+            spy_dm = np.nan_to_num(spy_dm, nan=0.0, posinf=0.0, neginf=0.0)
+            stk_dm = np.nan_to_num(stk_dm, nan=0.0, posinf=0.0, neginf=0.0)
+            
             n_obs = max(1, len(spy_returns) - 1)
             cov_vals = np.dot(stk_dm.T, spy_dm) / n_obs
             cov_s = pd.Series(cov_vals, index=price_df.columns, dtype='float32')
