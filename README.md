@@ -291,6 +291,7 @@ The fundamental root cause of the Render environment discrepancy was identified 
 4. **C-FFI Struct Alignment Assertion**: Added a module-level assertion `assert ctypes.sizeof(Stock) == 80` in `financial_module.py` to continuously verify byte-for-byte binary alignment between Python `ctypes.Structure` and C `Stock` struct (`stock.h`).
 5. **Build Script Verification**: Added automated Parquet presence checking in `build.sh` to log data lake file status during cloud deployment build execution.
 6. **Backtest Engine Lazy Ingestion & Pushdown Predicates**: Refactored `backtest_engine.py` to execute fundamental screening (C-FFI scoring) first across quarters to assemble the target universe (~54 unique tickers), then query `us-shareprices-daily.parquet` via PyArrow pushdown predicates combining both `Ticker` whitelist and `Date` window bounds (`Date >= start_date` and `Date <= end_date`). Added `.dropna()` length guards for volatility calculations to eliminate Numpy runtime warnings on thin edge-case stock histories.
+7. **Live Calculation Pipeline Reordering & Hard Truncation**: Refactored `get_cached_fundamental_snapshot()` and `/api/calculate` in `main.py` to apply static filters (Market Cap, Sector) *first* to reduce the 3,189 stock universe to surviving candidates (<500 stocks). Delayed heavy technical indicator calculations (RSI, Covariance, SMA) to execute strictly on survivors. Enforced hard truncation (`Top 100`) after C-FFI scoring, preventing JSON serialization OOMs on Render and eliminating Tiingo API HTTP 429 rate limit errors.
 
 ---
 

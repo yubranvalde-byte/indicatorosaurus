@@ -317,8 +317,8 @@ def compute_live_technical_indicators(unique_tickers):
 def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     """
     Returns live fundamental dataset from In-Memory TTL Cache (1800s / 30 mins).
-    Sub-second response time (< 1ms) for C-FFI screener endpoint.
-    Returns copy-isolated records enriched with dynamic technical indicators.
+    Sub-second response time (< 1ms) for baseline dataset.
+    Returns copy-isolated raw fundamental records.
     """
     global _LIVE_DATA_CACHE
     now = time.time()
@@ -337,33 +337,10 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
     if not disk_records:
         return None, err or "Failed to load base dataset."
 
-    # 3. Compute dynamic technical indicators from Parquet data lake
-    unique_tickers = [r['Ticker'] for r in disk_records if 'Ticker' in r]
-    tech_indicators = compute_live_technical_indicators(unique_tickers)
-
-    # 4. Merge dynamic technical indicators into snapshot records
-    if tech_indicators:
-        for r in disk_records:
-            sym = r.get('Ticker', '').upper().strip()
-            if sym in tech_indicators:
-                t_data = tech_indicators[sym]
-                for field in ['RelativeStrength', 'PriceVs200SMA', 'RSI', 'Beta']:
-                    cur_val = _safe_float(r.get(field, 0.0))
-                    if cur_val == 0.0 or field in ['RelativeStrength', 'PriceVs200SMA']:
-                        r[field] = t_data[field]
-        del tech_indicators
-        gc.collect()
-
-    # 5. Guard against caching stale or empty technical indicator data
-    valid_sma_in_snapshot = sum(1 for r in disk_records if _safe_float(r.get('PriceVs200SMA', 0.0)) > 0.0)
-    if valid_sma_in_snapshot == 0 and disk_records:
-        print(f"⚠️ [In-Memory Cache WARNING] All {len(disk_records)} records have PriceVs200SMA == 0.0 (technical indicators missing/failed). Bypassing cache update to force retry on next request.")
-        return [dict(r) for r in disk_records], None
-
     # Update in-memory cache & timestamp
     _LIVE_DATA_CACHE['data'] = disk_records
     _LIVE_DATA_CACHE['timestamp'] = now
-    print(f"[In-Memory Cache] Updated cache with {len(disk_records)} records ({valid_sma_in_snapshot} valid PriceVs200SMA entries, TTL {int(ttl_seconds)}s).")
+    print(f"[In-Memory Cache] Updated baseline cache with {len(disk_records)} raw records (TTL {int(ttl_seconds)}s).")
 
     # Return isolated copy to caller
     return [dict(r) for r in disk_records], None
