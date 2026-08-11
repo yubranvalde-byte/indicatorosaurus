@@ -67,6 +67,8 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
 ### Technology Stack Overview
 | Layer | Technologies / Tools | Purpose |
 | :--- | :--- | :--- |
+| **AI System Context** | `ALPHAQUANT_AI_RULES.md` | Centralized prompt & engineering constraints specification |
+| **Deterministic Scripts** | Python (`/scripts/compile_c_engine.py`, `/scripts/run_rolling_backtest.py`) | Atomic manual execution triggers replacing heavy agent tooling |
 | **Core Computational Kernel** | C (GCC `-O3 -shared -fPIC`), `ctypes` | Multi-factor weighted dot-product scoring and in-place QuickSort |
 | **Backend Framework** | Python 3.9+, Flask 3.x, Gunicorn WSGI | REST API routing, query validation, JSON serialization |
 | **Data Processing & Analytics** | Pandas, NumPy, PyArrow | Vectorized math, sector statistics, Parquet column/date pushdown I/O |
@@ -324,20 +326,26 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Step 2 — Compile the C Shared Library
+### Step 2 — Compile the C Shared Library & Validate Alignment
 ```bash
-make clean && make
+python scripts/compile_c_engine.py
 ```
-*Compiles `financial_engine.c` into `libsortbuslines.so` using `-O3 -shared -fPIC`.*
+*Compiles `financial_engine.c` into `libsortbuslines.so` (using GCC / WSL fallback) and asserts FFI `Stock` 80-byte memory alignment.*
 
-### Step 3 — Run the Development Server
+### Step 3 — Run Strategy Rolling Backtests
+```bash
+python scripts/run_rolling_backtest.py --strategy momentum --window 3y
+```
+*Executes point-in-time dynamic portfolio rebalancing simulation without look-ahead bias.*
+
+### Step 4 — Run the Development Server
 ```bash
 python main.py
 ```
 *Access dashboard at `http://127.0.0.1:5000`.*
 
-### Step 4 — Production Cloud Deployment (e.g. Render)
-- **Build Command**: `make && pip install -r requirements.txt`
+### Step 5 — Production Cloud Deployment (e.g. Render)
+- **Build Command**: `python scripts/compile_c_engine.py && pip install -r requirements.txt`
 - **Start Command**: `gunicorn main:app`
 - **Environment Variables**: `TIINGO_API_KEY` (Optional for live quote enrichment).
 
