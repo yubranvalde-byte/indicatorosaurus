@@ -290,6 +290,7 @@ The fundamental root cause of the Render environment discrepancy was identified 
 3. **In-Memory Cache Guard**: Implemented a defensive check in `get_cached_fundamental_snapshot()`. If `PriceVs200SMA == 0.0` across all snapshot records (indicating technical indicator load failure), the engine bypasses TTL cache updating, forcing a retry on the next request instead of caching zero-value snapshots for 30 minutes.
 4. **C-FFI Struct Alignment Assertion**: Added a module-level assertion `assert ctypes.sizeof(Stock) == 80` in `financial_module.py` to continuously verify byte-for-byte binary alignment between Python `ctypes.Structure` and C `Stock` struct (`stock.h`).
 5. **Build Script Verification**: Added automated Parquet presence checking in `build.sh` to log data lake file status during cloud deployment build execution.
+6. **Backtest Engine Lazy Ingestion & Pushdown Predicates**: Refactored `backtest_engine.py` to execute fundamental screening (C-FFI scoring) first across quarters to assemble the target universe (~54 unique tickers), then query `us-shareprices-daily.parquet` via PyArrow pushdown predicates combining both `Ticker` whitelist and `Date` window bounds (`Date >= start_date` and `Date <= end_date`). Added `.dropna()` length guards for volatility calculations to eliminate Numpy runtime warnings on thin edge-case stock histories.
 
 ---
 

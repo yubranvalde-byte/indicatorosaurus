@@ -216,11 +216,17 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     price_data = None
     if os.path.exists(simfin_parquet_path):
+        min_date_filter = pd.Timestamp(start_date) - pd.Timedelta(days=5)
+        max_date_filter = pd.Timestamp(end_date) + pd.Timedelta(days=5)
         raw_p = pd.read_parquet(
             simfin_parquet_path,
             engine='pyarrow',
             columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
-            filters=[('Ticker', 'in', list(needed_tickers))]
+            filters=[
+                ('Ticker', 'in', list(needed_tickers)),
+                ('Date', '>=', min_date_filter),
+                ('Date', '<=', max_date_filter)
+            ]
         )
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
         raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
@@ -228,7 +234,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         price_data = raw_p.pivot(index='Date', columns='Ticker', values='Price').astype('float32')
         del raw_p
         gc.collect()
-        print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin Parquet.")
+        print(f"[Backtest Engine] Lazy-loaded prices for {len(price_data.columns)} tickers from SimFin Parquet (date filtered {start_date.date()} to {end_date.date()}).")
     elif os.path.exists(simfin_csv_path):
         raw_p = pd.read_csv(
             simfin_csv_path,
@@ -359,8 +365,16 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         port_ann_return = float(p_last ** annual_factor - 1.0)
         spy_ann_return = float(s_last ** annual_factor - 1.0)
 
-        port_vol = float(port_series.std() * math.sqrt(252))
-        spy_vol = float(spy_series.std() * math.sqrt(252))
+        valid_port = port_series.dropna()
+        valid_spy = spy_series.dropna()
+
+        port_vol = float(valid_port.std() * math.sqrt(252)) if len(valid_port) > 1 else 0.0
+        spy_vol = float(valid_spy.std() * math.sqrt(252)) if len(valid_spy) > 1 else 0.0
+
+        if math.isnan(port_vol) or math.isinf(port_vol):
+            port_vol = 0.0
+        if math.isnan(spy_vol) or math.isinf(spy_vol):
+            spy_vol = 0.0
 
         # 4% risk free hurdle
         port_sharpe = (port_ann_return - 0.04) / port_vol if port_vol > 0 else 0.0
