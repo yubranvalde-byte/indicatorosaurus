@@ -14,8 +14,8 @@ def compress_prices_to_parquet():
     df = pd.read_csv(
         csv_path,
         sep=';',
-        usecols=['Ticker', 'Date', 'Close', 'Adj. Close'],
-        dtype={'Ticker': 'category', 'Close': 'float32', 'Adj. Close': 'float32'},
+        usecols=['Ticker', 'Date', 'Close', 'Adj. Close', 'Volume'],
+        dtype={'Ticker': 'category', 'Close': 'float32', 'Adj. Close': 'float32', 'Volume': 'float32'},
         parse_dates=['Date']
     )
 
@@ -24,7 +24,7 @@ def compress_prices_to_parquet():
 
     size_mb = os.path.getsize(parquet_path) / (1024 * 1024)
     original_mb = os.path.getsize(csv_path) / (1024 * 1024)
-    print(f"Done! {original_mb:.1f}MB CSV → {size_mb:.1f}MB Parquet ({100*(1-size_mb/original_mb):.0f}% smaller)")
+    print(f"Done! {original_mb:.1f}MB CSV -> {size_mb:.1f}MB Parquet ({100*(1-size_mb/original_mb):.0f}% smaller)")
 
 if __name__ == '__main__':
     compress_prices_to_parquet()

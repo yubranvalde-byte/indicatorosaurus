@@ -97,6 +97,7 @@ _LIVE_DATA_CACHE = {
 
 _TECH_DATA_CACHE = {
     'price_df': None,
+    'volume_df': None,
     'spy_s': None,
     'timestamp': 0.0
 }
@@ -170,16 +171,20 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
     return price_map
 
 
-def compute_live_technical_indicators(unique_tickers):
+def ensure_tech_cache():
     """
-    Dynamically calculates momentum & technical indicators (RelativeStrength, PriceVs200SMA, RSI, Beta)
-    from offline us-shareprices-daily.parquet and spy_historical.csv for the active stock universe.
-    Aggressively optimizes RAM lifecycle via date pre-filtering, 1D vectorization, and immediate matrix deletion.
+    Hydrates _TECH_DATA_CACHE from us-shareprices-daily.parquet and spy_historical.csv if missing or expired (30m TTL).
+    Returns tuple of (full_price_df, full_volume_df, full_spy_s).
     """
-    if not unique_tickers:
-        return {}
+    global _TECH_DATA_CACHE
+    now = time.time()
 
-    # Robust Multi-Candidate Path Resolution for Parquet & SPY data files
+    if (_TECH_DATA_CACHE['price_df'] is not None and 
+        _TECH_DATA_CACHE['volume_df'] is not None and 
+        _TECH_DATA_CACHE['spy_s'] is not None and 
+        (now - _TECH_DATA_CACHE['timestamp']) < CACHE_TTL_SECONDS):
+        return _TECH_DATA_CACHE['price_df'], _TECH_DATA_CACHE['volume_df'], _TECH_DATA_CACHE['spy_s']
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     simfin_parquet_candidates = [
         os.path.join(base_dir, 'data', 'raw_simfin', 'us-shareprices-daily.parquet'),
@@ -198,77 +203,84 @@ def compute_live_technical_indicators(unique_tickers):
     ]
     spy_path = next((p for p in spy_candidates if os.path.exists(p)), None)
 
-    tech_map = {}
-    print(f"[DIAG] Technical indicator path resolution (base_dir='{base_dir}'):")
-    for p in simfin_parquet_candidates:
-        exists = os.path.exists(p)
-        sz = f"{os.path.getsize(p)/(1024*1024):.2f} MB" if exists else "N/A"
-        print(f"  - Candidate '{p}': exists={exists}, size={sz}")
-    print(f"[DIAG] Selected Parquet path: '{simfin_parquet_path}', SPY path: '{spy_path}'")
-
     if not simfin_parquet_path or not spy_path:
         print(f"CRITICAL PATH WARNING: Data files missing for technical indicator computation. Parquet: '{simfin_parquet_path}', SPY: '{spy_path}'")
-        return tech_map
+        return None, None, None
 
     try:
-        global _TECH_DATA_CACHE
-        now = time.time()
         t0_io = time.perf_counter()
-        
-        if _TECH_DATA_CACHE['price_df'] is not None and (now - _TECH_DATA_CACHE['timestamp']) < CACHE_TTL_SECONDS:
-            full_price_df = _TECH_DATA_CACHE['price_df']
-            full_spy_s = _TECH_DATA_CACHE['spy_s']
-            t1_io = time.perf_counter()
-            print(f"[PROFILER] Technical Indicator Cache Hit (O(1) I/O): {t1_io - t0_io:.3f}s")
+        min_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=370)
+
+        # Read parquet with PyArrow date pushdown filter
+        raw_p = pd.read_parquet(
+            simfin_parquet_path,
+            engine='pyarrow',
+            columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
+            filters=[('Date', '>=', min_date)]
+        )
+        if raw_p.empty:
+            return None, None, None
+
+        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+        if 'Volume' not in raw_p.columns:
+            raw_p['Volume'] = 0.0
         else:
-            # Pre-filter dates to trailing 370 calendar days using PyArrow pushdown to reduce RAM
-            min_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=370)
-            
-            # Load trailing price history with Date pushdown filter
-            raw_p = pd.read_parquet(
-                simfin_parquet_path,
-                engine='pyarrow',
-                columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
-                filters=[('Date', '>=', min_date)]
-            )
-            if raw_p.empty:
-                return tech_map
+            raw_p['Volume'] = raw_p['Volume'].fillna(0.0).astype('float32')
 
-            raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-            raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-            raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
 
-            full_price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
-            del raw_p
-            gc.collect()
+        full_price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
+        full_volume_df = raw_p.pivot(index='Date', columns='Ticker', values='Volume').sort_index().tail(260)
+        del raw_p
+        gc.collect()
 
-            # Load SPY benchmark history
-            spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
-            spy_df['Date'] = pd.to_datetime(spy_df['Date'])
-            spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
-            del spy_df
-            gc.collect()
+        # Load SPY benchmark history
+        spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
+        spy_df['Date'] = pd.to_datetime(spy_df['Date'])
+        spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
+        del spy_df
+        gc.collect()
 
-            # ── CRITICAL: Align SPY window to the SAME date range as full_price_df ───────
-            price_start_date = full_price_df.index[0]
-            price_end_date = full_price_df.index[-1]
-            full_spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
-            if len(full_spy_s) < 2:
-                full_spy_s = spy_full.tail(260)
-                print(f"[Technical Indicators WARNING] SPY date overlap with Parquet is insufficient. "
-                      f"Parquet window: {price_start_date.date()} -> {price_end_date.date()}, "
-                      f"SPY latest: {spy_full.index[-1].date()}. RS may be unreliable.")
-            del spy_full
-            
-            # Save to global cache
-            _TECH_DATA_CACHE['price_df'] = full_price_df
-            _TECH_DATA_CACHE['spy_s'] = full_spy_s
-            _TECH_DATA_CACHE['timestamp'] = now
-            
-            t1_io = time.perf_counter()
-            print(f"[PROFILER] Technical Indicator Parquet/CSV I/O (Cache Miss): {t1_io - t0_io:.3f}s")
-            print(f"[Technical Indicators] Cache hydrated: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
-                  f"SPY aligned {full_spy_s.index[0].date()} -> {full_spy_s.index[-1].date()} ({len(full_spy_s)} rows)")
+        price_start_date = full_price_df.index[0]
+        price_end_date = full_price_df.index[-1]
+        full_spy_s = spy_full[(spy_full.index >= price_start_date) & (spy_full.index <= price_end_date)]
+        if len(full_spy_s) < 2:
+            full_spy_s = spy_full.tail(260)
+        del spy_full
+
+        _TECH_DATA_CACHE['price_df'] = full_price_df
+        _TECH_DATA_CACHE['volume_df'] = full_volume_df
+        _TECH_DATA_CACHE['spy_s'] = full_spy_s
+        _TECH_DATA_CACHE['timestamp'] = now
+
+        t1_io = time.perf_counter()
+        print(f"[PROFILER] Technical Indicator Parquet/CSV I/O (Cache Miss): {t1_io - t0_io:.3f}s")
+        print(f"[Technical Indicators] Cache hydrated: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
+              f"SPY aligned {full_spy_s.index[0].date()} -> {full_spy_s.index[-1].date()} ({len(full_spy_s)} rows)")
+
+        return full_price_df, full_volume_df, full_spy_s
+    except Exception as e:
+        print(f"ERROR hydrating technical data cache: {e}")
+        return None, None, None
+
+
+def compute_live_technical_indicators(unique_tickers):
+    """
+    Dynamically calculates momentum & technical indicators (RelativeStrength, PriceVs200SMA, RSI, Beta)
+    from offline us-shareprices-daily.parquet and spy_historical.csv for the active stock universe.
+    Aggressively optimizes RAM lifecycle via date pre-filtering, 1D vectorization, and immediate matrix deletion.
+    """
+    if not unique_tickers:
+        return {}
+
+    tech_map = {}
+    try:
+        t0_io = time.perf_counter()
+        full_price_df, full_volume_df, full_spy_s = ensure_tech_cache()
+        if full_price_df is None or full_spy_s is None:
+            return tech_map
+        t1_io = time.perf_counter()
 
         # Subset for the currently requested unique universe
         t0_calc = time.perf_counter()
@@ -528,12 +540,35 @@ def apply_knockout_filters(stocks_list, strategy):
 
 def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
     """
-    Apply optional user-defined demographic gates (sectors and market cap range).
+    Apply strict Gatekeeper Matrix early in the data pipeline to filter out unqualified assets:
+      - Market Cap > $500M ($500,000,000)
+      - 20-day Average Daily Trading Volume (ADTV) > $5M ($5,000,000)
+      - Price > $5.00
+    Also applies user-specified demographic gates (allowed_sectors, min_market_cap, max_market_cap).
     Returns a new list of dicts. If no filters are provided, returns the list unchanged.
     """
     t0_dyn = time.perf_counter()
     if not stocks_list:
         return []
+
+    # ── Gatekeeper Cut-Off Constants ─────────────────────────────────────────
+    GATEKEEPER_MIN_MARKET_CAP = 500_000_000.0  # $500M
+    GATEKEEPER_MIN_PRICE = 5.00                # $5.00
+    GATEKEEPER_MIN_ADTV = 5_000_000.0          # $5M 20-day ADTV
+
+    # Pre-compute vectorized ADTV & latest Prices via cached technical matrix
+    price_df, volume_df, _ = ensure_tech_cache()
+    latest_prices = {}
+    adtv_map = {}
+    if price_df is not None and volume_df is not None:
+        tail_price = price_df.tail(20)
+        tail_volume = volume_df.tail(20)
+        daily_dollar_vol = tail_price * tail_volume
+        adtv_series = daily_dollar_vol.mean(axis=0)
+        latest_price_series = price_df.iloc[-1]
+
+        adtv_map = adtv_series.to_dict()
+        latest_prices = latest_price_series.to_dict()
 
     # Process allowed_sectors into a set of lowercased stripped strings for robust matching
     sector_set = None
@@ -543,31 +578,56 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
         elif hasattr(allowed_sectors, '__iter__'):
             sector_set = {str(s).strip().lower() for s in allowed_sectors if s}
 
+    rule_fail_counts = {'MarketCap': 0, 'Price': 0, 'ADTV': 0, 'Sector': 0, 'UserMarketCap': 0}
     survivors = []
+
     for stock in stocks_list:
+        stk_ticker = str(stock.get('Ticker', '')).upper().strip()
+
         # 1. Sector filter
         if sector_set is not None:
             sector = str(stock.get('Sector', stock.get('GICS_Sector', ''))).strip().lower()
             if sector not in sector_set:
+                rule_fail_counts['Sector'] += 1
                 continue
 
         # Coerce market cap to safe float
         mkt_cap = _safe_float(stock.get('MarketCap', 0.0))
 
-        # 2. Min market cap filter
+        # 2. Gatekeeper Matrix Filter 1: Market Cap > $500M
+        if mkt_cap < GATEKEEPER_MIN_MARKET_CAP:
+            rule_fail_counts['MarketCap'] += 1
+            continue
+
+        # 3. Gatekeeper Matrix Filter 2: Price > $5.00
+        stk_price = latest_prices.get(stk_ticker, _safe_float(stock.get('Price', 0.0)))
+        if stk_price > 0 and stk_price <= GATEKEEPER_MIN_PRICE:
+            rule_fail_counts['Price'] += 1
+            continue
+
+        # 4. Gatekeeper Matrix Filter 3: 20-day ADTV > $5M
+        if adtv_map:
+            stk_adtv = adtv_map.get(stk_ticker, 0.0)
+            if stk_adtv <= GATEKEEPER_MIN_ADTV:
+                rule_fail_counts['ADTV'] += 1
+                continue
+
+        # User-defined Min market cap filter
         if min_market_cap is not None:
             try:
                 min_val = float(min_market_cap)
                 if mkt_cap < min_val:
+                    rule_fail_counts['UserMarketCap'] += 1
                     continue
             except (ValueError, TypeError):
                 pass
 
-        # 3. Max market cap filter
+        # User-defined Max market cap filter
         if max_market_cap is not None:
             try:
                 max_val = float(max_market_cap)
                 if mkt_cap > max_val:
+                    rule_fail_counts['UserMarketCap'] += 1
                     continue
             except (ValueError, TypeError):
                 pass
@@ -577,8 +637,8 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
     before = len(stocks_list)
     after = len(survivors)
     t1_dyn = time.perf_counter()
-    print(f"[PROFILER] Static Sector/Cap Filtering: {t1_dyn - t0_dyn:.3f}s")
-    print(f"[DynamicFilter] Sector/Cap: {before} -> {after} stocks ({before - after} eliminated)")
+    print(f"[PROFILER] Gatekeeper Matrix & Sector/Cap Filtering: {t1_dyn - t0_dyn:.3f}s")
+    print(f"[GatekeeperMatrix] {before} -> {after} stocks ({before - after} eliminated) | Fail breakdown: {rule_fail_counts}")
     return survivors
 
 

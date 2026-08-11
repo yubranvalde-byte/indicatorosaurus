@@ -80,7 +80,7 @@ The single-page web client (`templates/index.html`) provides interactive analyti
 ### Memory & Latency Optimizations
 1. **Two-Tier In-Memory TTL Cache (`financial_module.py`)**:
    - `_LIVE_DATA_CACHE` (30-minute TTL): Retains baseline raw fundamental snapshots in RAM, returning `<1ms` cache hits.
-   - `_TECH_DATA_CACHE` (30-minute TTL): Retains the global 370-day pivoted price matrix (`full_price_df`) and aligned SPY series (`full_spy_s`), eliminating 9.2s disk reads per request.
+   - `_TECH_DATA_CACHE` (30-minute TTL): Retains the global 370-day pivoted price matrix (`price_df`), volume matrix (`volume_df`), and aligned SPY series (`spy_s`), eliminating disk reads and enabling vectorized sub-second 20-day ADTV and price calculations.
 2. **Selective Live Quote Enrichment**: Inverts live data calls to query Tiingo's API *only* for the top 100 surviving stocks after scoring, reducing HTTP batches from 64 down to 2 and avoiding rate limits (HTTP 429).
 3. **Lazy Price Ingestion in Backtest**: Screener identifies surviving tickers (~10-50 tickers) *first*, then loads daily prices from Parquet using PyArrow predicates (`Ticker` whitelist + `Date` bounds).
 4. **Memory Footprint Control**: Explicit `float32` downcasting, pre-sorting DataFrames to use `drop_duplicates(subset=['Ticker'], keep='last')` instead of memory-heavy `groupby().last()`, and inner-loop `gc.collect()`.
@@ -236,7 +236,11 @@ The complete step-by-step lifecycle of a live screener request via `/api/calcula
 2. Baseline Data Load -------> Fetch raw snapshot from _LIVE_DATA_CACHE (<1ms)
        |
        v
-3. Static Demographics ------> Apply sector list & market cap filters (apply_dynamic_filters)
+3. **Static Demographics & Gatekeeper Matrix**: Apply early-stage strict cutoff filters (`apply_dynamic_filters`) before statistical normalization:
+                                - **Market Cap**: > $500M
+                                - **Price**: > $5.00 (from cached daily price matrix)
+                                - **20-Day ADTV**: > $5M (vectorized 20-day mean of Price * Volume)
+                                - **Demographics**: GICS sector whitelisting and user-specified cap bounds
        |
        v
 4. Technical Indicators ------> Fetch technicals from _TECH_DATA_CACHE (RelativeStrength, SMA, RSI, Beta)
