@@ -116,7 +116,7 @@ AlphaQuant operates under a **Pure Offline Mandate** for simulation and fundamen
 
 ### ETL Key Rules (`simfin_etl.py`)
 1. **Zero Look-Ahead Bias**: Fundamental statements are joined to price technicals strictly using the statement's **Publish Date** (`Publish Date <= Price Date`). Statements become visible to the engine only *after* public filing.
-2. **Trailing PE Substitution**: `ForwardPE` is computed as $\text{Price} / \text{EPS}_{\text{TTM}}$ using reported trailing twelve-month earnings.
+2. **Trailing PE Substitution**: `TrailingPE` is computed as $\text{Price} / \text{EPS}_{\text{TTM}}$ using reported trailing twelve-month earnings.
 3. **No Data Spoofing**: Missing data fields are safely coerced to `0.0` or neutral defaults (`_safe_float`) without artificial backfilling.
 
 ---
@@ -128,7 +128,7 @@ The core scoring engine maps 16 quantitative financial metrics onto normalized s
 ### The 16 Quantitative Indicators
 | Index | Indicator Key | Type | Description |
 | :---: | :--- | :--- | :--- |
-| `0` | `ForwardPE` | Valuation | Trailing Price-to-Earnings ($\text{Price} / \text{EPS}_{\text{TTM}}$) |
+| `0` | `TrailingPE` | Valuation | Trailing Price-to-Earnings ($\text{Price} / \text{EPS}_{\text{TTM}}$) |
 | `1` | `EV_EBITDA` | Valuation | Enterprise Value to EBITDA ratio |
 | `2` | `FCFYield` | Valuation | Free Cash Flow Yield ($\text{FCF} / \text{Market Cap}$) |
 | `3` | `RevenueGrowth` | Growth | Trailing 12-month Revenue Growth Rate |
@@ -136,7 +136,7 @@ The core scoring engine maps 16 quantitative financial metrics onto normalized s
 | `5` | `GrossMargin` | Profitability | Gross Profit / Total Revenue |
 | `6` | `OperatingMargin` | Profitability | Operating Income / Total Revenue |
 | `7` | `ROIC` | Efficiency | Return on Invested Capital |
-| `8` | `DebtToEquity` | Health | Total Debt / Total Shareholder Equity |
+| `8` | `NetDebt_EBITDA` | Health | Net Debt / EBITDA ratio |
 | `9` | `ShareholderYield` | Return | $(\text{Dividends} + \text{Share Repurchases} - \text{Debt Issued}) / \text{Market Cap}$ |
 | `10` | `FiveYDivGrowth` | Return | 5-Year Compound Annual Dividend Growth Rate |
 | `11` | `PayoutRatio` | Safety | Dividend Payout Ratio ($\text{Dividends} / \text{Net Income}$) |
@@ -161,9 +161,9 @@ $$\text{Score}(x) = \begin{cases}
 ##### Configured Goldilocks Bounds (`GOLDILOCKS_PARAMS`)
 - `PayoutRatio`: $[L=0.35, U=0.70, \sigma_L=0.25, \sigma_R=0.20]$
 - `RSI`: $[L=45.0, U=60.0, \sigma_L=15.0, \sigma_R=10.0]$
-- `ForwardPE`: $[L=12.0, U=28.0, \sigma_L=5.0, \sigma_R=15.0]$
+- `TrailingPE`: $[L=12.0, U=28.0, \sigma_L=5.0, \sigma_R=15.0]$
 - `EV_EBITDA`: $[L=8.0, U=16.0, \sigma_L=3.0, \sigma_R=8.0]$
-- `DebtToEquity`: $[L=0.1, U=0.8, \sigma_L=0.4, \sigma_R=0.6]$
+- `NetDebt_EBITDA`: $[L=0.0, U=3.0, \sigma_L=1.0, \sigma_R=2.0]$
 - `Beta`: $[L=0.8, U=1.2, \sigma_L=0.6, \sigma_R=0.4]$
 - `PriceVs200SMA`: $[L=1.02, U=1.15, \sigma_L=0.10, \sigma_R=0.08]$
 - `ShareholderYield`: $[L=0.04, U=0.09, \sigma_L=0.03, \sigma_R=0.04]$
@@ -177,17 +177,23 @@ $$Z_{i} = \frac{x_{i} - \text{Median}_{\text{sector}}}{\max\left(\text{MAD}_{\te
 
 $$\text{Score}(x_{i}) = \frac{100}{1 + e^{-1.5 \cdot Z_{i}}}$$
 
-Where $\text{MAD} = \text{Median}(|x_i - \text{Median}(x)|)$. If lower values are better (e.g. `ForwardPE`), the Z-score is inverted ($Z = -Z$).
+Where $\text{MAD} = \text{Median}(|x_i - \text{Median}(x)|)$. If lower values are better (e.g. `TrailingPE`), the Z-score is inverted ($Z = -Z$).
 
 ---
 
-### Strategy Knock-Out Filter Gates (`KNOCKOUT_FILTERS`)
-Before scoring, assets failing strategy binary gates are removed:
-- **`deep-value`**: `FCFYield > 0.0`, `OperatingMargin > 0.0`
-- **`hyper-growth`**: `RevenueGrowth > 0.0`, `GrossMargin > 0.20`
-- **`momentum`**: `PriceVs200SMA > 0.0` (verifies valid historical SMA data)
-- **`income`**: `PayoutRatio > 0.0`, `PayoutRatio < 0.85`, `ShareholderYield > 0.015`
-- **`quality`**: `ROIC > 0.08`, `CurrentRatio > 1.0`
+### Gatekeeper Matrix & Knock-Out Filter Gates (`apply_dynamic_filters`, `KNOCKOUT_FILTERS`)
+Before scoring, assets must pass global Gatekeeper Matrix cut-offs and strategy-specific binary gates:
+- **Global Gatekeeper Matrix**:
+  - `MarketCap > $500M`
+  - `Price > $5.00`
+  - `20-day ADTV > $5M`
+  - `Conditional Insolvency Gatekeeper`: If `Total_Equity <= 0`, asset is kept ONLY if `FCF > 0` AND Interest Coverage (`EBIT / Interest_Expense`) > 3.0.
+- **Strategy Knock-Out Gates**:
+  - **`deep-value`**: `FCFYield > 0.0`, `OperatingMargin > 0.0`
+  - **`hyper-growth`**: `RevenueGrowth > 0.0`, `GrossMargin > 0.20`
+  - **`momentum`**: `PriceVs200SMA > 0.0` (verifies valid historical SMA data)
+  - **`income`**: `PayoutRatio > 0.0`, `PayoutRatio < 0.85`, `ShareholderYield > 0.015`
+  - **`quality`**: `ROIC > 0.08`, `CurrentRatio > 1.0`
 
 ---
 
@@ -280,9 +286,8 @@ Rebalancing Step (Quarter T_k):
 ```
 
 ### Strategy Rebalancing Frequency
-- `momentum`, `custom`: Every 3 months (1 quarter step)
+- `momentum`, `deep-value`, `income`, `custom`: Every 3 months (1 quarter step)
 - `hyper-growth`, `quality`: Every 6 months (2 quarter steps)
-- `deep-value`, `income`: Every 12 months (4 quarter steps)
 
 ### Robust Scalar Extraction & Performance Formulas
 To avoid `TypeError: float() argument must be a string or a real number, not 'Series'`, all Pandas reductions are safely converted to scalars via `_scalar_float()`:

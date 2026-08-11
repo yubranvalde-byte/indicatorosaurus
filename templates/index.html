@@ -299,8 +299,8 @@ tailwind.config = {
 <script>
 // ── Indicator definitions (16 in INDICATOR_COLUMNS order) ───────────────────
 const INDICATORS = [
-  { id:'sl-forward-pe',       col:'ForwardPE',        label:'Forward P/E',       icon:'timeline',      group:'Valuation',
-    tip:'Price vs projected earnings. Lower = cheaper entry point.',
+  { id:'sl-trailing-pe',      col:'TrailingPE',       label:'Trailing P/E',      icon:'timeline',      group:'Valuation',
+    tip:'Price vs trailing TTM earnings. Lower = cheaper entry point.',
     fmt: v => v.toFixed(2) },
   { id:'sl-peg-ratio',        col:'EV_EBITDA',        label:'EV / EBITDA',       icon:'show_chart',    group:'Valuation',
     tip:'Enterprise Value / EBITDA. Lower = cheaper valuation multiple.',
@@ -323,8 +323,8 @@ const INDICATORS = [
   { id:'sl-roic',             col:'ROIC',             label:'ROIC (ROA proxy)',   icon:'savings',       group:'Profitability',
     tip:'Return on assets — capital efficiency proxy. Avoids ROE distortion from buybacks.',
     fmt: v => `${(v*100).toFixed(1)}%` },
-  { id:'sl-debt-equity',      col:'DebtToEquity',     label:'Debt / Equity',     icon:'credit_card',   group:'Health',
-    tip:'Financial leverage ratio. Lower = safer balance sheet.',
+  { id:'sl-net-debt-ebitda',  col:'NetDebt_EBITDA',   label:'Net Debt / EBITDA', icon:'credit_card',   group:'Health',
+    tip:'Net Debt to EBITDA leverage ratio. Lower = safer balance sheet.',
     fmt: v => v.toFixed(2) },
   { id:'sl-div-yield',        col:'ShareholderYield', label:'Shareholder Yield', icon:'payments',      group:'Income',
     tip:'Total cash returned via dividends, net share buybacks, and debt reduction. Higher = better.',

@@ -9,7 +9,7 @@ Maintains strict compliance with:
 1. Pure Offline Mandate (No yfinance / network calls).
 2. Zero Look-Ahead Bias (Matches fundamentals via Publish Date to price technicals).
 3. No Data Spoofing (Safely coerces missing/invalid data to 0.0 without artificial backfilling).
-4. Substituted ForwardPE with Trailing PE (Price / EPS_TTM).
+4. Substituted ForwardPE with TrailingPE (Price / EPS_TTM).
 """
 
 import os
@@ -21,13 +21,14 @@ import pandas as pd
 RAW_DIR = os.path.join(os.path.dirname(__file__), "data", "raw_simfin")
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "historical_fundamental_data.csv")
 
-# Expected 22-column schema (+ Ticker header match)
+# Expected schema (+ Ticker header match)
 FINAL_COLUMNS = [
     "Ticker", "GICS_Sector", "Quarter_End_Date",
-    "ForwardPE", "EV_EBITDA", "FCFYield", "RevenueGrowth", "EPSGrowth",
-    "GrossMargin", "OperatingMargin", "ROIC", "DebtToEquity", "ShareholderYield",
+    "TrailingPE", "EV_EBITDA", "FCFYield", "RevenueGrowth", "EPSGrowth",
+    "GrossMargin", "OperatingMargin", "ROIC", "NetDebt_EBITDA", "ShareholderYield",
     "FiveYDivGrowth", "PayoutRatio", "Beta", "RSI", "PriceVs200SMA",
-    "RelativeStrength", "CurrentRatio", "MarketCap", "EBITDA"
+    "RelativeStrength", "CurrentRatio", "MarketCap", "EBITDA",
+    "Total_Equity", "FCF", "EBIT", "Interest_Expense"
 ]
 
 def safe_div(num, denom, default=0.0):
@@ -234,6 +235,7 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
         shares_bs = group["Shares (Diluted)_bs"].fillna(group["Shares (Basic)_bs"]).values if "Shares (Diluted)_bs" in group.columns else group.get("Shares (Diluted)", 0.0).values
         shares_price = group["Shares Outstanding"].values
         price = group["Price"].values
+        int_exp_col = group["Interest Expense, Net"].fillna(0.0).abs().values if "Interest Expense, Net" in group.columns else np.zeros(len(group))
 
         dates = pd.to_datetime(group["Report Date"]).dt.strftime("%Y-%m-%d").values
         sectors = group["GICS_Sector"].values
@@ -250,9 +252,9 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
             sh = shares_price[i] if (not pd.isna(shares_price[i]) and shares_price[i] > 0) else shares_bs[i]
             mkt_cap = price[i] * sh if (not pd.isna(price[i]) and not pd.isna(sh) and sh > 0) else 0.0
 
-            # 1. ForwardPE (Substituted with Trailing PE: Price / EPS_TTM = MarketCap / Net Income)
+            # 1. TrailingPE (Price / EPS_TTM = MarketCap / Net Income)
             eps_ttm = safe_div(net_inc[i], sh, default=0.0)
-            forward_pe = safe_div(price[i], eps_ttm, default=0.0) if eps_ttm > 0 else 0.0
+            trailing_pe = safe_div(price[i], eps_ttm, default=0.0) if eps_ttm > 0 else 0.0
 
             # 2. EBITDA & EV/EBITDA
             ebitda = op_inc[i] + da[i]
@@ -283,8 +285,9 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
             inv_cap = tot_debt + total_equity[i] - cash_eq[i]
             roic = safe_div(nopat, inv_cap, default=0.0)
 
-            # 9. Debt to Equity
-            d_to_e = safe_div(tot_debt, total_equity[i], default=0.0)
+            # 9. Net Debt / EBITDA
+            net_debt = tot_debt - cash_eq[i]
+            net_debt_ebitda = safe_div(net_debt, ebitda, default=0.0)
 
             # 10. Shareholder Yield (-(Dividends + Repurchases + Debt Repayments) / MarketCap)
             cash_returned = -(div_paid[i] + repurchase[i] + debt_repay[i])
@@ -308,7 +311,7 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
                 "Ticker": ticker,
                 "GICS_Sector": sectors[i],
                 "Quarter_End_Date": dates[i],
-                "ForwardPE": round(float(forward_pe), 4),
+                "TrailingPE": round(float(trailing_pe), 4),
                 "EV_EBITDA": round(float(ev_ebitda), 4),
                 "FCFYield": round(float(fcf_yield), 6),
                 "RevenueGrowth": round(float(rev_growth), 6),
@@ -316,7 +319,7 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
                 "GrossMargin": round(float(gross_margin), 6),
                 "OperatingMargin": round(float(op_margin), 6),
                 "ROIC": round(float(roic), 6),
-                "DebtToEquity": round(float(d_to_e), 4),
+                "NetDebt_EBITDA": round(float(net_debt_ebitda), 4),
                 "ShareholderYield": round(float(sh_yield), 6),
                 "FiveYDivGrowth": round(float(five_y_div_growth), 4),
                 "PayoutRatio": round(float(payout_ratio), 6),
@@ -326,7 +329,11 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
                 "RelativeStrength": round(float(rel_str_vals[i]), 6),
                 "CurrentRatio": round(float(current_ratio), 4),
                 "MarketCap": round(float(mkt_cap), 2),
-                "EBITDA": round(float(ebitda), 2)
+                "EBITDA": round(float(ebitda), 2),
+                "Total_Equity": round(float(total_equity[i]), 2),
+                "FCF": round(float(fcf), 2),
+                "EBIT": round(float(op_inc[i]), 2),
+                "Interest_Expense": round(float(int_exp_col[i]), 2)
             }
             rows.append(row)
 

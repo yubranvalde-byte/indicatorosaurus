@@ -60,14 +60,15 @@ ALL_TICKERS = get_dynamic_universe()
 # CurrentRatio is filter-only (Quality gate). EBITDA is gating-only for EV/EBITDA
 # override (prevents negative EBITDA inversion). Neither is packed into the C struct.
 CSV_HEADER = [
-    'Ticker', 'ForwardPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
-    'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
+    'Ticker', 'TrailingPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
+    'GrossMargin', 'OperatingMargin', 'ROIC', 'NetDebt_EBITDA', 'ShareholderYield',
     'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA', 'RelativeStrength',
     'CurrentRatio',   # Filter-only — not scored by C engine
     'LongName',       # Metadata — not scored by C engine
     'Sector',         # Metadata — not scored by C engine
     'MarketCap',      # Metadata/Filter — not scored by C engine
     'EBITDA',         # Gating-only — EV_EBITDA override guard, placed at the absolute end!
+    'Total_Equity', 'FCF', 'EBIT', 'Interest_Expense'
 ]
 
 OUTPUT_FILE = 'market_data.csv'
@@ -256,7 +257,7 @@ def build_row(symbol: str, info: dict, hist: pd.DataFrame, spy_return: float | N
 
     return [
         symbol,
-        safe_float(info.get('forwardPE')),           # ForwardPE
+        safe_float(info.get('trailingPE')),          # TrailingPE
         ev_ebitda,                                    # EV_EBITDA  (enterpriseToEbitda)
         fcf_yield,                                    # FCFYield  (freeCashflow / marketCap)
         safe_float(info.get('revenueGrowth')),        # RevenueGrowth
@@ -264,7 +265,7 @@ def build_row(symbol: str, info: dict, hist: pd.DataFrame, spy_return: float | N
         safe_float(info.get('grossMargins')),         # GrossMargin
         safe_float(info.get('operatingMargins')),     # OperatingMargin
         safe_float(info.get('returnOnAssets')),       # ROIC  [proxy: ROA — avoids ROE distortion]
-        safe_float(info.get('debtToEquity')),         # DebtToEquity
+        safe_float(info.get('debtToEquity')),         # NetDebt_EBITDA
         shareholder_yield,                            # ShareholderYield  (cashflow-derived)
         five_y_div,                                   # FiveYDivGrowth  [5yr avg yield — not payoutRatio]
         safe_float(info.get('payoutRatio')),          # PayoutRatio
@@ -583,7 +584,7 @@ def get_shares_at(shares_series, balance_sheet, date_str, default_shares):
 def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_sheet, price_hist, spy_hist, shares_series):
     sector = str(info.get('sector', ''))
     
-    # 1. ForwardPE
+    # 1. TrailingPE
     net_income = get_statement_val(financials, ['Net Income', 'NetIncome', 'Net Income Common Stockholders'], date_str, 0.0)
     shares = get_shares_at(shares_series, balance_sheet, date_str, safe_float(info.get('sharesOutstanding')))
     close_price = get_historical_price_on(price_hist['Close'], date_str) if 'Close' in price_hist else 0.0
@@ -641,9 +642,11 @@ def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_
     total_assets = get_statement_val(balance_sheet, ['Total Assets', 'TotalAssets'], date_str, 0.0)
     roic = net_income / total_assets if total_assets > 0 else 0.0
 
-    # 9. DebtToEquity
+    # 9. NetDebt_EBITDA
     equity = get_statement_val(balance_sheet, ['Stockholders Equity', 'Total Stockholder Equity', 'StockholdersEquity', 'TotalStockholdersEquity'], date_str, 0.0)
-    debt_equity = total_debt / equity if equity > 0 else 0.0
+    net_debt = total_debt - cash
+    net_debt_ebitda = net_debt / ebitda if ebitda > 0 else 0.0
+    interest_exp = abs(get_statement_val(financials, ['Interest Expense', 'InterestExpense', 'Interest Expense Net'], date_str, 0.0))
 
     # 10. ShareholderYield
     divs = get_statement_val(cashflow, ['DividendsPaid', 'Cash Dividends Paid', 'CommonStockDividendsPaid', 'PaymentOfDividends'], date_str, 0.0)
@@ -723,7 +726,7 @@ def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_
         round(gross_margin, 6),
         round(op_margin, 6),
         round(roic, 6),
-        round(debt_equity, 4),
+        round(net_debt_ebitda, 4),
         round(shareholder_yield, 6),
         round(five_y_div, 6),
         round(payout_ratio, 6),
@@ -733,7 +736,11 @@ def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_
         round(rel_strength, 6),
         round(current_ratio, 4),
         round(market_cap, 2),
-        round(ebitda, 2)
+        round(ebitda, 2),
+        round(equity, 2),
+        round(fcf, 2),
+        round(op_income, 2),
+        round(interest_exp, 2)
     ]
 
 
@@ -741,10 +748,11 @@ def compute_quarterly_row(symbol, info, date_str, financials, cashflow, balance_
 def fetch_and_save_historical_fundamental_data():
     HIST_OUTPUT_FILE = 'historical_fundamental_data.csv'
     HIST_HEADER = [
-        'Ticker', 'GICS_Sector', 'Quarter_End_Date', 'ForwardPE', 'EV_EBITDA', 'FCFYield',
-        'RevenueGrowth', 'EPSGrowth', 'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity',
+        'Ticker', 'GICS_Sector', 'Quarter_End_Date', 'TrailingPE', 'EV_EBITDA', 'FCFYield',
+        'RevenueGrowth', 'EPSGrowth', 'GrossMargin', 'OperatingMargin', 'ROIC', 'NetDebt_EBITDA',
         'ShareholderYield', 'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
-        'RelativeStrength', 'CurrentRatio', 'MarketCap', 'EBITDA'
+        'RelativeStrength', 'CurrentRatio', 'MarketCap', 'EBITDA',
+        'Total_Equity', 'FCF', 'EBIT', 'Interest_Expense'
     ]
 
     fetched_records = set()

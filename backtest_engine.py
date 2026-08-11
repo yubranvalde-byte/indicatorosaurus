@@ -35,10 +35,10 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         
     needed_fund_cols = [
         'Ticker', 'GICS_Sector', 'Sector', 'Quarter_End_Date', 'MarketCap', 'EBITDA',
-        'ForwardPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
-        'GrossMargin', 'OperatingMargin', 'ROIC', 'DebtToEquity', 'ShareholderYield',
+        'TrailingPE', 'EV_EBITDA', 'FCFYield', 'RevenueGrowth', 'EPSGrowth',
+        'GrossMargin', 'OperatingMargin', 'ROIC', 'NetDebt_EBITDA', 'ShareholderYield',
         'FiveYDivGrowth', 'PayoutRatio', 'Beta', 'RSI', 'PriceVs200SMA',
-        'RelativeStrength', 'CurrentRatio'
+        'RelativeStrength', 'CurrentRatio', 'Total_Equity', 'FCF', 'EBIT', 'Interest_Expense'
     ]
 
     t0_csv = time.perf_counter()
@@ -65,8 +65,8 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         'momentum': 3,
         'hyper-growth': 6,
         'quality': 6,
-        'deep-value': 12,
-        'income': 12,
+        'deep-value': 3,
+        'income': 3,
         'custom': 3
     }
     strategy_clean = str(strategy).strip().lower() if strategy else 'custom'

@@ -15,7 +15,7 @@ NUM_INDICATORS = 16
 
 # Strict column order matching fetch_static_data.py CSV_HEADER (positions 1-16)
 INDICATOR_COLUMNS = [
-    'ForwardPE',         # indicators[0]
+    'TrailingPE',        # indicators[0]
     'EV_EBITDA',         # indicators[1] (replaced PEGRatio)
     'FCFYield',          # indicators[2]
     'RevenueGrowth',     # indicators[3]
@@ -23,7 +23,7 @@ INDICATOR_COLUMNS = [
     'GrossMargin',       # indicators[5]
     'OperatingMargin',   # indicators[6]
     'ROIC',              # indicators[7]
-    'DebtToEquity',      # indicators[8]
+    'NetDebt_EBITDA',    # indicators[8]
     'ShareholderYield',  # indicators[9] (replaced DividendYield)
     'FiveYDivGrowth',    # indicators[10]
     'PayoutRatio',       # indicators[11]
@@ -34,11 +34,11 @@ INDICATOR_COLUMNS = [
 ]
 
 # Directionality flags: True = lower is better (inverted normalization)
-# Lower is Better: ForwardPE, DebtToEquity, PayoutRatio
+# Lower is Better: TrailingPE, NetDebt_EBITDA, PayoutRatio
 LOWER_IS_BETTER = {
-    'ForwardPE':    True,
-    'DebtToEquity': True,
-    'PayoutRatio':  True,
+    'TrailingPE':     True,
+    'NetDebt_EBITDA': True,
+    'PayoutRatio':    True,
 }
 
 # ─── Knock-out Filter Registry ────────────────────────────────────────────────
@@ -80,9 +80,9 @@ VALID_STRATEGIES = frozenset(KNOCKOUT_FILTERS.keys())
 GOLDILOCKS_PARAMS = {
     'PayoutRatio':      {'L': 0.35,  'U': 0.70,  'sigma_L': 0.25,  'sigma_R': 0.20},
     'RSI':              {'L': 45.0,  'U': 60.0,  'sigma_L': 15.0,  'sigma_R': 10.0},
-    'ForwardPE':        {'L': 12.0,  'U': 28.0,  'sigma_L': 5.0,   'sigma_R': 15.0},
+    'TrailingPE':       {'L': 12.0,  'U': 28.0,  'sigma_L': 5.0,   'sigma_R': 15.0},
     'EV_EBITDA':        {'L': 8.0,   'U': 16.0,  'sigma_L': 3.0,   'sigma_R': 8.0},
-    'DebtToEquity':     {'L': 0.1,   'U': 0.8,   'sigma_L': 0.4,   'sigma_R': 0.6},
+    'NetDebt_EBITDA':   {'L': 0.0,   'U': 3.0,   'sigma_L': 1.0,   'sigma_R': 2.0},
     'Beta':             {'L': 0.8,   'U': 1.2,   'sigma_L': 0.6,   'sigma_R': 0.4},
     'PriceVs200SMA':    {'L': 1.02,  'U': 1.15,  'sigma_L': 0.10,  'sigma_R': 0.08},
     'ShareholderYield': {'L': 0.04,  'U': 0.09,  'sigma_L': 0.03,  'sigma_R': 0.04},
@@ -578,7 +578,7 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
         elif hasattr(allowed_sectors, '__iter__'):
             sector_set = {str(s).strip().lower() for s in allowed_sectors if s}
 
-    rule_fail_counts = {'MarketCap': 0, 'Price': 0, 'ADTV': 0, 'Sector': 0, 'UserMarketCap': 0}
+    rule_fail_counts = {'MarketCap': 0, 'Price': 0, 'ADTV': 0, 'Insolvency': 0, 'Sector': 0, 'UserMarketCap': 0}
     survivors = []
 
     for stock in stocks_list:
@@ -610,6 +610,18 @@ def apply_dynamic_filters(stocks_list, allowed_sectors=None, min_market_cap=None
             stk_adtv = adtv_map.get(stk_ticker, 0.0)
             if stk_adtv <= GATEKEEPER_MIN_ADTV:
                 rule_fail_counts['ADTV'] += 1
+                continue
+
+        # 5. Gatekeeper Matrix Filter 4: Conditional Insolvency Gatekeeper
+        # If Total_Equity <= 0, keep asset if FCF > 0 AND Interest Coverage (EBIT / Interest Expense) > 3.0
+        total_equity = _safe_float(stock.get('Total_Equity', stock.get('Total Equity', 0.0)))
+        if total_equity <= 0.0:
+            fcf = _safe_float(stock.get('FCF', 0.0))
+            ebit = _safe_float(stock.get('EBIT', stock.get('Operating Income (Loss)', 0.0)))
+            int_exp = _safe_float(stock.get('Interest_Expense', stock.get('Interest Expense, Net', 0.0)))
+            int_cov = ebit / int_exp if int_exp > 0 else 0.0
+            if fcf <= 0.0 or int_cov <= 3.0:
+                rule_fail_counts['Insolvency'] += 1
                 continue
 
         # User-defined Min market cap filter
@@ -749,7 +761,7 @@ def _calculate_sigmoid_zscore(val, median_val, mad_val, invert=False):
         return 0.0 if z < 0.0 else 100.0
 
 
-OVERRIDE_COLUMNS = frozenset({'PayoutRatio', 'ForwardPE', 'DebtToEquity', 'EV_EBITDA'})
+OVERRIDE_COLUMNS = frozenset({'PayoutRatio', 'TrailingPE', 'NetDebt_EBITDA', 'EV_EBITDA'})
 
 
 def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None):

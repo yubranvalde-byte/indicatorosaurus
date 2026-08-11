@@ -9,9 +9,9 @@
 // the Python FFI layer. The C engine only performs a pure dot product.
 //
 // Index → Column mapping (matches financial_module.py INDICATOR_COLUMNS order):
-//   [0]  ForwardPE        [1]  EV_EBITDA       [2]  FCFYield
+//   [0]  TrailingPE       [1]  EV_EBITDA       [2]  FCFYield
 //   [3]  RevenueGrowth    [4]  EPSGrowth        [5]  GrossMargin
-//   [6]  OperatingMargin  [7]  ROIC             [8]  DebtToEquity
+//   [6]  OperatingMargin  [7]  ROIC             [8]  NetDebt_EBITDA
 //   [9]  ShareholderYield [10] FiveYDivGrowth   [11] PayoutRatio
 //   [12] Beta             [13] RSI              [14] PriceVs200SMA
 //   [15] RelativeStrength
