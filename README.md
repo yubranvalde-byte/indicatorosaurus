@@ -121,10 +121,12 @@ AlphaQuant operates under a **Pure Offline Mandate** for simulation and fundamen
 +-----------------------------------------------------------------------------------+
 ```
 
-### ETL Key Rules (`simfin_etl.py`)
+### ETL Key Rules (`data_pipeline/simfin_etl.py`)
 1. **Zero Look-Ahead Bias**: Fundamental statements are joined to price technicals strictly using the statement's **Publish Date** (`Publish Date <= Price Date`). Statements become visible to the engine only *after* public filing.
 2. **Trailing PE Substitution**: `TrailingPE` is computed as $\text{Price} / \text{EPS}_{\text{TTM}}$ using reported trailing twelve-month earnings.
-3. **No Data Spoofing**: Missing data fields are safely coerced to `0.0` or neutral defaults (`_safe_float`) without artificial backfilling.
+3. **Upstream Gatekeeper Filtering**: Upstream point-in-time filtering permanently drops illiquid records (`MarketCap < $1B` or `Price < $5.00`), generating a lean `24,262` row fundamental dataset across `1,866` institutional-grade equities (`data/historical_fundamental_data.csv`).
+4. **Parquet Price Compression (`data_pipeline/compress_prices_to_parquet.py`)**: Converts 6.2M daily share price rows into Snappy-compressed `us-shareprices-daily.parquet` (415.4MB CSV $\rightarrow$ 53.8MB Parquet, 87% reduction).
+5. **No Data Spoofing**: Missing data fields are safely coerced to `0.0` or neutral defaults (`_safe_float`) without artificial backfilling.
 
 ---
 
