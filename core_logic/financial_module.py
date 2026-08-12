@@ -384,7 +384,7 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
 
     # 2. Load baseline records from local disk CSV
     disk_records, err = load_latest_fundamental_snapshot(csv_path)
-    if not disk_records:
+    if disk_records is None or disk_records.empty:
         return None, err or "Failed to load base dataset."
 
     # Update in-memory cache & timestamp
