@@ -63,10 +63,14 @@
 ## 4. Deterministic Script Architecture & Execution Standards
 
 - Heavy autonomous agent multi-step tooling MUST be replaced by deterministic scripts in `/scripts`.
-- Core maintenance tasks are driven via standalone Python scripts:
-  - `python scripts/compile_c_engine.py`: Compiles C kernel using GCC `-O3 -shared -fPIC` into `libsortbuslines.so` and validates C-FFI struct alignment.
+- Core maintenance tasks and regression verification suites are driven via standalone Python scripts:
+  - `python scripts/compile_c_engine.py`: Compiles C kernel using GCC `-O3 -shared -fPIC` into `libsortbuslines.so` and validates C-FFI struct alignment (80 bytes).
   - `python scripts/run_rolling_backtest.py`: Triggers backtest simulation across historical anchor dates cleanly and outputs key performance metrics.
-- 
+  - `python scripts/verify_price_resolver.py`: Verifies Phase 1 multi-currency price resolver, SDMX/CBS macro cache, and latency SLA.
+  - `python scripts/verify_portfolio_ledger.py`: Verifies Phase 2 FIFO lot tracking and Israeli capital gains tax edge cases.
+  - `python scripts/verify_portfolio_analytics.py`: Verifies Phase 3 daily holdings matrix, TWR cash-flow invariance, XIRR solver, and What-If simulator.
+  - `python scripts/verify_portfolio_api.py`: Verifies Phase 4 Portfolio Intelligence REST endpoints, latency SLA (< 100ms), and RFC-8259 NaN safety.
+
 ## 5. Living Documentation Requirement**: Any changes to system architecture, FFI layout, or mathematical rules MUST be reflected in `README.md`.
 
   - **Living Documentation:** Whenever you modify the codebase, alter the architecture, or adjust the mathematical/algorithmic logic in this project, you MUST proactively update the English `README.md` to reflect these changes.

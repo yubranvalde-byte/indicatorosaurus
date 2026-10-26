@@ -434,7 +434,12 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
             "spy_sharpe": round(spy_sharpe, 4),
             "portfolio_max_drawdown": round(port_max_dd, 4),
             "spy_max_drawdown": round(spy_max_dd, 4),
-            "total_alpha": round(alpha, 4)
+            "total_alpha": round(alpha, 4),
+            # Canonical unified metric keys for CLI & cross-module reporting
+            "portfolio_annualized_return": round(port_ann_return, 4),
+            "spy_annualized_return": round(spy_ann_return, 4),
+            "portfolio_volatility": round(port_vol, 4),
+            "spy_volatility": round(spy_vol, 4),
         }
     }
 

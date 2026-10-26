@@ -29,12 +29,11 @@ import math
 import numpy as np
 import pandas as pd
 
+from financial_module import _scalar_float, _clean_frame, _to_naive_ts
 from portfolio_ledger import (
     CASH_TX_TYPES,
     DIVIDEND_WITHHOLDING_RATE,
     PortfolioLedger,
-    _clean_frame,
-    _scalar_float,
 )
 
 RISK_FREE_ANNUAL = 0.04
@@ -44,13 +43,6 @@ WINDOW_PRESETS = ("1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "ALL")
 
 
 # ─── Date & Window Helpers ────────────────────────────────────────────────────
-
-def _to_naive_ts(val) -> pd.Timestamp:
-    ts = pd.Timestamp(val)
-    if ts.tz is not None:
-        ts = ts.tz_localize(None)
-    return ts.normalize()
-
 
 def resolve_window_bounds(
     inception_date: pd.Timestamp,
@@ -284,7 +276,7 @@ class PortfolioAnalytics:
 
         # 1. Resolve Macro Series (USD_ILS, IL_CPI) on continuous daily grid
         macro_df = self.macro_provider(t_start, t_end)
-        macro_aligned = macro_df.reindex(daily_grid).ffill().bfill()
+        macro_aligned = macro_df.reindex(daily_grid).ffill().fillna(0.0)
         fx_vec = macro_aligned["USD_ILS"].to_numpy(dtype=np.float64)
         cpi_vec = macro_aligned["IL_CPI"].to_numpy(dtype=np.float64)
 
@@ -294,7 +286,7 @@ class PortfolioAnalytics:
 
         if sec_tickers:
             px_df, curr_map = self.price_provider(sec_tickers, t_start, t_end)
-            px_aligned = px_df.reindex(daily_grid).ffill().bfill()[sec_tickers].astype(np.float64)
+            px_aligned = px_df.reindex(daily_grid).ffill().fillna(0.0)[sec_tickers].astype(np.float64)
 
             sec_tx["tx_date"] = pd.to_datetime(sec_tx["date"]).dt.normalize()
             sec_tx["signed_qty"] = np.where(sec_tx["tx_type"] == "BUY", sec_tx["quantity"], -sec_tx["quantity"])
@@ -595,7 +587,7 @@ class PortfolioAnalytics:
 
         if bench_list:
             b_px_df, b_curr_map = self.price_provider(bench_list, t0, t1)
-            b_px_aligned = b_px_df.reindex(slice_grid).ffill().bfill()
+            b_px_aligned = b_px_df.reindex(slice_grid).ffill().fillna(0.0)
             fx_slice = slice_df["usd_ils"].to_numpy(dtype=np.float64)
 
             for idx_b, b_sym in enumerate(bench_list):

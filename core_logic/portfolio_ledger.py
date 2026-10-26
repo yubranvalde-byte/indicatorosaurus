@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, asdict
 
 import numpy as np
 import pandas as pd
-from financial_module import _scalar_float, sanitize_for_json
+from financial_module import _scalar_float, sanitize_for_json, _clean_frame, _to_naive_ts
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)

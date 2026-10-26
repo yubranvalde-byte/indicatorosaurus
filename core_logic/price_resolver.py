@@ -30,6 +30,7 @@ import time
 import requests
 import numpy as np
 import pandas as pd
+from financial_module import _to_naive_ts as _to_naive_timestamp, _clean_frame
 
 try:
     import yfinance as yf
@@ -81,14 +82,6 @@ _MACRO_RESOLVER_CACHE = {
 
 
 # ─── Helper Utilities ─────────────────────────────────────────────────────────
-
-def _to_naive_timestamp(dt_val) -> pd.Timestamp:
-    """Convert any date input to a timezone-naive normalized pd.Timestamp."""
-    ts = pd.Timestamp(dt_val)
-    if ts.tz is not None:
-        ts = ts.tz_localize(None)
-    return ts.normalize()
-
 
 def _today() -> pd.Timestamp:
     return pd.Timestamp.now().normalize()

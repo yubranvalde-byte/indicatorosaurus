@@ -21,6 +21,9 @@ The platform bridges raw corporate fundamental filings and daily market price da
 - **Zero Look-Ahead Bias Backtesting**: Point-in-time fundamental screening combined with PyArrow Parquet pushdown lazy price ingestion.
 - **Two-Tier In-Memory TTL Cache & Pre-Flight State Management**: Sub-millisecond fundamental data access and explicit route pre-flight technical indicator cache hydration to prevent cold-start I/O tax during requests.
 - **Portfolio Intelligence Phase 1 — Hybrid Multi-Currency Price & Macro Resolver (`core_logic/price_resolver.py`)**: 3-Tier historical price resolution engine combining the local SimFin Parquet lake (`us-shareprices-daily.parquet`), a Snappy-compressed portfolio cache (`portfolio_price_cache.parquet`), and external fallback (Tiingo / `yfinance`) with automatic Tel Aviv Stock Exchange (`.TA`) Agorot-to-ILS scaling ($\text{Price}_{\text{ILS}} = \text{Price}_{\text{Agorot}} / 100.0$) and a continuous daily calendar macro engine (`fx_cpi_cache.parquet`) for `USD/ILS` FX and Israeli CPI series.
+- **Portfolio Intelligence Phase 2 — Dual-Currency FIFO Ledger & Israeli Tax Engine (`core_logic/portfolio_ledger.py`)**: Real-time transaction persistence (`data/portfolio_transactions.parquet`), fractional FIFO queue state machine, and exact Israeli capital gains tax decomposition (25% on real gains, inflationary exemptions, YTD tax shielding, and loss carry-forward).
+- **Portfolio Intelligence Phase 3 — Vectorized Time-Series & Attribution Engine (`core_logic/portfolio_analytics.py`)**: Continuous daily holdings matrix ($N_{\text{days}} \times M_{\text{tickers}}$), cash-flow invariant Time-Weighted Return (TWR), exact Money-Weighted Return (MWR / XIRR via Newton-Raphson), ILS FX & tax attribution, and counterfactual benchmark opportunity simulation.
+- **Portfolio Intelligence Phase 4 — Low-Latency REST API Engine (`api/main.py`)**: Low-latency endpoints (`/api/portfolio/summary`, `/api/portfolio/transactions`, `/api/portfolio/analytics`) with in-memory memoization (< 100ms warm SLA) and strict RFC-8259 NaN-safety.
 
 ---
 
@@ -70,11 +73,11 @@ AlphaQuant uses a tiered architecture separating heavy computational math (C dyn
 | Layer | Technologies / Tools | Purpose |
 | :--- | :--- | :--- |
 | **AI System Context** | `ALPHAQUANT_AI_RULES.md` | Centralized prompt & engineering constraints specification |
-| **Deterministic Scripts** | Python (`/scripts/compile_c_engine.py`, `/scripts/run_rolling_backtest.py`) | Atomic manual execution triggers replacing heavy agent tooling |
+| **Deterministic Scripts** | Python (`/scripts/*.py`) | Automated testing & execution: `compile_c_engine.py`, `run_rolling_backtest.py`, `verify_price_resolver.py`, `verify_portfolio_ledger.py`, `verify_portfolio_analytics.py`, `verify_portfolio_api.py` |
 | **Core Computational Kernel** | C (GCC `-O3 -shared -fPIC`), `ctypes` | Multi-factor weighted dot-product scoring and in-place QuickSort |
 | **Backend Framework** | Python 3.9+, Flask 3.x, Gunicorn WSGI | REST API routing, query validation, JSON serialization |
-| **Data Processing & Analytics** | Pandas, NumPy, PyArrow | Vectorized math, sector statistics, Parquet column/date pushdown I/O |
-| **Data Storage / Lake** | Apache Parquet (Snappy), CSV | Compressed price time-series (`us-shareprices-daily.parquet`) |
+| **Data Processing & Analytics** | Pandas, NumPy, PyArrow | Vectorized math, sector statistics, Parquet column/date pushdown I/O, FIFO tax lot engine, XIRR solver |
+| **Data Storage / Lake** | Apache Parquet (Snappy), CSV | `us-shareprices-daily.parquet`, `portfolio_price_cache.parquet`, `fx_cpi_cache.parquet`, `portfolio_transactions.parquet` |
 | **Frontend UI** | HTML5, Tailwind CSS, Chart.js, Vanilla JS | Async single-page dashboard with real-time performance charting |
 
 ### Frontend Architecture

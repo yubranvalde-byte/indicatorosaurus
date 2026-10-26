@@ -647,6 +647,28 @@ def sanitize_for_json(obj):
     return str(obj)
 
 
+def _clean_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Zero NaN/inf in every numeric column of a DataFrame."""
+    if df is None or df.empty:
+        return df if df is not None else pd.DataFrame()
+    out = df.copy()
+    num = out.select_dtypes(include=[np.number]).columns
+    if len(num):
+        out[num] = out[num].fillna(0.0).replace([np.inf, -np.inf], 0.0)
+    return out
+
+
+def _to_naive_ts(val) -> pd.Timestamp:
+    """Normalize any date/timestamp representation to a timezone-naive midnight Timestamp."""
+    ts = pd.Timestamp(val)
+    if ts.tz is not None:
+        ts = ts.tz_localize(None)
+    return ts.normalize()
+
+# Alias for cross-module compatibility
+_to_naive_timestamp = _to_naive_ts
+
+
 def _calculate_piecewise_gaussian(val, params):
     """Scalar piecewise Gaussian normalizer (retained for backward compatibility)."""
     if val is None:
