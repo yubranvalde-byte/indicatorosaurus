@@ -20,6 +20,7 @@ The platform bridges raw corporate fundamental filings and daily market price da
 - **Cross-Sectional Sector-Neutral Normalization**: Outlier-resistant Sigmoid Z-score normalizations using sector medians and Median Absolute Deviation (MAD), alongside piecewise Gaussian Goldilocks decay curves.
 - **Zero Look-Ahead Bias Backtesting**: Point-in-time fundamental screening combined with PyArrow Parquet pushdown lazy price ingestion.
 - **Two-Tier In-Memory TTL Cache & Pre-Flight State Management**: Sub-millisecond fundamental data access and explicit route pre-flight technical indicator cache hydration to prevent cold-start I/O tax during requests.
+- **Portfolio Intelligence Phase 1 — Hybrid Multi-Currency Price & Macro Resolver (`core_logic/price_resolver.py`)**: 3-Tier historical price resolution engine combining the local SimFin Parquet lake (`us-shareprices-daily.parquet`), a Snappy-compressed portfolio cache (`portfolio_price_cache.parquet`), and external fallback (Tiingo / `yfinance`) with automatic Tel Aviv Stock Exchange (`.TA`) Agorot-to-ILS scaling ($\text{Price}_{\text{ILS}} = \text{Price}_{\text{Agorot}} / 100.0$) and a continuous daily calendar macro engine (`fx_cpi_cache.parquet`) for `USD/ILS` FX and Israeli CPI series.
 
 ---
 
@@ -309,6 +310,54 @@ To avoid `TypeError: float() argument must be a string or a real number, not 'Se
 - **Sharpe Ratio (4% risk-free rate)**: $\text{Sharpe} = \frac{R_{\text{ann}} - 0.04}{\sigma_{\text{ann}}}$
 - **Maximum Drawdown**: $\text{MDD} = \min\left(\frac{\text{NAV}_t - \text{Peak}_t}{\text{Peak}_t}\right)$
 - **Excess Return Alpha vs SPY**: $\alpha = R_{\text{ann}}^{\text{Portfolio}} - R_{\text{ann}}^{\text{SPY}}$
+
+---
+
+## 6A. Portfolio Intelligence Phase 1: Hybrid Price & Macro Resolution Engine (`core_logic/price_resolver.py`)
+
+To support multi-currency US/TASE portfolio tracking and Israeli real (CPI/FX-adjusted) capital gains tax calculations in sub-millisecond warm latency, `core_logic/price_resolver.py` implements a 3-Tier equity resolution architecture paired with a continuous daily macro index engine:
+
+### 1. 3-Tier Hybrid Equity Price Resolution (`resolve_prices`)
+- **Tier 1 (Primary Local Lake — `us-shareprices-daily.parquet`)**: Queries institutional US equities via PyArrow predicate pushdown (`Ticker` whitelist and `Date` bounds) matching `backtest_engine.py`.
+- **Tier 2 (Local Portfolio Cache — `data/portfolio_price_cache.parquet`)**: Stores and serves ETFs (`QQQ`, `SMH`, `SPY`), TASE securities (`.TA`), and promoted Tier 1 slices in a compact Snappy-compressed Parquet artifact (`~22ms` disk read; `< 1ms` in-memory TTL hit).
+- **Tier 3 (External Fallback & Cache Hydration)**: Automatically fetches missing tickers or uncached date ranges via Tiingo REST API (`TIINGO_API_KEY`) or `yfinance` fallback and atomically merges them into `data/portfolio_price_cache.parquet`.
+- **TASE Agorot Normalization**: Detects Tel Aviv Stock Exchange tickers (`.TA`) quoted in Agorot (`ILA`) and normalizes prices to ILS ($\text{Price}_{\text{ILS}} = \text{Price}_{\text{Agorot}} / 100.0$) prior to caching, returning native currency metadata (`USD` vs `ILS`).
+- **Zero Synthetic Data & Zero Look-Ahead**: Strictly forward-filled (`.ffill()`, no `.bfill()`); raises `RuntimeError` if a ticker cannot be resolved from local caches or authoritative external sources.
+
+### 2. Macro FX (`USD/ILS`) & Israeli CPI Engine (`resolve_macro_series`)
+- **`USD_ILS`**: Fetched directly from the **Bank of Israel SDMX API** (`RER_USD_ILS` official representative rate).
+- **`IL_CPI`**: Fetched from the **Israel Central Bureau of Statistics (CBS) API** (index `120010`), chain-linked across base-year transitions to the latest CBS base, and keyed strictly to its **publication date** (the 15th of month $M+1$, "המדד הידוע" / the known index).
+- Reindexed onto a continuous daily calendar grid (`2010-01-01` to present) using strict chronological forward-fill (`ffill`) in `data/fx_cpi_cache.parquet`.
+- Verified via `python scripts/verify_price_resolver.py`.
+
+---
+
+## 6B. Portfolio Intelligence Phase 2: Dual-Currency FIFO Ledger & Israeli Tax Engine (`core_logic/portfolio_ledger.py`)
+
+`core_logic/portfolio_ledger.py` implements a persistent dual-currency (`USD` / `ILS`) transaction ledger, FIFO tax-lot accounting state machine, and Israeli capital gains tax calculator (25% on real gains):
+
+### 1. Transaction Ledger & Persistence (`PortfolioLedger`)
+- **Supported Operations**: `BUY`, `SELL`, `DIVIDEND`, `CASH_DEPOSIT`, `CASH_WITHDRAWAL`.
+- **Schema**: `tx_id`, `date` (`YYYY-MM-DD`), `ticker`, `tx_type`, `quantity` (fractional shares supported), `price` (native currency), `fee` (native currency), `currency` (`USD` or `ILS`), and `notes`.
+- **Atomic Persistence**: Stored in Snappy-compressed `data/portfolio_transactions.parquet` via atomic `.tmp` + `os.replace` commits (only persisted after full FIFO replay validation passes, preventing oversells or corrupt state), with deterministic CSV import/export (`import_csv`, `export_csv`).
+
+### 2. Israeli Real Capital Gains Tax Decomposition (`compute_israeli_lot_tax`)
+On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `ILS`:
+- **Original Cost (`ILS`)**: $\text{OriginalCost}_{\text{ILS}} = (Q \cdot P_{\text{buy}} + \text{Fee}_{\text{buy}}) \cdot \text{FX}_{\text{buy}}$ (where $\text{FX} = 1.0$ for `ILS` securities).
+- **Net Proceeds (`ILS`)**: $\text{Proceeds}_{\text{ILS}} = (Q \cdot P_{\text{sell}} - \text{Fee}_{\text{sell}}) \cdot \text{FX}_{\text{sell}}$.
+- **Indexation Factor (`InflationaryRatio`)**:
+  - `USD` securities: $\max\left(1.0, \frac{\text{FX}_{\text{sell}}}{\text{FX}_{\text{buy}}}\right)$
+  - `ILS` (`.TA`) securities: $\max\left(1.0, \frac{\text{CPI}_{\text{sell}}}{\text{CPI}_{\text{buy}}}\right)$
+- **Adjusted Cost (`ILS`)**: $\text{AdjustedCost}_{\text{ILS}} = \text{OriginalCost}_{\text{ILS}} \times \text{InflationaryRatio}$.
+- **Real vs. Inflationary Split**:
+  1. $\text{Proceeds}_{\text{ILS}} \ge \text{AdjustedCost}_{\text{ILS}}$: Real Taxable Gain $= \text{Proceeds}_{\text{ILS}} - \text{AdjustedCost}_{\text{ILS}}$; Inflationary Exempt Gain $= \text{AdjustedCost}_{\text{ILS}} - \text{OriginalCost}_{\text{ILS}}$.
+  2. $\text{OriginalCost}_{\text{ILS}} \le \text{Proceeds}_{\text{ILS}} < \text{AdjustedCost}_{\text{ILS}}$: Real Taxable Gain $= 0.0$; Inflationary Exempt Gain $= \text{Proceeds}_{\text{ILS}} - \text{OriginalCost}_{\text{ILS}}$.
+  3. $\text{Proceeds}_{\text{ILS}} < \text{OriginalCost}_{\text{ILS}}$: Real Capital Loss $= \text{Proceeds}_{\text{ILS}} - \text{OriginalCost}_{\text{ILS}}$ (creates offsettable tax shield).
+
+### 3. YTD Tax Shield, Loss Carry-Forward & Portfolio Snapshot
+- **Annual Tax Summary (`tax_summary`)**: Aggregates realized real gains and losses per tax year, applying current-year realized losses first and carrying forward unused real capital losses across subsequent tax years (`carry_forward_losses=True`) before applying the 25% tax rate. Tracks `DIVIDEND` distributions at a flat 25% withholding rate (`offset_dividends=False`).
+- **Valuation & Tax-Loss Harvesting (`snapshot`)**: Computes open position valuations, FIFO lot breakdowns, average cost basis in `USD` and `ILS`, unrealized gross/net PnL after hypothetical liquidation tax, and unrealized Tax-Loss Harvesting (`tlh_candidates`) opportunities.
+- Verified via `python scripts/verify_portfolio_ledger.py`.
 
 ---
 
