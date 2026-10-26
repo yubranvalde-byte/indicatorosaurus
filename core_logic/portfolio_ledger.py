@@ -32,6 +32,7 @@ from dataclasses import dataclass, field, asdict
 
 import numpy as np
 import pandas as pd
+from financial_module import _scalar_float, sanitize_for_json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
@@ -49,25 +50,6 @@ LEDGER_COLUMNS = ["tx_id", "date", "ticker", "tx_type", "quantity", "price", "fe
 
 
 # ─── Numerical Safety ─────────────────────────────────────────────────────────
-
-def _scalar_float(val, default: float = 0.0) -> float:
-    """Coerce any scalar / 0-d / 1-element pandas or NumPy value to a finite Python float."""
-    if val is None:
-        return default
-    if hasattr(val, "squeeze"):
-        val = val.squeeze()
-    if hasattr(val, "item"):
-        try:
-            val = val.item()
-        except (ValueError, AttributeError):
-            if hasattr(val, "iloc"):
-                val = val.iloc[0]
-    try:
-        f = float(val)
-    except (ValueError, TypeError):
-        return default
-    return default if (math.isnan(f) or math.isinf(f)) else f
-
 
 def _clean_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Zero NaN/inf in every numeric column."""
@@ -298,20 +280,40 @@ class PortfolioLedger:
             raise KeyError(f"tx_id {tx_id} not found.")
         self._commit(self._tx[self._tx["tx_id"] != int(tx_id)])
 
-    def import_csv(self, csv_path: str, replace: bool = False) -> int:
+    def delete_transaction(self, tx_id: int) -> bool:
+        """Safe transaction deletion returning True on success, False if tx_id not found."""
+        if int(tx_id) not in set(self._tx["tx_id"]):
+            return False
+        self.remove_transaction(tx_id)
+        return True
+
+    def clear(self) -> None:
+        """Clear all transactions from the ledger and persist empty state."""
+        self._commit(self._empty_frame())
+
+    def import_csv(self, csv_source: str, replace: bool = False, merge: bool = False) -> int:
         """
         Import transactions from CSV (columns: date, ticker, tx_type, quantity, price, fee, currency[, notes, tx_id]).
-        replace=True keeps CSV tx_ids (if present) and replaces the ledger; otherwise rows are appended
-        with new sequential tx_ids. The whole import is atomic. Returns number of imported rows.
+        csv_source: file path string OR in-memory CSV string content.
+        replace: if True, overwrites ledger.
+        merge: if True, appends rows to existing ledger (takes precedence over replace).
+        The whole import is atomic. Returns number of imported rows.
         """
-        raw = pd.read_csv(csv_path, dtype={"ticker": str, "notes": str, "currency": str, "tx_type": str, "date": str})
+        import io
+        if isinstance(csv_source, str) and ("\n" in csv_source or "," in csv_source) and not os.path.exists(csv_source):
+            src = io.StringIO(csv_source)
+        else:
+            src = csv_source
+
+        raw = pd.read_csv(src, dtype={"ticker": str, "notes": str, "currency": str, "tx_type": str, "date": str})
         required = {"date", "ticker", "tx_type", "quantity", "price", "fee", "currency"}
         missing = required - set(raw.columns)
         if missing:
-            raise ValueError(f"CSV {csv_path} missing columns {sorted(missing)}.")
+            raise ValueError(f"CSV missing columns {sorted(missing)}.")
 
-        keep_ids = replace and "tx_id" in raw.columns
-        next_id = 1 if replace else self._next_tx_id()
+        should_replace = replace and not merge
+        keep_ids = should_replace and "tx_id" in raw.columns
+        next_id = 1 if should_replace else self._next_tx_id()
         rows = []
         for i, r in enumerate(raw.to_dict(orient="records")):
             tx_id = int(r["tx_id"]) if keep_ids else next_id + i
@@ -324,13 +326,19 @@ class PortfolioLedger:
         new_df = pd.DataFrame(rows, columns=LEDGER_COLUMNS) if rows else self._empty_frame()
         if keep_ids and new_df["tx_id"].duplicated().any():
             raise ValueError("CSV contains duplicate tx_id values.")
-        base = self._empty_frame() if replace else self._tx
+        base = self._empty_frame() if should_replace else self._tx
         self._commit(pd.concat([base, new_df], ignore_index=True))
         return len(rows)
 
-    def export_csv(self, csv_path: str) -> None:
-        """Deterministic CSV export: fixed column order, sorted by (date, tx_id), '\\n' line endings."""
-        self._tx.to_csv(csv_path, index=False, columns=LEDGER_COLUMNS, lineterminator="\n", float_format="%.10g")
+    def export_csv(self, csv_path: str = None) -> str:
+        """
+        Deterministic CSV export: fixed column order, sorted by (date, tx_id), '\\n' line endings.
+        If csv_path is provided, writes to disk; otherwise returns CSV string.
+        """
+        if csv_path:
+            self._tx.to_csv(csv_path, index=False, columns=LEDGER_COLUMNS, lineterminator="\n", float_format="%.10g")
+            return ""
+        return self._tx.to_csv(index=False, columns=LEDGER_COLUMNS, lineterminator="\n", float_format="%.10g")
 
     def transactions(self) -> pd.DataFrame:
         return self._tx.copy()

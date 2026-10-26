@@ -4,7 +4,7 @@ import math
 import os
 import time
 import pandas as pd
-from financial_module import normalize_stocks, run_financial_engine, _safe_float
+from financial_module import normalize_stocks, run_financial_engine, _safe_float, _scalar_float
 
 def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None):
     """
@@ -327,25 +327,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
 
     simulation_dates = [d for d in trading_dates if d >= effective_start]
     period_starts = [p['start'] for p in periods]
-
-    def _scalar_float(val, default=0.0):
-        if val is None:
-            return default
-        if hasattr(val, 'squeeze'):
-            val = val.squeeze()
-        if hasattr(val, 'item'):
-            try:
-                val = val.item()
-            except ValueError:
-                if hasattr(val, 'iloc'):
-                    val = val.iloc[0]
-        elif hasattr(val, 'iloc'):
-            val = val.iloc[0]
-        try:
-            f = float(val)
-            return default if (math.isnan(f) or math.isinf(f)) else f
-        except (ValueError, TypeError):
-            return default
 
     for d in simulation_dates:
         # Binary-search: find the rightmost period whose start <= d

@@ -216,13 +216,14 @@ def _query_tier2_cache(tickers: list, start_ts: pd.Timestamp, end_ts: pd.Timesta
     if not os.path.exists(PORTFOLIO_CACHE_PATH) or not tickers:
         return pd.DataFrame(columns=LONG_COLUMNS)
 
+    clean_tickers = list(dict.fromkeys(tickers))
     try:
         cached_df = pd.read_parquet(
             PORTFOLIO_CACHE_PATH,
             engine="pyarrow",
             columns=LONG_COLUMNS,
             filters=[
-                ("Ticker", "in", list(tickers)),
+                ("Ticker", "in", clean_tickers),
                 ("Date", ">=", start_ts - pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)),
                 ("Date", "<=", end_ts),
             ],
@@ -230,6 +231,27 @@ def _query_tier2_cache(tickers: list, start_ts: pd.Timestamp, end_ts: pd.Timesta
     except Exception as e:
         print(f"[PriceResolver Tier 2 WARNING] Failed reading portfolio price cache: {e}")
         return pd.DataFrame(columns=LONG_COLUMNS)
+
+    # If any tickers are missing from the requested window because their observations are
+    # older than start_ts (e.g. offline execution beyond cache max date), fetch their latest known observation
+    found_tickers = set(cached_df["Ticker"]) if not cached_df.empty else set()
+    missing_tickers = [t for t in clean_tickers if t not in found_tickers]
+    if missing_tickers:
+        try:
+            prior_df = pd.read_parquet(
+                PORTFOLIO_CACHE_PATH,
+                engine="pyarrow",
+                columns=LONG_COLUMNS,
+                filters=[
+                    ("Ticker", "in", missing_tickers),
+                    ("Date", "<=", end_ts),
+                ],
+            )
+            if not prior_df.empty:
+                latest_prior = prior_df.sort_values("Date").groupby("Ticker").last().reset_index()
+                cached_df = pd.concat([cached_df, latest_prior], ignore_index=True) if not cached_df.empty else latest_prior
+        except Exception as e:
+            print(f"[PriceResolver Tier 2 WARNING] Fallback prior read failed: {e}")
 
     if cached_df.empty:
         return pd.DataFrame(columns=LONG_COLUMNS)

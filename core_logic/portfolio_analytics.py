@@ -232,11 +232,21 @@ class PortfolioAnalytics:
             from price_resolver import resolve_prices as price_provider
         self.price_provider = price_provider
         self.macro_provider = macro_provider or ledger.macro_provider
+        self._cached_daily_series: dict = {}
 
-    def build_daily_series(self, end_date=None) -> pd.DataFrame:
+    def invalidate_cache(self):
+        """Invalidate memoized daily time series when the underlying ledger mutates."""
+        self._cached_daily_series.clear()
+
+    def build_daily_series(self, end_date=None, cash_mode: str = "auto") -> pd.DataFrame:
         """
         Reconstruct a continuous daily portfolio time-series DataFrame from the first
         transaction date through `end_date` in both `USD` and `ILS`.
+
+        cash_mode:
+          - 'auto': explicit cash if any CASH_DEPOSIT/WITHDRAWAL exists, else implicit
+          - 'explicit': forces explicit cash accounting
+          - 'implicit': forces implicit invested-equity accounting
 
         Columns returned:
           - holdings_value_usd, holdings_value_ils
@@ -252,6 +262,10 @@ class PortfolioAnalytics:
           - cumulative_fees_ils, cumulative_realized_tax_ils
           - usd_ils, il_cpi
         """
+        end_ts_key = str(end_date)[:10] if end_date is not None else "latest"
+        cache_key = (end_ts_key, str(cash_mode).lower())
+        if cache_key in self._cached_daily_series:
+            return self._cached_daily_series[cache_key].copy()
         tx_df = self.ledger.transactions()
         if tx_df.empty:
             return pd.DataFrame()
@@ -376,7 +390,13 @@ class PortfolioAnalytics:
         )
 
         # 4. Determine Explicit Cash Mode vs. Implicit Invested-Equity Mode
-        has_explicit_cash = bool(tx_in_range["tx_type"].isin(CASH_TX_TYPES).any())
+        cash_mode_norm = str(cash_mode or "auto").lower().strip()
+        if cash_mode_norm == "explicit":
+            has_explicit_cash = True
+        elif cash_mode_norm == "implicit":
+            has_explicit_cash = False
+        else:
+            has_explicit_cash = bool(tx_in_range["tx_type"].isin(CASH_TX_TYPES).any())
 
         cum_div_usd = daily_agg["div_net_usd"].cumsum().to_numpy(dtype=np.float64)
         cum_div_ils = daily_agg["div_net_ils"].cumsum().to_numpy(dtype=np.float64)
@@ -462,7 +482,9 @@ class PortfolioAnalytics:
         )
         out.index.name = "Date"
         self._last_holdings_matrix = holdings_matrix
-        return _clean_frame(out)
+        cleaned_out = _clean_frame(out)
+        self._cached_daily_series[cache_key] = cleaned_out.copy()
+        return cleaned_out
 
     @staticmethod
     def _compute_vectorized_twr(nav: np.ndarray, ext_cf: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -502,6 +524,7 @@ class PortfolioAnalytics:
         end_date=None,
         view_currency: str = "ILS",
         benchmarks: list[str] = None,
+        cash_mode: str = "auto",
     ) -> dict:
         """
         Slice the portfolio time-series to `[t0, t1]` (via preset `window` or custom `[start_date, end_date]`),
@@ -512,7 +535,7 @@ class PortfolioAnalytics:
         if view_cur not in ("USD", "ILS"):
             raise ValueError(f"view_currency must be 'USD' or 'ILS' (got {view_currency}).")
 
-        daily_df = self.build_daily_series(end_date=end_date)
+        daily_df = self.build_daily_series(end_date=end_date, cash_mode=cash_mode)
         if daily_df.empty:
             return {"series": pd.DataFrame(), "kpis": {}, "attribution": {}, "what_if": {}}
 
@@ -545,14 +568,17 @@ class PortfolioAnalytics:
         out_series = pd.DataFrame(
             {
                 "nav": slice_df[nav_col].to_numpy(dtype=np.float64),
+                "port_nav": slice_df[nav_col].to_numpy(dtype=np.float64),
                 "holdings_value": slice_df[f"holdings_value_{cur_lower}"].to_numpy(dtype=np.float64),
                 "cash_balance": slice_df[f"cash_balance_{cur_lower}"].to_numpy(dtype=np.float64),
                 "cost_basis": slice_df[f"cost_basis_{cur_lower}"].to_numpy(dtype=np.float64),
                 "external_cf": slice_df[cf_col].to_numpy(dtype=np.float64),
                 "portfolio_daily_return": slice_df[twr_daily_col].to_numpy(dtype=np.float64),
                 "portfolio_twr_pct": rebased_port_twr * 100.0,
+                "port_twr_rebased_pct": rebased_port_twr * 100.0,
                 "portfolio_index_100": rebased_port_index_100,
                 "portfolio_drawdown_pct": drawdown_series * 100.0,
+                "port_drawdown_pct": drawdown_series * 100.0,
                 "usd_ils": slice_df["usd_ils"].to_numpy(dtype=np.float64),
                 "il_cpi": slice_df["il_cpi"].to_numpy(dtype=np.float64),
             },
@@ -593,6 +619,7 @@ class PortfolioAnalytics:
                     b_daily_ret[1:] = np.where(b_view_px[:-1] > 1e-9, (b_view_px[1:] - b_view_px[:-1]) / b_view_px[:-1], 0.0)
 
                 out_series[f"bench_{b_sym}_twr_pct"] = b_rebased_ret * 100.0
+                out_series[f"bench_{b_sym}_rebased_pct"] = b_rebased_ret * 100.0
                 out_series[f"bench_{b_sym}_index_100"] = 100.0 * (1.0 + b_rebased_ret)
 
                 if idx_b == 0:
@@ -673,6 +700,9 @@ class PortfolioAnalytics:
             "attribution": attribution,
             "what_if": what_if_results,
         }
+
+    # Alias for API/consumer consistency
+    slice_and_rebase = analyze_slice
 
     def _compute_slice_kpis(
         self,

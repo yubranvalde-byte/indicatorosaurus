@@ -576,20 +576,75 @@ def apply_derived_knockouts_vectorized(df, strategy):
 
 # ─── 4. Min-Max Normalization Layer ───────────────────────────────────────────
 
-def _safe_float(val):
-    """Coerce a CSV cell value to float, treating 'nan'/empty/None as 0.0."""
+def _safe_float(val, default=0.0):
+    """Coerce a scalar/cell value to float, treating 'nan'/empty/None/inf as default."""
     if val is None:
-        return 0.0
+        return default
+    if hasattr(val, "squeeze"):
+        val = val.squeeze()
+    if hasattr(val, "item"):
+        try:
+            val = val.item()
+        except (ValueError, AttributeError):
+            if hasattr(val, "iloc"):
+                val = val.iloc[0]
+    elif hasattr(val, "iloc"):
+        val = val.iloc[0]
     s = str(val).strip().lower()
-    if s in ('nan', '', 'inf', '-inf'):
-        return 0.0
+    if s in ('nan', '', 'inf', '-inf', 'none'):
+        return default
     try:
         result = float(s)
         if math.isnan(result) or math.isinf(result):
-            return 0.0
+            return default
         return result
     except (ValueError, TypeError):
-        return 0.0
+        return default
+
+# Alias for cross-module consistency with portfolio engines
+_scalar_float = _safe_float
+
+
+def sanitize_for_json(obj):
+    """
+    Recursively sanitize any Python structure (DataFrame, Series, ndarray, np.generic, dict, list)
+    into pure Python types guaranteed free of NaN, Infinity, or non-serializable objects.
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, pd.DataFrame):
+        df_clean = obj.fillna(0.0).replace([np.inf, -np.inf], 0.0)
+        # Format DatetimeIndex if present
+        if isinstance(df_clean.index, pd.DatetimeIndex):
+            df_clean = df_clean.copy()
+            df_clean.index = df_clean.index.strftime('%Y-%m-%d')
+            df_clean.reset_index(inplace=True)
+            if 'index' in df_clean.columns:
+                df_clean.rename(columns={'index': 'date'}, inplace=True)
+            elif 'Date' in df_clean.columns:
+                df_clean.rename(columns={'Date': 'date'}, inplace=True)
+        return [sanitize_for_json(row) for row in df_clean.to_dict(orient='records')]
+    if isinstance(obj, pd.Series):
+        s_clean = obj.fillna(0.0).replace([np.inf, -np.inf], 0.0)
+        if isinstance(s_clean.index, pd.DatetimeIndex):
+            s_dict = {k.strftime('%Y-%m-%d'): v for k, v in s_clean.to_dict().items()}
+        else:
+            s_dict = s_clean.to_dict()
+        return sanitize_for_json(s_dict)
+    if isinstance(obj, (np.ndarray, list, tuple, set)):
+        return [sanitize_for_json(item) for item in obj]
+    if isinstance(obj, dict):
+        return {str(k): sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (np.floating, float)):
+        f = float(obj)
+        return 0.0 if (math.isnan(f) or math.isinf(f)) else f
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, (pd.Timestamp, np.datetime64)):
+        return str(obj)[:10]
+    return str(obj)
 
 
 def _calculate_piecewise_gaussian(val, params):
