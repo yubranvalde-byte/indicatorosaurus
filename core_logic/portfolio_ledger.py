@@ -364,10 +364,24 @@ class PortfolioLedger:
 
     def rebuild(self) -> LedgerState:
         """Replay all transactions chronologically (date, tx_id) and rebuild FIFO lots, realized PnL, cash."""
+        self._state = self._replay(self._tx)
+        return self._state
+
+    def _state_as_of(self, as_of_ts: pd.Timestamp) -> LedgerState:
+        """Ledger state including only transactions dated <= as_of (full cached state if nothing is excluded)."""
+        as_of_str = pd.Timestamp(as_of_ts).strftime("%Y-%m-%d")
+        if self._tx.empty or self._tx["date"].max() <= as_of_str:
+            return self._get_state()
+        return self._replay(self._tx[self._tx["date"] <= as_of_str])
+
+    def _replay(self, tx_frame: pd.DataFrame) -> LedgerState:
+        """FIFO replay of `tx_frame` (already sorted by date, tx_id). Does not mutate cached state."""
         state = LedgerState()
         self._ensure_macro()
+        # Negative cash is only meaningful when the ledger tracks cash explicitly (deposits/withdrawals exist)
+        track_cash = bool(tx_frame["tx_type"].isin(CASH_TX_TYPES).any()) if not tx_frame.empty else False
 
-        for r in self._tx.itertuples(index=False):
+        for r in tx_frame.itertuples(index=False):
             fx, cpi = self._macro_on(r.date)
             q, p, fee, cur = float(r.quantity), float(r.price), float(r.fee), r.currency
 
@@ -394,12 +408,11 @@ class PortfolioLedger:
                 })
                 state.cash[cur] += gross_native - withholding_native - fee
 
-            if state.cash[cur] < -QTY_EPSILON:
+            if track_cash and state.cash[cur] < -QTY_EPSILON:
                 state.warnings.append(f"{r.date} tx {r.tx_id}: {cur} cash balance negative ({state.cash[cur]:.2f}).")
 
         for w in state.warnings:
             warnings.warn(w)
-        self._state = state
         return state
 
     @staticmethod
@@ -444,18 +457,20 @@ class PortfolioLedger:
     def dividends(self) -> pd.DataFrame:
         return _clean_frame(pd.DataFrame(self._get_state().dividends))
 
-    def cash_balances(self) -> dict:
-        return {c: _scalar_float(v) for c, v in self._get_state().cash.items()}
+    def cash_balances(self, state: LedgerState = None) -> dict:
+        state = state if state is not None else self._get_state()
+        return {c: _scalar_float(v) for c, v in state.cash.items()}
 
-    def tax_summary(self, year: int = None) -> pd.DataFrame:
+    def tax_summary(self, year: int = None, state: LedgerState = None) -> pd.DataFrame:
         """
         Per-tax-year Israeli capital gains summary (ILS). Current-year losses offset gains first,
         then carried-forward losses (if enabled). Optionally leftover current-year losses offset dividends.
+        `state` defaults to the full-ledger state (used internally for as-of snapshots).
         """
-        state = self._get_state()
+        state = state if state is not None else self._get_state()
         realized = pd.DataFrame(state.realized)
         divs = pd.DataFrame(state.dividends)
-        years = sorted(set(realized["tax_year"]) if not realized.empty else set()
+        years = sorted((set(realized["tax_year"]) if not realized.empty else set())
                        | (set(divs["tax_year"]) if not divs.empty else set()))
 
         rows, carry = [], 0.0
@@ -502,14 +517,14 @@ class PortfolioLedger:
 
     def snapshot(self, as_of=None, market_prices: dict = None, price_provider=None) -> dict:
         """
-        Current portfolio valuation as of `as_of` (default: today).
+        Portfolio valuation as of `as_of` (default: today), using only transactions dated <= as_of.
 
         market_prices: optional {ticker: native price} override; otherwise prices come from
         `price_provider(tickers, start, end)` (default: price_resolver.resolve_prices, last row).
         Returns dict with 'positions' (DataFrame), 'lots' (DataFrame), 'tlh_candidates' (DataFrame), 'totals' (dict).
         """
         as_of_ts = pd.Timestamp(as_of).normalize() if as_of is not None else pd.Timestamp.now().normalize()
-        state = self._get_state()
+        state = self._state_as_of(as_of_ts)
         self._ensure_macro(extra_date=as_of_ts.strftime("%Y-%m-%d"))
         fx_now, cpi_now = self._macro_on(as_of_ts)
 
@@ -542,19 +557,19 @@ class PortfolioLedger:
                 })
         lots_df = _clean_frame(pd.DataFrame(lot_rows))
 
-        ytd = self.tax_summary(as_of_ts.year)
+        ytd = self.tax_summary(as_of_ts.year, state=state)
         ytd_taxable = _scalar_float(ytd["taxable_real_gain_ils"].iloc[0]) if not ytd.empty else 0.0
         if not ytd.empty:
             unused_shield = _scalar_float(ytd["loss_carry_out_ils"].iloc[0])
         else:
-            prior = self.tax_summary()
+            prior = self.tax_summary(state=state)
             prior = prior[prior["tax_year"] < as_of_ts.year] if not prior.empty else prior
             unused_shield = _scalar_float(prior["loss_carry_out_ils"].iloc[-1]) if not prior.empty else 0.0
 
         if lots_df.empty:
             return {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pd.DataFrame(), "lots": lots_df,
-                    "tlh_candidates": pd.DataFrame(), "totals": {"cash": self.cash_balances(),
-                    "unused_loss_shield_ils": unused_shield}}
+                    "tlh_candidates": pd.DataFrame(), "totals": {"cash": self.cash_balances(state),
+                    "unused_loss_shield_ils": unused_shield, "est_liquidation_tax_ils": 0.0}}
 
         lots_df["market_value_ils"] = lots_df["proceeds_ils"]
         lots_df["market_value_usd"] = lots_df["market_value_ils"] / fx_now
@@ -595,7 +610,7 @@ class PortfolioLedger:
             "est_liquidation_tax_ils": liq_tax,
             "unrealized_net_after_tax_ils": nominal - liq_tax,
             "ytd_taxable_real_gain_ils": ytd_taxable,
-            "cash": self.cash_balances(),
+            "cash": self.cash_balances(state),
         }
         return {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pos, "lots": lots_df,
                 "tlh_candidates": tlh, "totals": totals}

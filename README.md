@@ -361,6 +361,28 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
 
 ---
 
+## 6C. Portfolio Intelligence Phase 3: Vectorized Time-Series, TWR/XIRR & Benchmarking Engine (`core_logic/portfolio_analytics.py`)
+
+`core_logic/portfolio_analytics.py` reconstructs continuous daily dual-currency portfolio trajectories, decomposes return attribution, and benchmarks performance against up to 3 reference assets:
+
+### 1. Vectorized Daily Holdings Matrix & Dual-Currency Valuation (`build_daily_series`)
+- Pivots signed share deltas onto a continuous daily calendar grid ($N_{\text{days}} \times M_{\text{tickers}}$) and computes daily market values in both `USD` and `ILS` via vectorized matrix multiplication against `resolve_prices` and `resolve_macro_series`.
+- Supports both **Explicit Cash Mode** (when `CASH_DEPOSIT` / `CASH_WITHDRAWAL` records exist) and **Implicit Invested-Equity Mode** (default when only `BUY` / `SELL` / `DIVIDEND` records exist).
+
+### 2. TWR vs. MWR (XIRR) & Attribution Breakdown
+- **Time-Weighted Return (TWR)**: Computes daily sub-period returns invariant to external capital injections/withdrawals:
+  $$r_t = \frac{V_t - V_{t-1} - CF_t}{V_{t-1} + \max(0.0, CF_t)}, \quad R_{\text{TWR}, t} = \prod_{k=1}^{t} (1 + r_k) - 1$$
+- **Money-Weighted Return (MWR / XIRR)**: Solves $\sum_{k} \frac{CF_k}{(1 + \text{XIRR})^{(d_k - d_0)/365.0}} = 0$ via Newton-Raphson root-finding with bracketed bisection fallback, alongside Modified Dietz return.
+- **ILS Attribution Breakdown**: Decomposes total `ILS` return into (a) Pure Asset Return at constant FX, (b) `USD/ILS` Exchange Rate Impact, and (c) Brokerage Fee + Realized & Unrealized Israeli Tax Drag.
+
+### 3. Time-Slicing, Rebasing & Cash-Flow Matched What-If Simulator (`analyze_slice`)
+- Supports window presets (`1M`, `3M`, `6M`, `YTD`, `1Y`, `3Y`, `5Y`, `ALL`) and custom `[start_date, end_date]` bounds, rebasing both the portfolio and up to 3 benchmark tickers (`SPY`, `QQQ`, `SMH`, `LUMI.TA`, etc.) to `0.0%` (and base `100.0`) at $t_0$ in the active `view_currency` (`USD` or `ILS`).
+- **What-If Opportunity Simulator**: Simulates redirecting every historical net external cash flow into each benchmark asset on the exact same transaction dates, reporting hypothetical terminal NAV and excess value created.
+- **Institutional Risk KPIs**: Annualized Return, Volatility, Sharpe Ratio ($R_f = 4\%$), Sortino Ratio, Portfolio Beta & Jensen's Alpha vs. primary benchmark, Underwater Drawdown series ($\text{DD}_t$), Maximum Drawdown (MDD), and realized Win-Rate / Payoff Ratio.
+- Verified via `python scripts/verify_portfolio_analytics.py`.
+
+---
+
 ## 7. Developer Onboarding & Extensibility Guide
 
 ### System Prerequisites
