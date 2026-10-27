@@ -692,14 +692,22 @@ def portfolio_transactions():
         if not csv_content:
             return jsonify({"error": "csv_content is required for import_csv"}), 400
         merge = bool(payload.get("merge", False))
+        replace = not merge
         try:
-            imported = ledger.import_csv(csv_content, merge=merge)
+            report = ledger.import_csv(csv_content, replace=replace, merge=merge, return_report=True)
             analytics.invalidate_cache()
-            return jsonify({
-                "status": "success",
-                "imported_count": int(imported),
-                "message": f"Imported {imported} transactions",
-            })
+            return jsonify(sanitize_for_json({
+                "status": report["status"],
+                "imported_count": int(report["imported_count"]),
+                "total_rows": int(report["total_rows"]),
+                "skipped_count": int(report["skipped_count"]),
+                "skipped_rows": report["skipped_rows"],
+                "message": (
+                    f"All {report['imported_count']} transactions imported successfully!"
+                    if report["skipped_count"] == 0
+                    else f"Imported {report['imported_count']} of {report['total_rows']} rows ({report['skipped_count']} skipped)"
+                ),
+            }))
         except Exception as e:
             return jsonify({"error": f"CSV import failed: {str(e)}"}), 400
 

@@ -818,6 +818,8 @@ tailwind.config = {
           <button type="button" onclick="clearPortfolioLedger()" class="w-full px-3 py-1.5 rounded bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
             Clear All Transactions
           </button>
+          <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
+          <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
         </div>
       </div>
 
@@ -2733,6 +2735,69 @@ function exportPortfolioCsv() {
   window.location.href = '/api/portfolio/transactions/export';
 }
 
+function dismissCsvDiagnostic() {
+  const panel = document.getElementById('pf-csv-diagnostic-panel');
+  if (panel) {
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+  }
+}
+
+function renderCsvImportDiagnostic(data) {
+  const panel = document.getElementById('pf-csv-diagnostic-panel');
+  if (!panel) return;
+
+  const importedCount = Number(data.imported_count ?? 0);
+  const totalRows = Number(data.total_rows ?? importedCount);
+  const skippedRows = Array.isArray(data.skipped_rows) ? data.skipped_rows : [];
+  const skippedCount = Number(data.skipped_count ?? skippedRows.length);
+
+  if (skippedCount === 0) {
+    panel.className = 'rounded-lg border border-secondary/40 bg-secondary/10 p-3 text-xs space-y-1.5';
+    panel.innerHTML = `
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-1.5 font-bold text-secondary">
+          <span class="material-symbols-outlined text-[16px]">check_circle</span>
+          <span>All ${importedCount} transactions imported successfully!</span>
+        </div>
+        <button type="button" onclick="dismissCsvDiagnostic()" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1">✕</button>
+      </div>
+    `;
+  } else {
+    panel.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs space-y-2';
+    const itemsHtml = skippedRows.map(sr => {
+      const lineNum = sr.line ?? '?';
+      const sym = sr.symbol || 'UNKNOWN';
+      const reason = sr.reason || (Array.isArray(sr.missing_fields) ? `Missing ${sr.missing_fields.join(', ')}` : 'Invalid row');
+      return `
+        <div class="bg-[#141414]/80 border border-outline-variant/25 rounded px-2.5 py-1.5 font-mono text-[11px] flex flex-col gap-0.5">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-amber-300">Line ${lineNum} (${sym})</span>
+            <span class="text-[9px] uppercase px-1.5 py-0.2 rounded bg-tertiary/15 text-tertiary font-bold">Skipped</span>
+          </div>
+          <span class="text-on-surface-variant font-sans text-[11px]">${reason}</span>
+        </div>
+      `;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="flex justify-between items-start gap-2">
+        <div>
+          <div class="flex items-center gap-1.5 font-bold text-amber-300">
+            <span class="material-symbols-outlined text-[16px]">warning</span>
+            <span>Imported ${importedCount} of ${totalRows} rows (${skippedCount} skipped)</span>
+          </div>
+          <p class="text-[11px] text-on-surface-variant mt-0.5">Valid transactions are now live in your portfolio. The following rows were skipped:</p>
+        </div>
+        <button type="button" onclick="dismissCsvDiagnostic()" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1">✕</button>
+      </div>
+      <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+        ${itemsHtml}
+      </div>
+    `;
+  }
+}
+
 async function importPortfolioCsv(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2745,7 +2810,8 @@ async function importPortfolioCsv(event) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'CSV Import failed');
-    showTxFeedback(`Imported CSV (${data.imported_count ?? data.count ?? 0} transactions)`);
+    renderCsvImportDiagnostic(data);
+    showTxFeedback(data.message || `Imported CSV (${data.imported_count ?? 0} transactions)`);
     event.target.value = '';
     await refreshPortfolioWorkspace();
   } catch (err) {

@@ -568,6 +568,33 @@ def run_api_verification():
         assert avg_dna_ms < 50.0, f"[SLA BREACH] Warm Quant DNA latency {avg_dna_ms:.2f}ms >= 50ms"
         print(" -> [PASS] Phase 6 Quant Factor DNA, Sector Attribution & TLH Simulator verified.")
 
+        # -------------------------------------------------------------------------
+        # 9. Fault-Tolerant Brokerage CSV Import & Row-by-Row Diagnostic API Verification
+        # -------------------------------------------------------------------------
+        print("\n[Step 9] Verifying Fault-Tolerant Yahoo Finance CSV Import & Diagnostic Report API...")
+        yahoo_csv_payload = "\n".join([
+            "Symbol,Current Price,Date,Trade Date,Purchase Price,Quantity,Commission,Comment,Transaction Type",
+            "AAPL,220.0,2025/05/01,20240201,185.00,10.0,1.50,Yahoo BUY lot,BUY",
+            "XLK,210.0,2025/05/01,20240520,0.0,15.0,0.0,Invalid zero price,BUY",
+            "BTC-USD,95000.0,2025/05/01,,,,,,",
+        ])
+        y_res = client.post("/api/portfolio/transactions", json={
+            "action": "import_csv",
+            "csv_content": yahoo_csv_payload,
+            "merge": True,
+        })
+        y_data = _strict_json_parse(y_res, expected_status=200)
+        assert y_data["status"] == "partial", f"Expected status='partial', got {y_data}"
+        assert y_data["imported_count"] == 1
+        assert y_data["total_rows"] == 3
+        assert y_data["skipped_count"] == 2
+        assert len(y_data["skipped_rows"]) == 2
+        assert y_data["skipped_rows"][0]["line"] == 3 and y_data["skipped_rows"][0]["symbol"] == "XLK"
+        assert "Purchase Price (0.0)" in y_data["skipped_rows"][0]["reason"]
+        assert y_data["skipped_rows"][1]["line"] == 4 and y_data["skipped_rows"][1]["symbol"] == "BTC-USD"
+        assert set(y_data["skipped_rows"][1]["missing_fields"]) == {"Trade Date", "Transaction Type", "Quantity", "Purchase Price"}
+        print(" -> [PASS] Fault-tolerant CSV Import API & Diagnostic Report verified.")
+
         print("\n---------------------------------------------------------------------------------")
         print("[SUCCESS] All Phase 4, Phase 5, Phase 6 & Checkpoint 2 assertions passed!")
         print("---------------------------------------------------------------------------------")

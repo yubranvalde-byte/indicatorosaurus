@@ -45,8 +45,135 @@ CAPITAL_GAINS_TAX_RATE = 0.25
 DIVIDEND_WITHHOLDING_RATE = 0.25
 CASH_TICKER = "CASH"
 QTY_EPSILON = 1e-9
+ROUNDING_TOLERANCE = 0.01
+TX_TYPE_PRIORITY = {
+    "CASH_DEPOSIT": 0,
+    "BUY": 1,
+    "DIVIDEND": 2,
+    "SELL": 3,
+    "CASH_WITHDRAWAL": 4,
+}
 
 LEDGER_COLUMNS = ["tx_id", "date", "ticker", "tx_type", "quantity", "price", "fee", "currency", "notes"]
+
+_CSV_COLUMN_PRIORITIES = {
+    "date": ["trade date", "execution date", "transaction date", "date"],
+    "ticker": ["ticker", "symbol", "security", "instrument"],
+    "tx_type": ["tx_type", "transaction type", "type", "action", "side"],
+    "quantity": ["quantity", "qty", "shares", "units"],
+    "price": ["purchase price", "trade price", "execution price", "avg price", "price"],
+    "fee": ["fee", "commission", "commissions", "expenses"],
+    "currency": ["currency", "ccy"],
+    "notes": ["notes", "comment", "comments", "description"],
+    "tx_id": ["tx_id", "transaction id"],
+}
+
+_TX_TYPE_ALIASES = {
+    "BUY": "BUY",
+    "B": "BUY",
+    "BOT": "BUY",
+    "PURCHASE": "BUY",
+    "BUY_TO_OPEN": "BUY",
+    "LONG": "BUY",
+    "SELL": "SELL",
+    "S": "SELL",
+    "SLD": "SELL",
+    "SALE": "SELL",
+    "SELL_TO_CLOSE": "SELL",
+    "SHORT": "SELL",
+    "DIVIDEND": "DIVIDEND",
+    "DIV": "DIVIDEND",
+    "DIVIDENDS": "DIVIDEND",
+    "CASH_DIVIDEND": "DIVIDEND",
+    "CASH_DEPOSIT": "CASH_DEPOSIT",
+    "DEPOSIT": "CASH_DEPOSIT",
+    "CASH_IN": "CASH_DEPOSIT",
+    "DEP": "CASH_DEPOSIT",
+    "CASH_WITHDRAWAL": "CASH_WITHDRAWAL",
+    "WITHDRAWAL": "CASH_WITHDRAWAL",
+    "WITHDRAW": "CASH_WITHDRAWAL",
+    "CASH_OUT": "CASH_WITHDRAWAL",
+    "WDR": "CASH_WITHDRAWAL",
+}
+
+
+def _is_blank_csv_val(val) -> bool:
+    if val is None:
+        return True
+    if isinstance(val, float) and math.isnan(val):
+        return True
+    s = str(val).strip().lower()
+    return s in ("", "nan", "none", "null", "n/a", "na", "-")
+
+
+def _parse_flexible_date(val) -> str:
+    """
+    Parse brokerage date strings/numbers into canonical 'YYYY-MM-DD'.
+    Supports YYYYMMDD ints/floats (e.g. 20231205 or 20231205.0), YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY.
+    Returns '' if missing or unparseable.
+    """
+    if _is_blank_csv_val(val):
+        return ""
+    s = str(val).strip()
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    try:
+        if len(s) == 8 and s.isdigit():
+            ts = pd.to_datetime(s, format="%Y%m%d", errors="raise")
+            return ts.strftime("%Y-%m-%d")
+        if "/" in s:
+            parts = s.split("/")
+            if len(parts[0]) == 4:
+                ts = pd.to_datetime(s, format="%Y/%m/%d", errors="raise")
+            else:
+                ts = pd.to_datetime(s, dayfirst=True, errors="raise")
+            return ts.strftime("%Y-%m-%d")
+        ts = pd.Timestamp(s)
+        if pd.isna(ts):
+            return ""
+        return ts.strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def _normalize_tx_type(val) -> str:
+    if _is_blank_csv_val(val):
+        return ""
+    norm = str(val).strip().upper().replace("-", "_").replace(" ", "_")
+    return _TX_TYPE_ALIASES.get(norm, "")
+
+
+def _resolve_csv_columns(raw_columns) -> tuple:
+    """
+    Case-insensitively resolve CSV header columns using priority rules.
+    Returns (col_map, label_map) where col_map maps canonical name -> actual CSV header name.
+    """
+    lower_to_actual = {str(c).strip().lower(): c for c in raw_columns}
+    col_map = {}
+    for canonical, candidates in _CSV_COLUMN_PRIORITIES.items():
+        for cand in candidates:
+            if cand in lower_to_actual:
+                col_map[canonical] = lower_to_actual[cand]
+                break
+
+    required_canonical = ("date", "ticker", "tx_type", "quantity", "price")
+    missing_structural = [k for k in required_canonical if k not in col_map]
+    if missing_structural:
+        raise ValueError(
+            f"CSV header is missing required column(s) for {missing_structural}. "
+            f"Detected columns: {list(raw_columns)}"
+        )
+
+    date_col_lower = str(col_map["date"]).strip().lower()
+    price_col_lower = str(col_map["price"]).strip().lower()
+    label_map = {
+        "date": "Trade Date" if "trade" in date_col_lower else str(col_map["date"]).strip().title(),
+        "ticker": "Symbol" if "symbol" in str(col_map["ticker"]).strip().lower() else "Ticker",
+        "tx_type": "Transaction Type",
+        "quantity": "Quantity",
+        "price": "Purchase Price" if "purchase" in price_col_lower else str(col_map["price"]).strip().title(),
+    }
+    return col_map, label_map
 
 
 # ─── Numerical Safety ─────────────────────────────────────────────────────────
@@ -293,13 +420,19 @@ class PortfolioLedger:
         """Clear all transactions from the ledger and persist empty state."""
         self._commit(self._empty_frame())
 
-    def import_csv(self, csv_source: str, replace: bool = False, merge: bool = False) -> int:
+    def import_csv(self, csv_source: str, replace: bool = False, merge: bool = False, return_report: bool = False):
         """
-        Import transactions from CSV (columns: date, ticker, tx_type, quantity, price, fee, currency[, notes, tx_id]).
-        csv_source: file path string OR in-memory CSV string content.
-        replace: if True, overwrites ledger.
-        merge: if True, appends rows to existing ledger (takes precedence over replace).
-        The whole import is atomic. Returns number of imported rows.
+        Fault-tolerant, schema-adaptive CSV transaction importer supporting both internal AlphaQuant CSVs
+        and third-party brokerage exports (e.g., Yahoo Finance `portfolio.csv`).
+
+        Features:
+          - Fuzzy case-insensitive column resolution with priority rules (`Trade Date` > `Date`, `Purchase Price` > `Price`).
+          - Flexible date parsing (`YYYYMMDD` integers/floats, `YYYY-MM-DD`, `YYYY/MM/DD`, `DD/MM/YYYY`).
+          - Chronological & same-day ordering (`BUY` before `SELL` on identical dates).
+          - Fractional broker rounding tolerance (`<= 0.01` shares clamped to open lot balance).
+          - Row-by-row diagnostic reporting with 1-based CSV line numbers and missing/invalid field details.
+
+        Returns `int` (imported count) when `return_report=False`, or a diagnostic dictionary when `return_report=True`.
         """
         import io
         if isinstance(csv_source, str) and ("\n" in csv_source or "," in csv_source) and not os.path.exists(csv_source):
@@ -307,29 +440,199 @@ class PortfolioLedger:
         else:
             src = csv_source
 
-        raw = pd.read_csv(src, dtype={"ticker": str, "notes": str, "currency": str, "tx_type": str, "date": str})
-        required = {"date", "ticker", "tx_type", "quantity", "price", "fee", "currency"}
-        missing = required - set(raw.columns)
-        if missing:
-            raise ValueError(f"CSV missing columns {sorted(missing)}.")
+        raw = pd.read_csv(src, dtype=str, keep_default_na=False)
+        col_map, label_map = _resolve_csv_columns(raw.columns)
 
         should_replace = replace and not merge
-        keep_ids = should_replace and "tx_id" in raw.columns
+        keep_ids = should_replace and ("tx_id" in col_map)
         next_id = 1 if should_replace else self._next_tx_id()
+
+        total_rows = 0
+        candidates = []
+        skipped_rows = []
+        today_norm = pd.Timestamp.now().normalize()
+
+        for idx, r in enumerate(raw.to_dict(orient="records")):
+            line_num = idx + 2  # 1-based line number (header is line 1)
+            if all(_is_blank_csv_val(v) for v in r.values()):
+                continue
+            total_rows += 1
+
+            raw_date = r.get(col_map["date"], "")
+            raw_ticker = r.get(col_map["ticker"], "")
+            raw_tx_type = r.get(col_map["tx_type"], "")
+            raw_qty = r.get(col_map["quantity"], "")
+            raw_price = r.get(col_map["price"], "")
+            raw_fee = r.get(col_map["fee"], "") if "fee" in col_map else ""
+            raw_ccy = r.get(col_map["currency"], "") if "currency" in col_map else ""
+            raw_notes = r.get(col_map["notes"], "") if "notes" in col_map else ""
+            raw_tx_id = r.get(col_map["tx_id"], "") if "tx_id" in col_map else ""
+
+            tx_type_norm = _normalize_tx_type(raw_tx_type)
+            symbol_str = "" if _is_blank_csv_val(raw_ticker) else str(raw_ticker).strip().upper()
+            if tx_type_norm in CASH_TX_TYPES and not symbol_str:
+                symbol_str = CASH_TICKER
+
+            missing_fields = []
+
+            # 1. Validate Date
+            date_str = _parse_flexible_date(raw_date)
+            if not date_str:
+                missing_fields.append(label_map["date"])
+            elif pd.Timestamp(date_str).normalize() > today_norm:
+                missing_fields.append(f"{label_map['date']} (future: {date_str})")
+
+            # 2. Validate Transaction Type
+            if not tx_type_norm:
+                if _is_blank_csv_val(raw_tx_type):
+                    missing_fields.append(label_map["tx_type"])
+                else:
+                    missing_fields.append(f"{label_map['tx_type']} ('{str(raw_tx_type).strip()}')")
+
+            # 3. Validate Ticker / Symbol
+            if tx_type_norm not in CASH_TX_TYPES and (not symbol_str or symbol_str == CASH_TICKER):
+                missing_fields.append(label_map["ticker"])
+
+            # 4. Validate Quantity
+            qty_val = float("nan")
+            if _is_blank_csv_val(raw_qty):
+                missing_fields.append(label_map["quantity"])
+            else:
+                qty_val = _scalar_float(raw_qty, float("nan"))
+                if math.isnan(qty_val) or qty_val <= 0.0:
+                    missing_fields.append(f"{label_map['quantity']} ({str(raw_qty).strip()})")
+
+            # 5. Validate Price
+            price_val = 1.0
+            if tx_type_norm not in CASH_TX_TYPES:
+                if _is_blank_csv_val(raw_price):
+                    missing_fields.append(label_map["price"])
+                else:
+                    price_val = _scalar_float(raw_price, float("nan"))
+                    if math.isnan(price_val) or price_val <= 0.0:
+                        missing_fields.append(f"{label_map['price']} ({str(raw_price).strip()})")
+
+            if missing_fields:
+                has_invalid_val = any("(" in mf for mf in missing_fields)
+                prefix = "Missing/Invalid" if (len(missing_fields) == 1 and has_invalid_val) else "Missing"
+                reason = f"{prefix} {', '.join(missing_fields)}"
+                skipped_rows.append({
+                    "line": int(line_num),
+                    "symbol": symbol_str or "UNKNOWN",
+                    "missing_fields": list(missing_fields),
+                    "reason": reason,
+                })
+                continue
+
+            fee_val = 0.0 if _is_blank_csv_val(raw_fee) else max(0.0, _scalar_float(raw_fee, 0.0))
+            if _is_blank_csv_val(raw_ccy):
+                ccy_val = "ILS" if symbol_str.endswith(".TA") else "USD"
+            else:
+                ccy_val = str(raw_ccy).strip().upper()
+                if ccy_val not in CURRENCIES:
+                    ccy_val = "ILS" if symbol_str.endswith(".TA") else "USD"
+            if symbol_str.endswith(".TA") and ccy_val != "ILS":
+                ccy_val = "ILS"
+
+            notes_val = "" if _is_blank_csv_val(raw_notes) else str(raw_notes).strip()
+
+            candidates.append({
+                "line": int(line_num),
+                "date": date_str,
+                "ticker": CASH_TICKER if tx_type_norm in CASH_TX_TYPES else symbol_str,
+                "tx_type": tx_type_norm,
+                "quantity": float(qty_val),
+                "price": float(price_val),
+                "fee": float(fee_val),
+                "currency": ccy_val,
+                "notes": notes_val,
+                "raw_tx_id": raw_tx_id,
+            })
+
+        # Sort chronologically with same-day BUY before SELL priority
+        candidates.sort(key=lambda c: (c["date"], TX_TYPE_PRIORITY.get(c["tx_type"], 9), c["line"]))
+
+        base = self._empty_frame() if should_replace else self._tx.copy()
+
+        # Pre-validate FIFO open lot quantities across base + sorted candidates so >0.01 oversells are skipped gracefully
+        combined_events = []
+        if not base.empty:
+            for b_row in base.to_dict(orient="records"):
+                combined_events.append({
+                    "is_existing": True,
+                    "order_key": (str(b_row["date"]), TX_TYPE_PRIORITY.get(str(b_row["tx_type"]), 9), 0, int(b_row["tx_id"])),
+                    "item": b_row,
+                })
+        for cand in candidates:
+            combined_events.append({
+                "is_existing": False,
+                "order_key": (cand["date"], TX_TYPE_PRIORITY.get(cand["tx_type"], 9), 1, cand["line"]),
+                "item": cand,
+            })
+        combined_events.sort(key=lambda ev: ev["order_key"])
+
+        open_shares = {}
+        accepted_candidates = []
+        for ev in combined_events:
+            it = ev["item"]
+            t = str(it["ticker"])
+            tt = str(it["tx_type"])
+            q = float(it["quantity"])
+            if tt == "BUY":
+                open_shares[t] = open_shares.get(t, 0.0) + q
+                if not ev["is_existing"]:
+                    accepted_candidates.append(it)
+            elif tt == "SELL":
+                held = open_shares.get(t, 0.0)
+                if held > QTY_EPSILON and held < q <= held + ROUNDING_TOLERANCE:
+                    it["quantity"] = held
+                    open_shares[t] = 0.0
+                    if not ev["is_existing"]:
+                        accepted_candidates.append(it)
+                elif q <= held + QTY_EPSILON:
+                    open_shares[t] = max(0.0, held - q)
+                    if not ev["is_existing"]:
+                        accepted_candidates.append(it)
+                else:
+                    if not ev["is_existing"]:
+                        skipped_rows.append({
+                            "line": int(it["line"]),
+                            "symbol": t,
+                            "missing_fields": ["Insufficient Open Shares"],
+                            "reason": f"Oversell: attempted to sell {q:g} shares on {it['date']} but only {held:g} available",
+                        })
+                    else:
+                        open_shares[t] = 0.0
+            else:
+                if not ev["is_existing"]:
+                    accepted_candidates.append(it)
+
         rows = []
-        for i, r in enumerate(raw.to_dict(orient="records")):
-            tx_id = int(r["tx_id"]) if keep_ids else next_id + i
-            try:
-                rows.append(asdict(Transaction.build(tx_id, r["date"], r.get("ticker"), r["tx_type"], r["quantity"],
-                                                     r["price"], r["fee"], r["currency"], r.get("notes", ""))))
-            except ValueError as e:
-                raise ValueError(f"CSV row {i + 2}: {e}")
+        for i, c in enumerate(accepted_candidates):
+            if keep_ids and not _is_blank_csv_val(c["raw_tx_id"]):
+                tx_id = int(float(c["raw_tx_id"]))
+            else:
+                tx_id = next_id + i
+            rows.append(asdict(Transaction.build(
+                tx_id, c["date"], c["ticker"], c["tx_type"], c["quantity"],
+                c["price"], c["fee"], c["currency"], c["notes"]
+            )))
 
         new_df = pd.DataFrame(rows, columns=LEDGER_COLUMNS) if rows else self._empty_frame()
-        if keep_ids and new_df["tx_id"].duplicated().any():
+        if keep_ids and not new_df.empty and new_df["tx_id"].duplicated().any():
             raise ValueError("CSV contains duplicate tx_id values.")
-        base = self._empty_frame() if should_replace else self._tx
-        self._commit(pd.concat([base, new_df], ignore_index=True))
+        if should_replace or not new_df.empty:
+            self._commit(pd.concat([base, new_df], ignore_index=True))
+
+        skipped_rows.sort(key=lambda x: x["line"])
+        if return_report:
+            return {
+                "status": "success" if len(skipped_rows) == 0 else "partial",
+                "imported_count": len(rows),
+                "total_rows": total_rows,
+                "skipped_count": len(skipped_rows),
+                "skipped_rows": skipped_rows,
+            }
         return len(rows)
 
     def export_csv(self, csv_path: str = None) -> str:
@@ -404,8 +707,8 @@ class PortfolioLedger:
                     TaxLot(int(r.tx_id), r.ticker, cur, r.date, q, q, p, fee, fx, cpi))
                 state.cash[cur] -= q * p + fee
             elif r.tx_type == "SELL":
-                self._consume_fifo(state, r, fx, cpi)
-                state.cash[cur] += q * p - fee
+                actual_sell_qty = self._consume_fifo(state, r, fx, cpi)
+                state.cash[cur] += actual_sell_qty * p - fee
             elif r.tx_type == "DIVIDEND":
                 gross_native = q * p
                 gross_ils = gross_native * (fx if cur == "USD" else 1.0)
@@ -426,10 +729,12 @@ class PortfolioLedger:
         return state
 
     @staticmethod
-    def _consume_fifo(state: LedgerState, r, fx_sell: float, cpi_sell: float) -> None:
+    def _consume_fifo(state: LedgerState, r, fx_sell: float, cpi_sell: float) -> float:
         lots = state.open_lots.get(r.ticker)
         held = sum(l.qty_open for l in lots) if lots else 0.0
         sell_qty = float(r.quantity)
+        if held > QTY_EPSILON and held < sell_qty <= held + ROUNDING_TOLERANCE:
+            sell_qty = held
         if sell_qty > held + QTY_EPSILON:
             raise ValueError(f"{r.date} tx {r.tx_id}: SELL {sell_qty} {r.ticker} exceeds open position {held}.")
 
@@ -455,6 +760,7 @@ class PortfolioLedger:
                 lots.popleft()
         if not lots:
             state.open_lots.pop(r.ticker, None)
+        return sell_qty
 
     def _get_state(self) -> LedgerState:
         return self._state if self._state is not None else self.rebuild()

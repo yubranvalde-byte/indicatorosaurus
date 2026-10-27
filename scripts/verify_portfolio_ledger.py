@@ -339,6 +339,63 @@ def test_fifo_partial_lots_tase_cpi_dividends_and_snapshot(tmp_dir: str) -> None
     print("[PASS] Case 5: Partial FIFO Lots, TASE CPI Indexation, 25% Dividend Tax, Oversell Guard, TLH & CSV Round-Trip")
 
 
+def test_case_6_yahoo_finance_fault_tolerant_csv_importer(tmp_dir: str) -> None:
+    """
+    Case 6: Yahoo Finance `portfolio.csv` Fault-Tolerant Importer & Row-by-Row Diagnostic Report
+    Verifies:
+      - Fuzzy header mapping (`Symbol`, `Date` [quote date] vs `Trade Date` [`YYYYMMDD`], `Purchase Price`, `Commission`, `Transaction Type`, `Comment`).
+      - Reverse-chronological sorting (`SELL` appearing before `BUY` in CSV and same-day round-trip `BUY` before `SELL`).
+      - Fractional rounding tolerance (`<= 0.01` shares: `LAZRQ` bought `73.867` sh, sold `73.87` sh -> clamped to `73.867`).
+      - Skipping rows with `0.0` Purchase Price (`Line 5 (XLK): Missing/Invalid Purchase Price (0.0)`).
+      - Skipping watchlist rows missing `Trade Date`, `Transaction Type`, `Quantity`, `Purchase Price` (`Line 6 (BTC-USD)`).
+      - Skipping genuine oversell (`> 0.01` shares: `Line 7 (NVDA)` selling `50` sh when `10` sh held).
+    """
+    macro = _build_mock_macro_provider({
+        "2023-12-05": (3.70, 100.0),
+        "2024-02-15": (3.65, 101.0),
+        "2024-05-20": (3.68, 102.0),
+        "2024-09-10": (3.72, 103.0),
+    })
+    yahoo_csv = "\n".join([
+        "Symbol,Current Price,Date,Time,Change,Open,High,Low,Volume,Trade Date,Purchase Price,Quantity,Commission,High Limit,Low Limit,Comment,Transaction Type",
+        "LAZRQ,0.85,2025/05/01,16:00 EDT,-0.02,0.87,0.88,0.84,1200000,20240910,1.10,73.87,1.50,,,Broker 2-dec rounded sell,SELL",
+        "LAZRQ,0.85,2025/05/01,16:00 EDT,-0.02,0.87,0.88,0.84,1200000,20231205.0,2.50,73.867,1.50,,,Original fractional buy,BUY",
+        "NVDA,115.0,2025/05/01,16:00 EDT,1.20,114.0,116.0,113.5,45000000,20240215,85.00,10.0,,0,0,Core AI position,BUY",
+        "XLK,210.0,2025/05/01,16:00 EDT,0.50,209.0,211.0,208.5,5000000,20240520,0.0,15.0,0.0,,,Zero price row,BUY",
+        "BTC-USD,95000.0,2025/05/01,16:00 EDT,500.0,94500.0,95500.0,94000.0,100000,,,,,,,,",
+        "NVDA,115.0,2025/05/01,16:00 EDT,1.20,114.0,116.0,113.5,45000000,20240910,110.00,50.0,1.0,,,Unrecorded pre-split oversell,SELL",
+        "LUMI.TA,35.0,2025/05/01,16:00 EDT,0.10,34.8,35.2,34.7,900000,15/02/2024,30.00,100.0,10.0,,,TASE auto ILS inference,BUY",
+    ])
+
+    ledger = PortfolioLedger(path=os.path.join(tmp_dir, "yahoo.parquet"), macro_provider=macro)
+    report = ledger.import_csv(yahoo_csv, replace=True, return_report=True)
+
+    assert report["status"] == "partial"
+    assert report["total_rows"] == 7
+    assert report["imported_count"] == 4, f"Expected 4 valid rows imported, got {report}"
+    assert report["skipped_count"] == 3, f"Expected 3 skipped rows, got {report}"
+
+    skipped_by_line = {r["line"]: r for r in report["skipped_rows"]}
+    assert 5 in skipped_by_line and skipped_by_line[5]["symbol"] == "XLK"
+    assert "Purchase Price (0.0)" in skipped_by_line[5]["reason"]
+
+    assert 6 in skipped_by_line and skipped_by_line[6]["symbol"] == "BTC-USD"
+    assert set(skipped_by_line[6]["missing_fields"]) == {"Trade Date", "Transaction Type", "Quantity", "Purchase Price"}
+
+    assert 7 in skipped_by_line and skipped_by_line[7]["symbol"] == "NVDA"
+    assert "Oversell" in skipped_by_line[7]["reason"]
+
+    # Verify LAZRQ lot was closed cleanly with 0 open shares and 73.867 realized quantity
+    rl = ledger.realized_lots()
+    assert len(rl) == 1 and rl.iloc[0]["ticker"] == "LAZRQ"
+    _assert_close(rl.iloc[0]["quantity"], 73.867, "LAZRQ Clamped Fractional Sell Qty")
+
+    tx_df = ledger.transactions()
+    lumi_tx = tx_df[tx_df["ticker"] == "LUMI.TA"].iloc[0]
+    assert lumi_tx["currency"] == "ILS" and lumi_tx["date"] == "2024-02-15"
+    print("[PASS] Case 6: Yahoo Finance Fault-Tolerant CSV Importer, Fractional Clamping (<=0.01) & Diagnostic Report")
+
+
 def run_all_tests() -> None:
     print("=== AlphaQuant Phase 2: Portfolio Ledger & Israeli Tax Verification Suite ===")
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -347,6 +404,7 @@ def run_all_tests() -> None:
         test_case_3_usd_loss_plus_sharp_usd_appreciation(tmp_dir)
         test_case_4_ytd_tax_shield_and_carry_forward(tmp_dir)
         test_fifo_partial_lots_tase_cpi_dividends_and_snapshot(tmp_dir)
+        test_case_6_yahoo_finance_fault_tolerant_csv_importer(tmp_dir)
     print("-----------------------------------------------------------------------------")
     print("[SUCCESS] All Phase 2 Portfolio Ledger & Israeli Tax assertions passed!")
 

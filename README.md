@@ -339,10 +339,14 @@ To support multi-currency US/TASE portfolio tracking and Israeli real (CPI/FX-ad
 
 `core_logic/portfolio_ledger.py` implements a persistent dual-currency (`USD` / `ILS`) transaction ledger, FIFO tax-lot accounting state machine, and Israeli capital gains tax calculator (25% on real gains):
 
-### 1. Transaction Ledger & Persistence (`PortfolioLedger`)
+### 1. Transaction Ledger, Persistence & Fault-Tolerant Brokerage CSV Importer (`PortfolioLedger`)
 - **Supported Operations**: `BUY`, `SELL`, `DIVIDEND`, `CASH_DEPOSIT`, `CASH_WITHDRAWAL`.
 - **Schema**: `tx_id`, `date` (`YYYY-MM-DD`), `ticker`, `tx_type`, `quantity` (fractional shares supported), `price` (native currency), `fee` (native currency), `currency` (`USD` or `ILS`), and `notes`.
 - **Atomic Persistence**: Stored in Snappy-compressed `data/portfolio_transactions.parquet` via atomic `.tmp` + `os.replace` commits (only persisted after full FIFO replay validation passes, preventing oversells or corrupt state), with deterministic CSV import/export (`import_csv`, `export_csv`).
+- **Schema-Adaptive Brokerage CSV Importer (`import_csv`)**:
+  - **Fuzzy Header Resolution**: Case-insensitively maps third-party brokerage exports (including Yahoo Finance `portfolio.csv`) using priority rules (`Trade Date` / `Execution Date` over live quote `Date`; `Purchase Price` / `Trade Price` over `Current Price`; `Symbol` / `Ticker`; `Commission` / `Fee`; `Comment` / `Notes`; auto-inferring `ILS` for `.TA` tickers and `USD` otherwise).
+  - **Flexible Date & Same-Day Ordering**: Parses `YYYYMMDD` integers/floats (e.g., `20231205.0`), `YYYY-MM-DD`, `YYYY/MM/DD`, and `DD/MM/YYYY`, and sorts transactions chronologically by `(date, type_priority, source_line)` (`BUY` before `SELL` on identical dates).
+  - **Fractional Rounding Tolerance & Row-by-Row Diagnostics**: Clamps small broker rounding discrepancies ($\le 0.01$ shares, such as selling `73.87` shares against `73.867` open shares) to the open lot balance, and skips incomplete watchlist rows, zero-price rows, or genuine oversells ($> 0.01$ shares) while returning a full diagnostic report (`imported_count`, `total_rows`, `skipped_count`, `skipped_rows` with exact 1-based line numbers and missing/invalid field details).
 
 ### 2. Israeli Real Capital Gains Tax Decomposition (`compute_israeli_lot_tax`)
 On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `ILS`:
@@ -408,7 +412,7 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
   - `action: "add"`: Adds a validated transaction (`BUY`, `SELL`, `DIVIDEND`, `CASH_DEPOSIT`, `CASH_WITHDRAWAL`), returns 201 Created with generated `tx_id`.
   - `action: "delete"`: Deletes transaction by `tx_id`, returns 200 OK or 404 Not Found.
   - `action: "clear"`: Clears entire ledger, returning empty state.
-  - `action: "import_csv"`: Bulk ingests and validates CSV payloads (`merge: false` replaces ledger; `merge: true` appends).
+  - `action: "import_csv"`: Bulk ingests and validates internal or third-party brokerage CSV payloads (`merge: false` replaces ledger; `merge: true` appends), returning a structured diagnostic report (`status: "success" | "partial"`, `imported_count`, `total_rows`, `skipped_count`, `skipped_rows`) rendered in the frontend `#pf-csv-diagnostic-panel` inspector.
   - *Mutation Invalidation*: All mutations automatically invalidate downstream analytics time-series caches.
 - **`GET /api/portfolio/transactions/export`**: Returns standard CSV payload as an attachment (`portfolio_transactions.csv`).
 
