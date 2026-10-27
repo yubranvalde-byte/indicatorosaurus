@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, Response
 import csv
+import json
 import os
 import gc
 import sys
@@ -796,21 +797,23 @@ def portfolio_analytics():
             cash_mode=cash_mode,
         )
 
-        series_clean = res.get("series_clean")
-        if series_clean is None:
-            series_clean = sanitize_for_json(res["series"])
-        out_payload = {
-            "window": res["window"],
-            "start_date": res["start_date"],
-            "end_date": res["end_date"],
-            "view_currency": res["view_currency"],
-            "curves": series_clean,
-            "series": series_clean,
-            "kpis": sanitize_for_json(res["kpis"]),
-            "attribution": sanitize_for_json(res["attribution"]),
-            "what_if": sanitize_for_json(res["what_if"]),
-        }
-        return jsonify(out_payload)
+        if "_cached_json_bytes" not in res:
+            series_clean = res.get("series_clean")
+            if series_clean is None:
+                series_clean = sanitize_for_json(res["series"])
+            out_payload = {
+                "window": res["window"],
+                "start_date": res["start_date"],
+                "end_date": res["end_date"],
+                "view_currency": res["view_currency"],
+                "curves": series_clean,
+                "series": series_clean,
+                "kpis": sanitize_for_json(res["kpis"]),
+                "attribution": sanitize_for_json(res["attribution"]),
+                "what_if": sanitize_for_json(res["what_if"]),
+            }
+            res["_cached_json_bytes"] = json.dumps(out_payload, allow_nan=False)
+        return Response(res["_cached_json_bytes"], mimetype="application/json")
     except Exception as e:
         return jsonify({"error": f"Analytics calculation failed: {str(e)}"}), 500
 

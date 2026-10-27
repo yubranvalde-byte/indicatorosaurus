@@ -50,6 +50,7 @@ from portfolio_ledger import (
     DIVIDEND_WITHHOLDING_RATE,
     PortfolioLedger,
     TX_TYPE_PRIORITY,
+    align_pre_split_dataframe,
 )
 
 RISK_FREE_ANNUAL = 0.04
@@ -331,10 +332,38 @@ class PortfolioAnalytics:
         sec_tickers = sorted(sec_tx["ticker"].unique().tolist()) if not sec_tx.empty else []
 
         if sec_tickers:
-            px_df, curr_map = self.price_provider(sec_tickers, t_start, t_end)
-            px_aligned = px_df.reindex(daily_grid).ffill().fillna(0.0)[sec_tickers].astype(np.float64)
+            try:
+                px_df, curr_map = self.price_provider(sec_tickers, t_start, t_end)
+            except RuntimeError:
+                from price_resolver import resolve_prices
+                px_df, curr_map = resolve_prices(sec_tickers, t_start, t_end, allow_partial=True)
 
+            # Align pre-split BUY/SELL quantities and prices to the split-adjusted market price basis
+            sec_tx = align_pre_split_dataframe(sec_tx, px_df)
             sec_tx["tx_date"] = pd.to_datetime(sec_tx["date"]).dt.normalize()
+
+            # Build daily price grid; seed any leading NaNs on/after first BUY date from split-aligned execution price
+            px_raw = px_df.reindex(daily_grid).reindex(columns=sec_tickers).astype(np.float64)
+            px_raw = px_raw.where(px_raw > 0.0, np.nan)
+            px_ffilled = px_raw.ffill()
+
+            for t in sec_tickers:
+                t_tx = sec_tx[sec_tx["ticker"] == t]
+                if t_tx.empty:
+                    continue
+                t_buys = t_tx[t_tx["tx_type"] == "BUY"]
+                first_buy_ts = t_buys["tx_date"].min() if not t_buys.empty else t_tx["tx_date"].min()
+                if px_ffilled.loc[first_buy_ts:, t].isna().any():
+                    col_s = px_raw[t].copy()
+                    for tx_r in t_tx.itertuples(index=False):
+                        tx_dt = tx_r.tx_date
+                        tx_px = float(tx_r.price)
+                        if tx_dt in col_s.index and tx_px > 0.0 and pd.isna(col_s.at[tx_dt]):
+                            col_s.at[tx_dt] = tx_px
+                    px_ffilled[t] = col_s.ffill()
+
+            px_aligned = px_ffilled.fillna(0.0)[sec_tickers].astype(np.float64)
+
             sec_tx["signed_qty"] = np.where(sec_tx["tx_type"] == "BUY", sec_tx["quantity"], -sec_tx["quantity"])
 
             qty_deltas = (

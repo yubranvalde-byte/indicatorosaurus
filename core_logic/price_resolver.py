@@ -403,8 +403,15 @@ def _hydrate_missing_tickers_tier3(missing_tickers: list, start_ts: pd.Timestamp
 
 # ─── Unified Equity Price Resolution Interface ────────────────────────────────
 
+def _is_otc_q_ticker(ticker: str) -> bool:
+    """Return True if ticker is a 5-letter US OTC bankruptcy symbol ending in 'Q' (e.g. LAZRQ)."""
+    t = str(ticker).upper().strip()
+    return len(t) == 5 and t.isalpha() and t.endswith("Q") and not t.endswith(".TA")
+
+
 def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
-                   ttl_seconds: float = CACHE_TTL_SECONDS):
+                   ttl_seconds: float = CACHE_TTL_SECONDS, allow_partial: bool = False,
+                   local_only: bool = False):
     """
     Unified 3-Tier Hybrid Price Resolution Interface.
 
@@ -415,7 +422,7 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
         - currency_map: ticker -> 'USD' | 'ILS'
 
     Raises:
-      RuntimeError if any ticker cannot be resolved from Tier 1, Tier 2, or Tier 3.
+      RuntimeError if any ticker cannot be resolved from Tier 1, Tier 2, or Tier 3 (unless allow_partial=True).
     """
     if not tickers:
         return pd.DataFrame(), {}
@@ -449,11 +456,53 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
         _append_to_tier2_cache(t1_df[t1_df["Ticker"].isin(covered_t1)])
 
     tier3_candidates = [t for t in clean_tickers if t not in covered_t2 and t not in covered_t1]
-    t3_df = _hydrate_missing_tickers_tier3(tier3_candidates, start_ts, end_ts)
+    t3_df = _hydrate_missing_tickers_tier3(tier3_candidates, start_ts, end_ts) if not local_only else pd.DataFrame(columns=LONG_COLUMNS)
 
     # Precedence on overlapping (Date, Ticker): Tier 3 (freshest) > Tier 1 > Tier 2
     frames = [f[["Date", "Ticker", "Close"]] for f in (t2_df, t1_df, t3_df) if not f.empty]
+
+    # Delisted / OTC Bankruptcy Ticker Fallback:
+    # If a 5-letter US ticker ending in 'Q' (e.g. LAZRQ) failed resolution or lacks historical coverage
+    # across start_ts, query its 4-letter base ticker (LAZR) and splice/forward-fill the series.
+    q_candidates = [t for t in clean_tickers if _is_otc_q_ticker(t)]
+    if q_candidates:
+        combined_check = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["Date", "Ticker", "Close"])
+        covered_so_far = _covered_tickers(combined_check, start_ts, end_ts)
+        uncovered_q = [t for t in q_candidates if t not in covered_so_far]
+        if uncovered_q:
+            q_to_base = {q_t: q_t[:-1] for q_t in uncovered_q}
+            base_list = list(dict.fromkeys(q_to_base.values()))
+            b_t2 = _query_tier2_cache(base_list, start_ts, end_ts)
+            b_cov_t2 = _covered_tickers(b_t2, start_ts, end_ts)
+            b_t1 = _query_tier1_lake([b for b in base_list if b not in b_cov_t2], start_ts, end_ts)
+            b_cov_t1 = _covered_tickers(b_t1, start_ts, end_ts)
+            if not b_t1.empty:
+                _append_to_tier2_cache(b_t1[b_t1["Ticker"].isin(b_cov_t1)])
+            b_t3_cands = [b for b in base_list if b not in b_cov_t2 and b not in b_cov_t1]
+            b_t3 = _hydrate_missing_tickers_tier3(b_t3_cands, start_ts, end_ts) if not local_only else pd.DataFrame(columns=LONG_COLUMNS)
+            b_frames = [f[["Date", "Ticker", "Close"]] for f in (b_t2, b_t1, b_t3) if not f.empty]
+            if b_frames:
+                b_merged = pd.concat(b_frames, ignore_index=True).drop_duplicates(subset=["Date", "Ticker"], keep="last")
+                spliced_q_frames = []
+                for q_t, base_t in q_to_base.items():
+                    base_rows = b_merged[b_merged["Ticker"] == base_t].copy()
+                    if not base_rows.empty:
+                        base_rows["Ticker"] = q_t
+                        base_rows["Currency"] = _infer_native_currency(q_t)
+                        spliced_q_frames.append(base_rows[LONG_COLUMNS])
+                if spliced_q_frames:
+                    spliced_all = pd.concat(spliced_q_frames, ignore_index=True)
+                    _append_to_tier2_cache(spliced_all)
+                    # Prepend base ticker history before q_ticker's own frames so q_ticker wins on overlapping dates
+                    frames = [spliced_all[["Date", "Ticker", "Close"]]] + frames
+
+    daily_grid = pd.date_range(start_ts, end_ts, freq="D")
+
     if not frames:
+        if allow_partial:
+            empty_aligned = pd.DataFrame(0.0, index=daily_grid, columns=clean_tickers, dtype=out_dtype)
+            empty_aligned.index.name = "Date"
+            return empty_aligned, currency_map
         raise RuntimeError(f"[PriceResolver] Unable to resolve prices for any of {clean_tickers} "
                            f"in [{start_ts.date()}, {end_ts.date()}].")
 
@@ -464,10 +513,13 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
 
     missing = [t for t in clean_tickers if t not in pivoted.columns or pivoted[t].dropna().empty]
     if missing:
-        raise RuntimeError(f"[PriceResolver] Unable to resolve prices for {missing} in "
-                           f"[{start_ts.date()}, {end_ts.date()}] from local caches or external sources.")
+        if not allow_partial:
+            raise RuntimeError(f"[PriceResolver] Unable to resolve prices for {missing} in "
+                               f"[{start_ts.date()}, {end_ts.date()}] from local caches or external sources.")
+        for m_t in missing:
+            if m_t not in pivoted.columns:
+                pivoted[m_t] = np.nan
 
-    daily_grid = pd.date_range(start_ts, end_ts, freq="D")
     union_index = pivoted.index.union(daily_grid).sort_values()
     aligned = pivoted.reindex(union_index).ffill().reindex(daily_grid)[clean_tickers]
 
@@ -479,7 +531,8 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
     aligned = aligned.fillna(0.0).replace([np.inf, -np.inf], 0.0).astype(out_dtype)
     aligned.index.name = "Date"
 
-    _PRICE_RESOLVER_CACHE["entries"][cache_key] = (aligned.copy(), dict(currency_map), now)
+    if not missing:
+        _PRICE_RESOLVER_CACHE["entries"][cache_key] = (aligned.copy(), dict(currency_map), now)
     return aligned, currency_map
 
 

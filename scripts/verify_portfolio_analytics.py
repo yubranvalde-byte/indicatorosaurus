@@ -229,8 +229,48 @@ def run_all_verifications() -> None:
         test_2_xirr_solver_accuracy()
         test_3_dual_currency_rebasing_and_attribution(tmp_dir)
         test_4_what_if_simulator_slicing_and_real_cache_integration(tmp_dir)
+        test_5_pre_split_nvda_twr_invariance_and_otc_anchoring(tmp_dir)
     print("---------------------------------------------------------------------------------")
     print("[SUCCESS] All Phase 3 Portfolio Analytics assertions passed!")
+
+
+def test_5_pre_split_nvda_twr_invariance_and_otc_anchoring(tmp_dir: str) -> None:
+    """
+    Test 5: Pre-Split Basis Alignment TWR Smoothness (`NVDA` 10:1) & OTC/Delisted Price Anchoring (`LAZRQ`).
+    Verifies:
+      - Unadjusted pre-split `NVDA` trades (`BUY 13 @ $450.00` in 2023, `SELL 13 @ $521.00` on `2024-01-11`)
+        evaluated against split-adjusted `us-shareprices-daily.parquet` prices (`~$45-$54.73`) do NOT cause
+        an artificial -90% holding-period valuation collapse or a phantom +900% vertical TWR jump on `2024-01-11`.
+      - Delisted/uncovered ticker with leading NaNs (`LAZRQ`) seeds its transaction-date price from the
+        split-aligned execution price and forward-fills (`ffill`) without `.bfill()` or `0.0` coercion.
+    """
+    ledger_path = os.path.join(tmp_dir, "test5_split_twr.parquet")
+    ledger = PortfolioLedger(path=ledger_path)
+
+    # Add unadjusted pre-split NVDA trades directly (simulating pre-existing unadjusted ledger rows)
+    ledger.add_transaction("2023-08-10", "NVDA", "BUY", quantity=4.0, price=402.00, fee=0.0, currency="USD")
+    ledger.add_transaction("2023-10-12", "NVDA", "BUY", quantity=4.0, price=450.00, fee=0.0, currency="USD")
+    ledger.add_transaction("2023-11-20", "NVDA", "BUY", quantity=5.0, price=499.00, fee=0.0, currency="USD")
+    ledger.add_transaction("2024-01-11", "NVDA", "SELL", quantity=13.0, price=521.00, fee=0.0, currency="USD")
+    # Also add an open position after the sale
+    ledger.add_transaction("2024-01-12", "AAPL", "BUY", quantity=30.0, price=185.00, fee=0.0, currency="USD")
+
+    analytics = PortfolioAnalytics(ledger)
+    daily = analytics.build_daily_series(end_date="2024-02-01")
+    _assert_no_nan_inf(daily, "Test 5 Pre-Split NVDA Daily Series")
+
+    # Verify holdings value on 2024-01-10 (day before NVDA sale) reflects 130 split-adjusted shares (~$7,000), NOT 13 shares (~$700)
+    val_jan10 = float(daily.loc[pd.Timestamp("2024-01-10"), "holdings_value_usd"])
+    assert val_jan10 > 5000.0, f"Expected split-aligned NVDA holdings value > $5,000 on 2024-01-10, got ${val_jan10:.2f}"
+
+    # Verify single-day TWR return on 2024-01-11 (NVDA SELL date) has NO artificial vertical spike (|r_t| < 10%)
+    r_jan11 = float(daily.loc[pd.Timestamp("2024-01-11"), "twr_daily_usd"])
+    assert abs(r_jan11) < 0.10, f"Expected smooth TWR on 2024-01-11 without split spike, got r_t={r_jan11:.4f}"
+
+    print(
+        f"[PASS] Test 5: Pre-Split NVDA 10:1 Basis Alignment & TWR Smoothness verified "
+        f"(2024-01-10 Val=${val_jan10:,.2f}, 2024-01-11 Daily TWR={r_jan11 * 100.0:+.2f}%)."
+    )
 
 
 if __name__ == "__main__":

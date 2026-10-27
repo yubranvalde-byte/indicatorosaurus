@@ -46,6 +46,8 @@ DIVIDEND_WITHHOLDING_RATE = 0.25
 CASH_TICKER = "CASH"
 QTY_EPSILON = 1e-9
 ROUNDING_TOLERANCE = 0.01
+CANONICAL_SPLIT_FACTORS = (2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50)
+SPLIT_RATIO_TOLERANCE = 0.22
 TX_TYPE_PRIORITY = {
     "CASH_DEPOSIT": 0,
     "BUY": 1,
@@ -174,6 +176,210 @@ def _resolve_csv_columns(raw_columns) -> tuple:
         "price": "Purchase Price" if "purchase" in price_col_lower else str(col_map["price"]).strip().title(),
     }
     return col_map, label_map
+
+
+def _match_canonical_split_factor(p_tx: float, p_mkt: float, allow_reverse: bool = True) -> float:
+    """
+    Compare execution price p_tx against split-adjusted market price p_mkt on the transaction date.
+    Returns scale factor S such that Q_adj = Q_tx * S and P_adj = P_tx / S:
+      - Forward split: r = p_tx / p_mkt within +/- 22% of S in CANONICAL_SPLIT_FACTORS -> float(S)
+      - Reverse split: r_rev = p_mkt / p_tx within +/- 22% of S in CANONICAL_SPLIT_FACTORS -> 1.0 / float(S)
+      - Otherwise returns 1.0.
+    """
+    if not (p_tx > 0.0 and p_mkt > 0.0) or math.isnan(p_tx) or math.isnan(p_mkt):
+        return 1.0
+    r = p_tx / p_mkt
+    if abs(r - 1.0) <= SPLIT_RATIO_TOLERANCE:
+        return 1.0
+    if r > 1.0:
+        best_s = min(CANONICAL_SPLIT_FACTORS, key=lambda s: abs(r - s) / s)
+        if abs(r - best_s) / best_s <= SPLIT_RATIO_TOLERANCE:
+            return float(best_s)
+    elif allow_reverse and r < 1.0:
+        r_rev = p_mkt / p_tx
+        best_s = min(CANONICAL_SPLIT_FACTORS, key=lambda s: abs(r_rev - s) / s)
+        if abs(r_rev - best_s) / best_s <= SPLIT_RATIO_TOLERANCE:
+            return 1.0 / float(best_s)
+    return 1.0
+
+
+def _lookup_market_price_on_date(px_df: pd.DataFrame, ticker: str, date_str: str) -> float:
+    """Lookup resolved split-adjusted market price for `ticker` on or immediately before `date_str`."""
+    if px_df is None or px_df.empty or ticker not in px_df.columns:
+        return 0.0
+    col = px_df[ticker]
+    valid = col[col > 0.0].dropna()
+    if valid.empty:
+        return 0.0
+    ts = pd.Timestamp(date_str).normalize()
+    if ts in valid.index:
+        return float(valid.loc[ts])
+    prior = valid.loc[:ts]
+    if not prior.empty:
+        return float(prior.iloc[-1])
+    after = valid.loc[ts : ts + pd.Timedelta(days=7)]
+    if not after.empty:
+        return float(after.iloc[0])
+    return 0.0
+
+
+def align_pre_split_transactions(tx_items: list, px_df: pd.DataFrame, allow_reverse: bool = True) -> list:
+    """
+    Deterministic split-basis alignment pass across chronological BUY/SELL transaction dicts.
+    Compares each transaction's execution price P_tx against P_{mkt, t} from `px_df`.
+    When r = P_tx / P_{mkt, t} (or P_{mkt, t} / P_tx for reverse splits) falls within +/- 22%
+    of a canonical split integer S in {2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50} and normalizing
+    the lot sequence preserves non-negative FIFO share balances, normalizes:
+      Q_adj = Q_tx * S,  P_adj = P_tx / S  (preserving Q_adj * P_adj == Q_tx * P_tx and fees).
+    """
+    if not tx_items or px_df is None or px_df.empty:
+        return tx_items
+
+    by_ticker = {}
+    for it in tx_items:
+        if it.get("tx_type") in ("BUY", "SELL") and not it.get("is_zero_price_buy", False):
+            by_ticker.setdefault(str(it["ticker"]), []).append(it)
+
+    for ticker, t_items in by_ticker.items():
+        if ticker not in px_df.columns:
+            continue
+
+        item_factors = []
+        item_mkt_prices = []
+        for it in t_items:
+            p_mkt = _lookup_market_price_on_date(px_df, ticker, str(it["date"]))
+            p_tx = float(it["price"])
+            s_i = _match_canonical_split_factor(p_tx, p_mkt, allow_reverse=allow_reverse) if p_mkt > 0.0 else None
+            item_factors.append(s_i)
+            item_mkt_prices.append(p_mkt)
+
+        if all(s is None or s == 1.0 for s in item_factors):
+            continue
+
+        # Partition into FIFO cycles if unscaled shares are non-negative at every step
+        cycles = []
+        curr_cycle = []
+        rem_open = 0.0
+        unscaled_valid = True
+
+        for it, s_i, p_mkt in zip(t_items, item_factors, item_mkt_prices):
+            q = float(it["quantity"])
+            curr_cycle.append((it, s_i, p_mkt))
+            if it["tx_type"] == "BUY":
+                rem_open += q
+            else:
+                if q > rem_open + ROUNDING_TOLERANCE:
+                    unscaled_valid = False
+                    break
+                rem_open = max(0.0, rem_open - q)
+                if rem_open <= ROUNDING_TOLERANCE:
+                    rem_open = 0.0
+                    cycles.append(("closed", curr_cycle))
+                    curr_cycle = []
+
+        if unscaled_valid and curr_cycle:
+            cycles.append(("open", curr_cycle))
+
+        if unscaled_valid:
+            for cyc_type, cyc in cycles:
+                valid_s = [s for _, s, _ in cyc if s is not None]
+                if not valid_s or all(s == 1.0 for s in valid_s):
+                    continue
+
+                if cyc_type == "closed":
+                    # In a balanced closed cycle (sum(BUY) ~= sum(SELL)), all lots in the pre-split
+                    # regime must be scaled by the same factor S to preserve FIFO balance closure.
+                    non_unit = [s for s in valid_s if s != 1.0]
+                    if not non_unit:
+                        continue
+                    best_s = max(set(non_unit), key=lambda x: non_unit.count(x))
+                    # Verify all priced items in the cycle align with best_s within tolerance
+                    all_consistent = True
+                    for it_c, _, p_mkt_c in cyc:
+                        if p_mkt_c > 0.0:
+                            aligned_p = float(it_c["price"]) / best_s
+                            rel_diff = abs(aligned_p - p_mkt_c) / p_mkt_c
+                            if rel_diff > SPLIT_RATIO_TOLERANCE + 0.03:
+                                all_consistent = False
+                                break
+                    if all_consistent:
+                        for it_c, _, _ in cyc:
+                            it_c["quantity"] = float(it_c["quantity"]) * best_s
+                            it_c["price"] = float(it_c["price"]) / best_s
+                else:
+                    # Open cycle
+                    has_sells = any(it_c["tx_type"] == "SELL" for it_c, _, _ in cyc)
+                    if not has_sells:
+                        for it_c, s_c, _ in cyc:
+                            if s_c is not None and s_c != 1.0:
+                                it_c["quantity"] = float(it_c["quantity"]) * s_c
+                                it_c["price"] = float(it_c["price"]) / s_c
+                    else:
+                        non_unit = [s for s in valid_s if s != 1.0]
+                        best_s = max(set(non_unit), key=lambda x: non_unit.count(x)) if non_unit else 1.0
+                        all_consistent = best_s != 1.0 and all(
+                            abs((float(it_c["price"]) / best_s) - p_mkt_c) / p_mkt_c <= SPLIT_RATIO_TOLERANCE + 0.03
+                            for it_c, _, p_mkt_c in cyc if p_mkt_c > 0.0
+                        )
+                        if all_consistent:
+                            for it_c, _, _ in cyc:
+                                it_c["quantity"] = float(it_c["quantity"]) * best_s
+                                it_c["price"] = float(it_c["price"]) / best_s
+                        else:
+                            # Test individual scaling for FIFO non-negativity
+                            test_open = 0.0
+                            ind_ok = True
+                            for it_c, s_c, _ in cyc:
+                                s_eff = s_c if s_c is not None else 1.0
+                                q_scaled = float(it_c["quantity"]) * s_eff
+                                if it_c["tx_type"] == "BUY":
+                                    test_open += q_scaled
+                                else:
+                                    if q_scaled > test_open + ROUNDING_TOLERANCE:
+                                        ind_ok = False
+                                        break
+                                    test_open = max(0.0, test_open - q_scaled)
+                            if ind_ok:
+                                for it_c, s_c, _ in cyc:
+                                    s_eff = s_c if s_c is not None else 1.0
+                                    if s_eff != 1.0:
+                                        it_c["quantity"] = float(it_c["quantity"]) * s_eff
+                                        it_c["price"] = float(it_c["price"]) / s_eff
+        else:
+            # Unscaled sequence had an apparent oversell (e.g. pre-split BUY followed by post-split SELL).
+            # Check if individual split factors restore non-negative FIFO balances.
+            test_open = 0.0
+            ind_ok = True
+            for it, s_i in zip(t_items, item_factors):
+                s_eff = s_i if s_i is not None else 1.0
+                q_scaled = float(it["quantity"]) * s_eff
+                if it["tx_type"] == "BUY":
+                    test_open += q_scaled
+                else:
+                    if q_scaled > test_open + ROUNDING_TOLERANCE:
+                        ind_ok = False
+                        break
+                    test_open = max(0.0, test_open - q_scaled)
+            if ind_ok:
+                for it, s_i in zip(t_items, item_factors):
+                    s_eff = s_i if s_i is not None else 1.0
+                    if s_eff != 1.0:
+                        it["quantity"] = float(it["quantity"]) * s_eff
+                        it["price"] = float(it["price"]) / s_eff
+
+    return tx_items
+
+
+def align_pre_split_dataframe(tx_df: pd.DataFrame, px_df: pd.DataFrame, allow_reverse: bool = True) -> pd.DataFrame:
+    """Apply `align_pre_split_transactions` to a transaction DataFrame copy and return it."""
+    if tx_df is None or tx_df.empty or px_df is None or px_df.empty:
+        return tx_df
+    df_out = tx_df.copy()
+    records = df_out.to_dict(orient="records")
+    align_pre_split_transactions(records, px_df, allow_reverse=allow_reverse)
+    df_out["quantity"] = [float(r["quantity"]) for r in records]
+    df_out["price"] = [float(r["price"]) for r in records]
+    return df_out
 
 
 # ─── Numerical Safety ─────────────────────────────────────────────────────────
@@ -336,9 +542,11 @@ class PortfolioLedger:
     """
 
     def __init__(self, path: str = DEFAULT_LEDGER_PATH, macro_provider=None,
-                 carry_forward_losses: bool = True, offset_dividends: bool = False):
+                 carry_forward_losses: bool = True, offset_dividends: bool = False,
+                 price_provider=None):
         self.path = path
         self.macro_provider = macro_provider or _default_macro_provider
+        self.price_provider = price_provider
         self.carry_forward_losses = bool(carry_forward_losses)
         self.offset_dividends = bool(offset_dividends)
         self._tx = self._load()
@@ -505,20 +713,44 @@ class PortfolioLedger:
                 if math.isnan(qty_val) or qty_val <= 0.0:
                     missing_fields.append(f"{label_map['quantity']} ({str(raw_qty).strip()})")
 
-            # 5. Validate Price
+            # 5. Validate Price (allow zero/blank price on valid BUY candidate for Pass A split-row check)
             price_val = 1.0
+            is_zero_price_buy = False
+            zero_price_missing_fields = []
+            zero_price_reason = ""
             if tx_type_norm not in CASH_TX_TYPES:
                 if _is_blank_csv_val(raw_price):
-                    missing_fields.append(label_map["price"])
+                    if tx_type_norm == "BUY" and not missing_fields:
+                        is_zero_price_buy = True
+                        price_val = 0.0
+                        zero_price_missing_fields = [label_map["price"]]
+                        zero_price_reason = f"Missing {label_map['price']}"
+                    else:
+                        missing_fields.append(label_map["price"])
                 else:
                     price_val = _scalar_float(raw_price, float("nan"))
                     if math.isnan(price_val) or price_val <= 0.0:
-                        missing_fields.append(f"{label_map['price']} ({str(raw_price).strip()})")
+                        if tx_type_norm == "BUY" and not missing_fields and not math.isnan(price_val) and price_val == 0.0:
+                            is_zero_price_buy = True
+                            price_val = 0.0
+                            mf_str = f"{label_map['price']} ({str(raw_price).strip()})"
+                            zero_price_missing_fields = [mf_str]
+                            zero_price_reason = f"Missing/Invalid {mf_str}"
+                        else:
+                            missing_fields.append(f"{label_map['price']} ({str(raw_price).strip()})")
 
             if missing_fields:
-                has_invalid_val = any("(" in mf for mf in missing_fields)
-                prefix = "Missing/Invalid" if (len(missing_fields) == 1 and has_invalid_val) else "Missing"
-                reason = f"{prefix} {', '.join(missing_fields)}"
+                is_watchlist_row = (
+                    _is_blank_csv_val(raw_date)
+                    and _is_blank_csv_val(raw_qty)
+                    and _is_blank_csv_val(raw_price)
+                )
+                if is_watchlist_row:
+                    reason = f"Ignored Watchlist Row (Missing {', '.join(missing_fields)})"
+                else:
+                    has_invalid_val = any("(" in mf for mf in missing_fields)
+                    prefix = "Missing/Invalid" if (len(missing_fields) == 1 and has_invalid_val) else "Missing"
+                    reason = f"{prefix} {', '.join(missing_fields)}"
                 skipped_rows.append({
                     "line": int(line_num),
                     "symbol": symbol_str or "UNKNOWN",
@@ -550,6 +782,9 @@ class PortfolioLedger:
                 "currency": ccy_val,
                 "notes": notes_val,
                 "raw_tx_id": raw_tx_id,
+                "is_zero_price_buy": is_zero_price_buy,
+                "zero_price_missing_fields": zero_price_missing_fields,
+                "zero_price_reason": zero_price_reason,
             })
 
         # Sort chronologically with same-day BUY before SELL priority
@@ -557,7 +792,7 @@ class PortfolioLedger:
 
         base = self._empty_frame() if should_replace else self._tx.copy()
 
-        # Pre-validate FIFO open lot quantities across base + sorted candidates so >0.01 oversells are skipped gracefully
+        # Combine existing base rows + sorted candidate rows for chronological corporate-action & FIFO passes
         combined_events = []
         if not base.empty:
             for b_row in base.to_dict(orient="records"):
@@ -574,27 +809,121 @@ class PortfolioLedger:
             })
         combined_events.sort(key=lambda ev: ev["order_key"])
 
+        # Pass A: Zero-Price Split Row Folding (e.g. Yahoo Finance `XLK` BUY 12 @ 0.0 on split date)
+        open_lots_pass_a = {}  # ticker -> list of {"item": dict, "qty_open": float}
+        post_fold_events = []
+        folded_split_count = 0
+
+        for ev in combined_events:
+            it = ev["item"]
+            t = str(it["ticker"])
+            tt = str(it["tx_type"])
+            q = float(it["quantity"])
+
+            if not ev["is_existing"] and it.get("is_zero_price_buy", False):
+                lots_for_t = open_lots_pass_a.get(t, [])
+                held = sum(l["qty_open"] for l in lots_for_t)
+                if held > QTY_EPSILON and q > 0.0:
+                    split_ratio = (held + q) / held
+                    for l_entry in lots_for_t:
+                        lot_item = l_entry["item"]
+                        orig_lot_q = float(lot_item["quantity"])
+                        open_lot_q = float(l_entry["qty_open"])
+                        if abs(open_lot_q - orig_lot_q) <= QTY_EPSILON:
+                            lot_item["quantity"] = orig_lot_q * split_ratio
+                            lot_item["price"] = float(lot_item["price"]) / split_ratio
+                            l_entry["qty_open"] = open_lot_q * split_ratio
+                        else:
+                            # Only scale the unconsumed open portion if partially sold earlier
+                            sold_q = max(0.0, orig_lot_q - open_lot_q)
+                            new_total_q = sold_q + (open_lot_q * split_ratio)
+                            if new_total_q > 0.0:
+                                lot_item["price"] = (orig_lot_q * float(lot_item["price"])) / new_total_q
+                                lot_item["quantity"] = new_total_q
+                            l_entry["qty_open"] = open_lot_q * split_ratio
+                    folded_split_count += 1
+                    continue
+                else:
+                    skipped_rows.append({
+                        "line": int(it["line"]),
+                        "symbol": t,
+                        "missing_fields": list(it.get("zero_price_missing_fields") or [f"{label_map['price']} (0.0)"]),
+                        "reason": str(it.get("zero_price_reason") or f"Missing/Invalid {label_map['price']} (0.0)"),
+                    })
+                    continue
+
+            if tt == "BUY":
+                open_lots_pass_a.setdefault(t, []).append({"item": it, "qty_open": q})
+            elif tt == "SELL":
+                lots_for_t = open_lots_pass_a.get(t, [])
+                rem = q
+                while rem > QTY_EPSILON and lots_for_t:
+                    head = lots_for_t[0]
+                    take = min(head["qty_open"], rem)
+                    head["qty_open"] -= take
+                    rem -= take
+                    if head["qty_open"] <= QTY_EPSILON:
+                        lots_for_t.pop(0)
+            post_fold_events.append(ev)
+
+        # Pass B: Automatic Pre-Split Transaction Basis Alignment (e.g. closed pre-split NVDA / TQQQ / NVDL lots)
+        # Skip automatic market-price lookup only on internal tx_id round-trips when no custom price_provider is set
+        if not keep_ids or self.price_provider is not None:
+            sec_items = [
+                ev["item"] for ev in post_fold_events
+                if str(ev["item"].get("tx_type")) in ("BUY", "SELL")
+                and str(ev["item"].get("ticker", "")) not in ("", CASH_TICKER)
+            ]
+            if sec_items:
+                sec_tickers = sorted({str(it["ticker"]) for it in sec_items})
+                min_dt = min(str(it["date"]) for it in sec_items)
+                max_dt = max(str(it["date"]) for it in sec_items)
+                px_df = pd.DataFrame()
+                try:
+                    if self.price_provider is not None:
+                        px_df, _ = self.price_provider(sec_tickers, min_dt, max_dt)
+                    else:
+                        from price_resolver import resolve_prices
+                        is_offline_test = self.macro_provider is not _default_macro_provider
+                        px_df, _ = resolve_prices(
+                            sec_tickers, min_dt, max_dt,
+                            allow_partial=True,
+                            local_only=is_offline_test,
+                        )
+                except Exception:
+                    px_df = pd.DataFrame()
+                if px_df is not None and not px_df.empty:
+                    align_pre_split_transactions(sec_items, px_df)
+
+        # Pass C: Pre-validate FIFO open lot quantities across base + candidates so >0.01 oversells are skipped gracefully
         open_shares = {}
         accepted_candidates = []
-        for ev in combined_events:
+        updated_existing = []
+        for ev in post_fold_events:
             it = ev["item"]
             t = str(it["ticker"])
             tt = str(it["tx_type"])
             q = float(it["quantity"])
             if tt == "BUY":
                 open_shares[t] = open_shares.get(t, 0.0) + q
-                if not ev["is_existing"]:
+                if ev["is_existing"]:
+                    updated_existing.append(it)
+                else:
                     accepted_candidates.append(it)
             elif tt == "SELL":
                 held = open_shares.get(t, 0.0)
                 if held > QTY_EPSILON and held < q <= held + ROUNDING_TOLERANCE:
                     it["quantity"] = held
                     open_shares[t] = 0.0
-                    if not ev["is_existing"]:
+                    if ev["is_existing"]:
+                        updated_existing.append(it)
+                    else:
                         accepted_candidates.append(it)
                 elif q <= held + QTY_EPSILON:
                     open_shares[t] = max(0.0, held - q)
-                    if not ev["is_existing"]:
+                    if ev["is_existing"]:
+                        updated_existing.append(it)
+                    else:
                         accepted_candidates.append(it)
                 else:
                     if not ev["is_existing"]:
@@ -606,9 +935,15 @@ class PortfolioLedger:
                         })
                     else:
                         open_shares[t] = 0.0
+                        updated_existing.append(it)
             else:
-                if not ev["is_existing"]:
+                if ev["is_existing"]:
+                    updated_existing.append(it)
+                else:
                     accepted_candidates.append(it)
+
+        if not base.empty and updated_existing:
+            base = pd.DataFrame(updated_existing, columns=LEDGER_COLUMNS)
 
         rows = []
         for i, c in enumerate(accepted_candidates):

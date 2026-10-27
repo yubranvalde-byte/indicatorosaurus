@@ -396,6 +396,120 @@ def test_case_6_yahoo_finance_fault_tolerant_csv_importer(tmp_dir: str) -> None:
     print("[PASS] Case 6: Yahoo Finance Fault-Tolerant CSV Importer, Fractional Clamping (<=0.01) & Diagnostic Report")
 
 
+def test_case_7_zero_price_split_folding_and_pre_split_basis_alignment(tmp_dir: str) -> None:
+    """
+    Case 7: Corporate Action Split Folding & Pre-Split Basis Alignment (`XLK` & `NVDA`)
+    Verifies:
+      1. Zero-Price Split Row Folding (`XLK`):
+         - `2024-03-31 BUY 12 @ 209.80` + `2025-12-02 BUY 12 @ 0.0` folds into `24.0` open shares
+           at `$104.90` avg cost ($2,517.60 total cost preserved, 0 skipped rows, no $0 row emitted).
+      2. Automatic Pre-Split Transaction Basis Alignment (`NVDA` 10:1 split):
+         - Pre-split 2023 BUYs (`4 @ $402.00`, `4 @ $450.00`, `5 @ $499.00`) and `2024-01-11 SELL 13 @ $521.00`
+           are normalized 10:1 against split-adjusted `us-shareprices-daily.parquet` prices (`40 @ $40.20`,
+           `40 @ $45.00`, `50 @ $49.90`, `SELL 130 @ $52.10`), while preserving exact dollar cost,
+           3-Bucket cash balances, and Israeli Section 88 capital gains tax invariance.
+    """
+    macro = _build_mock_macro_provider({
+        "2023-08-10": (3.70, 100.0),
+        "2023-10-12": (3.95, 100.5),
+        "2023-11-20": (3.73, 101.0),
+        "2024-01-11": (3.74, 101.2),
+        "2024-03-31": (3.68, 101.8),
+        "2025-12-02": (3.65, 104.0),
+    })
+
+    # Mock price provider returning split-adjusted NVDA prices (~$42-$54.73) and post-split XLK (~$105-$140)
+    def _mock_split_adjusted_prices(tickers, start_date, end_date):
+        s_ts = pd.Timestamp(start_date).normalize()
+        e_ts = pd.Timestamp(end_date).normalize()
+        grid = pd.date_range(s_ts, e_ts, freq="D")
+        df = pd.DataFrame(index=grid, dtype="float64")
+        if "NVDA" in tickers:
+            nvda_s = pd.Series(45.0, index=grid, dtype="float64")
+            for dt_s, px in [
+                ("2023-08-10", 42.38),
+                ("2023-10-12", 46.94),
+                ("2023-11-20", 50.41),
+                ("2024-01-11", 54.73),
+            ]:
+                ts = pd.Timestamp(dt_s)
+                if ts in nvda_s.index:
+                    nvda_s.loc[ts] = px
+            df["NVDA"] = nvda_s
+        if "XLK" in tickers:
+            xlk_s = pd.Series(105.0, index=grid, dtype="float64")
+            for dt_s, px in [("2024-03-31", 104.90), ("2025-12-02", 140.00)]:
+                ts = pd.Timestamp(dt_s)
+                if ts in xlk_s.index:
+                    xlk_s.loc[ts] = px
+            df["XLK"] = xlk_s
+        return df, {t: "USD" for t in tickers}
+
+    split_csv = "\n".join([
+        "Symbol,Trade Date,Purchase Price,Quantity,Commission,Transaction Type",
+        "XLK,20251202,0.0,12.0,0.0,BUY",
+        "XLK,20240331,209.80,12.0,0.0,BUY",
+        "NVDA,20240111,521.00,13.0,1.30,SELL",
+        "NVDA,20231120,499.00,5.0,0.50,BUY",
+        "NVDA,20231012,450.00,4.0,0.40,BUY",
+        "NVDA,20230810,402.00,4.0,0.40,BUY",
+    ])
+
+    ledger = PortfolioLedger(
+        path=os.path.join(tmp_dir, "split_case7.parquet"),
+        macro_provider=macro,
+        price_provider=_mock_split_adjusted_prices,
+    )
+    rep = ledger.import_csv(split_csv, replace=True, return_report=True)
+
+    assert rep["status"] == "success", f"Expected clean import with folded split row, got {rep}"
+    assert rep["skipped_count"] == 0, f"Expected 0 skipped rows, got {rep['skipped_rows']}"
+    assert rep["imported_count"] == 5, f"Expected 5 transactions (1 folded XLK split + 4 NVDA), got {rep['imported_count']}"
+
+    tx_df = ledger.transactions()
+    xlk_rows = tx_df[tx_df["ticker"] == "XLK"]
+    assert len(xlk_rows) == 1, f"Expected single folded XLK BUY lot, got {len(xlk_rows)}"
+    _assert_close(float(xlk_rows.iloc[0]["quantity"]), 24.0, "XLK Folded Open Quantity (24.0)")
+    _assert_close(float(xlk_rows.iloc[0]["price"]), 104.90, "XLK Folded Avg Cost ($104.90)")
+    _assert_close(float(xlk_rows.iloc[0]["quantity"] * xlk_rows.iloc[0]["price"]), 12.0 * 209.80, "XLK Total Cost Invariance")
+
+    nvda_rows = tx_df[tx_df["ticker"] == "NVDA"].sort_values("date")
+    assert len(nvda_rows) == 4
+    _assert_close(float(nvda_rows.iloc[0]["quantity"]), 40.0, "NVDA Lot 1 10:1 Adjusted Qty")
+    _assert_close(float(nvda_rows.iloc[0]["price"]), 40.20, "NVDA Lot 1 10:1 Adjusted Price")
+    _assert_close(float(nvda_rows.iloc[1]["quantity"]), 40.0, "NVDA Lot 2 10:1 Adjusted Qty")
+    _assert_close(float(nvda_rows.iloc[1]["price"]), 45.00, "NVDA Lot 2 10:1 Adjusted Price")
+    _assert_close(float(nvda_rows.iloc[2]["quantity"]), 50.0, "NVDA Lot 3 10:1 Adjusted Qty")
+    _assert_close(float(nvda_rows.iloc[2]["price"]), 49.90, "NVDA Lot 3 10:1 Adjusted Price")
+    _assert_close(float(nvda_rows.iloc[3]["quantity"]), 130.0, "NVDA SELL 10:1 Adjusted Qty")
+    _assert_close(float(nvda_rows.iloc[3]["price"]), 52.10, "NVDA SELL 10:1 Adjusted Price")
+
+    # Verify Israeli Section 88 tax and 3-Bucket cash invariance against unscaled reference
+    ref_ledger = PortfolioLedger(path=os.path.join(tmp_dir, "ref_unscaled.parquet"), macro_provider=macro)
+    ref_ledger.add_transaction("2023-08-10", "NVDA", "BUY", quantity=4.0, price=402.00, fee=0.40, currency="USD")
+    ref_ledger.add_transaction("2023-10-12", "NVDA", "BUY", quantity=4.0, price=450.00, fee=0.40, currency="USD")
+    ref_ledger.add_transaction("2023-11-20", "NVDA", "BUY", quantity=5.0, price=499.00, fee=0.50, currency="USD")
+    ref_ledger.add_transaction("2024-01-11", "NVDA", "SELL", quantity=13.0, price=521.00, fee=1.30, currency="USD")
+    ref_ledger.add_transaction("2024-03-31", "XLK", "BUY", quantity=12.0, price=209.80, fee=0.0, currency="USD")
+
+    _assert_close(
+        ledger.tax_summary(2024).iloc[0]["capital_gains_tax_ils"],
+        ref_ledger.tax_summary(2024).iloc[0]["capital_gains_tax_ils"],
+        "Section 88 Capital Gains Tax Invariance under 10:1 Split Alignment",
+    )
+    _assert_close(
+        ledger.capital_buckets()["available_cash"]["USD"],
+        ref_ledger.capital_buckets()["available_cash"]["USD"],
+        "3-Bucket Available Cash Invariance",
+    )
+    _assert_close(
+        ledger.capital_buckets()["total_invested_capital"]["USD"],
+        ref_ledger.capital_buckets()["total_invested_capital"]["USD"],
+        "3-Bucket Total Invested Capital Invariance",
+    )
+    print("[PASS] Case 7: Zero-Price Split Row Folding (XLK 24 sh @ $104.90) & Pre-Split 10:1 Basis Alignment (NVDA)")
+
+
 def run_all_tests() -> None:
     print("=== AlphaQuant Phase 2: Portfolio Ledger & Israeli Tax Verification Suite ===")
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -405,6 +519,7 @@ def run_all_tests() -> None:
         test_case_4_ytd_tax_shield_and_carry_forward(tmp_dir)
         test_fifo_partial_lots_tase_cpi_dividends_and_snapshot(tmp_dir)
         test_case_6_yahoo_finance_fault_tolerant_csv_importer(tmp_dir)
+        test_case_7_zero_price_split_folding_and_pre_split_basis_alignment(tmp_dir)
     print("-----------------------------------------------------------------------------")
     print("[SUCCESS] All Phase 2 Portfolio Ledger & Israeli Tax assertions passed!")
 
