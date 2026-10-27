@@ -502,6 +502,35 @@ Phase 6 bridges the personal multi-currency portfolio ledger with the 80-byte `S
 
 ---
 
+## 6G. Bilingual (`EN` / `HE`) Localization, Contextual Info (`i`) Tooltips & Two-Screen Progressive Disclosure
+
+To make institutional-grade quantitative analytics and Israeli tax mechanics accessible without overwhelming the user, `frontend/templates/index.html` implements:
+
+### 1. Bilingual Localization (`EN` | `עב`) & Dynamic RTL/LTR Layout (`setAppLanguage`, `applyLayoutDirection`)
+- **Top-Header Language Switcher (`#lang-btn-en` | `#lang-btn-he`)**: Persisted in `localStorage` (`aq_lang`), switching instantaneously between English (`en`) and Hebrew (`he`) via the structured `I18N = { en: {...}, he: {...} }` dictionary (`data-i18n` and `data-i18n-placeholder` bindings).
+- **RTL Layout with Strict LTR Financial Figure Isolation**: When Hebrew (`he`) is active, the root document switches to `dir="rtl"` (`Heebo` / `Inter` typography) and docks the Screener sidebar to the right, while strictly enforcing `dir="ltr"` (`unicode-bidi: isolate; font-variant-numeric: tabular-nums;`) on all currency amounts, signed percentages, dates, ticker symbols, and Chart.js canvases so financial numbers never invert.
+
+### 2. Contextual Info (`i`) Tooltips Dictionary (`TOOLTIPS`, `#global-info-popover`)
+- Every technical, quantitative, and Israeli tax metric across both workspaces features an interactive `<span class="info-tooltip" data-term="...">i</span>` badge.
+- Hovering, focusing, or tapping any `i` badge opens a viewport-aware popover (`#global-info-popover`) with a concise 2–3 line explanation in the active language (`EN` or `HE`), covering:
+  - **Portfolio & Return Metrics**: `NAV`, `Net Liquidation NAV`, `TWR`, `MWR / XIRR`, `What-If Opportunity Simulator`, `Underwater Drawdown`, `MDD`, `Sharpe Ratio`, `Sortino Ratio`, `Beta`, `Jensen's Alpha`, `Annualized Volatility`.
+  - **Israeli Tax & Dual-Currency Terms**: `FIFO Tax Lots`, `Original vs. Adjusted Cost Basis`, `Inflationary Exempt Gain`, `Real Taxable Gain`, `YTD Tax Shield`, `Tax-Loss Harvesting (TLH)`, `FX Attribution & Tax Drag`.
+  - **Screener & Quant DNA Terms**: `C-FFI Quant Score`, `Factor Coverage %`, `Goldilocks Normalization`, `Sector-Neutral Sigmoid Z-Score`, the 5 Factor Pillars (`Valuation`, `Growth`, `Quality`, `Safety & Income`, `Momentum`), and all 16 quantitative indicators.
+
+### 3. Two-Screen Progressive Disclosure Layout (`setPortfolioViewTier`)
+- **Screen 1 — Standard Overview (`#pf-view-standard`, Default)**:
+  - Executive KPI Ribbon (`NAV`, `Net Liquidation NAV`, `TWR` vs `XIRR`, `Unrealized Gross & Net PnL`, `Israeli Tax Summary`).
+  - Primary Performance Chart (`TWR` curve, Benchmark comparison chips, Time-Slice presets).
+  - Live Holdings Table with one-click expandable inline `FIFO` tax lot breakdowns.
+  - Record Transaction & Fault-Tolerant Brokerage CSV Import/Export panel.
+- **Screen 2 — Advanced Quant & Tax Lab (`#pf-view-advanced`)**:
+  - Full 7-Metric Institutional Risk KPI Strip (`Annualized Return`, `Annualized Volatility`, `Sharpe Ratio`, `Sortino Ratio`, `Beta`, `Jensen's Alpha`, `Max Drawdown`) and `What-If Opportunity Simulator` cards.
+  - `ILS (₪)` Return Attribution Bar (`Pure Asset Return` + `FX Impact` - `Tax & Fee Drag` = `Net After-Tax TWR`).
+  - Portfolio Factor DNA Radar (`C-FFI` 5 Pillars + expandable 16-Indicator drawer) & GICS Sector Allocation/Attribution chart.
+  - Interactive Israeli Tax-Loss Harvesting (`TLH`) Simulator (`Part E Section 92`) and full chronological Transaction History Ledger.
+
+---
+
 ## 7. Developer Onboarding & Extensibility Guide
 
 ### System Prerequisites

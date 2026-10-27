@@ -6,7 +6,7 @@
 <title>Financial Intelligence Dashboard</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 tailwind.config = {
@@ -27,8 +27,8 @@ tailwind.config = {
       "error":"#ffb4ab","error-container":"#93000a"
     },
     borderRadius:{ DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem" },
-    fontFamily:{ "body-md":["Inter"],"headline-lg":["Inter"],"headline-md":["Inter"],
-      "headline-sm":["Inter"],"body-lg":["Inter"],"label-caps":["Inter"],"data-display":["JetBrains Mono"] },
+    fontFamily:{ "body-md":["Inter","Heebo","sans-serif"],"headline-lg":["Inter","Heebo","sans-serif"],"headline-md":["Inter","Heebo","sans-serif"],
+      "headline-sm":["Inter","Heebo","sans-serif"],"body-lg":["Inter","Heebo","sans-serif"],"label-caps":["Inter","Heebo","sans-serif"],"data-display":["JetBrains Mono","monospace"] },
     fontSize:{
       "label-caps":["12px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"700"}],
       "body-md":["14px",{lineHeight:"1.5",fontWeight:"400"}],
@@ -42,7 +42,7 @@ tailwind.config = {
 };
 </script>
 <style>
-  input[type=range]{-webkit-appearance:none;width:100%;background:transparent}
+  input[type=range]{-webkit-appearance:none;width:100%;background:transparent;direction:ltr}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#adc6ff;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(173,198,255,0.18)}
   input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#4d8eff var(--pct,50%),#424754 var(--pct,50%));border-radius:2px}
   input[type=range]:focus{outline:none}
@@ -51,6 +51,13 @@ tailwind.config = {
   .tooltip-wrap{position:relative;display:inline-flex}
   .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#2a2a2a;color:#c2c6d6;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 10px;border:1px solid #424754;opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
   .tooltip-wrap:hover .tip{opacity:1}
+  /* Reusable Contextual Info (i) Badge */
+  .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgba(173,198,255,0.12);border:1px solid rgba(173,198,255,0.35);color:#adc6ff;font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
+  .info-tooltip:hover,.info-tooltip:focus{background:#adc6ff;color:#002e6a;border-color:#adc6ff;box-shadow:0 0 10px rgba(173,198,255,0.45);outline:none}
+  #global-info-popover{position:fixed;z-index:9999;max-width:310px;background:#1e1e1e;color:#e5e2e1;border:1px solid #4d8eff;border-radius:10px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .15s ease}
+  #global-info-popover.visible{opacity:1}
+  /* Strict LTR numeric & financial figure isolation in RTL mode */
+  .num-ltr,.font-mono,.tabular-nums,canvas,input[type="number"],input[type="date"]{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
   ::-webkit-scrollbar{width:4px}
   ::-webkit-scrollbar-track{background:#131313}
   ::-webkit-scrollbar-thumb{background:#424754;border-radius:2px}
@@ -61,34 +68,43 @@ tailwind.config = {
 </head>
 <body class="bg-background text-on-surface font-body-md overflow-hidden">
 
+<!-- Global Viewport-Aware Contextual Info Popover -->
+<div id="global-info-popover" role="tooltip" aria-hidden="true"></div>
+
 <!-- Top Bar -->
-<header id="top-header" class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-14 px-8 z-40 transition-all duration-200" style="left:288px">
-  <div class="flex items-center gap-4">
-    <h1 class="text-headline-md font-bold text-on-surface">Financial Intelligence Dashboard</h1>
+<header id="top-header" class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-14 px-6 z-40 transition-all duration-200" style="left:288px">
+  <div class="flex items-center gap-3">
+    <h1 class="text-headline-md font-bold text-on-surface" data-i18n="app_title">Financial Intelligence Dashboard</h1>
     <!-- Workspace Switcher Navigation -->
-    <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg ml-2">
+    <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg">
       <button id="nav-tab-screener" onclick="switchWorkspace('screener')" class="px-3 py-1 rounded-md text-xs font-bold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5">
         <span class="material-symbols-outlined text-[14px]">Tune</span>
-        Screener &amp; Backtester
+        <span data-i18n="tab_screener">Screener &amp; Backtester</span>
       </button>
       <button id="nav-tab-portfolio" onclick="switchWorkspace('portfolio')" class="px-3 py-1 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
         <span class="material-symbols-outlined text-[14px]">account_balance_wallet</span>
-        Portfolio Intelligence
+        <span data-i18n="tab_portfolio">Portfolio Intelligence</span>
       </button>
     </div>
     <span id="active-profile-chip" class="hidden px-3 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-label-caps"></span>
   </div>
-  <div class="flex items-center gap-3">
+  <div class="flex items-center gap-2.5">
     <!-- Global Portfolio Currency Toggle (visible in Portfolio workspace) -->
     <div id="portfolio-header-controls" class="hidden items-center gap-2">
-      <span id="header-fx-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[11px] font-mono text-on-surface-variant">USD/ILS: --</span>
-      <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg">
+      <span id="header-fx-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[11px] font-mono text-on-surface-variant num-ltr">USD/ILS: --</span>
+      <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
         <button id="curr-btn-USD" onclick="setPortfolioCurrency('USD')" class="px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">USD $</button>
         <button id="curr-btn-ILS" onclick="setPortfolioCurrency('ILS')" class="px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ILS ₪</button>
       </div>
     </div>
+    <!-- Bilingual Language Toggle (EN | עב) -->
+    <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr" title="Switch Language / החלף שפה">
+      <button id="lang-btn-en" onclick="setAppLanguage('en')" class="px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">EN</button>
+      <button id="lang-btn-he" onclick="setAppLanguage('he')" class="px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">עב</button>
+    </div>
     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant text-label-caps text-on-surface-variant">
-      <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse inline-block"></span>Live Data
+      <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse inline-block"></span>
+      <span data-i18n="live_data">Live Data</span>
     </span>
   </div>
 </header>
@@ -97,8 +113,11 @@ tailwind.config = {
 <nav id="screener-sidebar" class="fixed left-0 top-0 h-full bg-surface/80 backdrop-blur-xl border-r border-outline-variant flex flex-col z-50 overflow-hidden" style="width:288px">
   <!-- Logo -->
   <div class="px-5 pt-5 pb-3 border-b border-outline-variant flex-shrink-0">
-    <h2 class="text-headline-sm font-bold text-primary">StockAnalyzer</h2>
-    <p class="text-label-caps text-on-surface-variant mt-1">Market Intelligence v3.0</p>
+    <div class="flex items-center justify-between">
+      <h2 class="text-headline-sm font-bold text-primary">AlphaQuant</h2>
+      <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+    </div>
+    <p class="text-label-caps text-on-surface-variant mt-1" data-i18n="sidebar_subtitle">Market Intelligence v3.3</p>
   </div>
 
   <!-- Scrollable body -->
@@ -106,28 +125,34 @@ tailwind.config = {
 
     <!-- Profile Buttons -->
     <div>
-      <p class="text-label-caps text-on-surface-variant mb-2">INVESTMENT PROFILES</p>
+      <p class="text-label-caps text-on-surface-variant mb-2 flex items-center justify-between">
+        <span data-i18n="investment_profiles">INVESTMENT PROFILES</span>
+        <span class="info-tooltip" data-term="Goldilocks Normalization" tabindex="0">i</span>
+      </p>
       <div class="grid grid-cols-3 gap-1.5 mb-1.5">
-        <button class="profile-btn" onclick="applyPreset('deep-value')">Deep Value</button>
-        <button class="profile-btn" onclick="applyPreset('hyper-growth')">Hyper-Growth</button>
-        <button class="profile-btn" onclick="applyPreset('momentum')">Momentum</button>
+        <button class="profile-btn" onclick="applyPreset('deep-value')" data-i18n="prof_deep_value">Deep Value</button>
+        <button class="profile-btn" onclick="applyPreset('hyper-growth')" data-i18n="prof_hyper_growth">Hyper-Growth</button>
+        <button class="profile-btn" onclick="applyPreset('momentum')" data-i18n="prof_momentum">Momentum</button>
       </div>
       <div class="grid grid-cols-2 gap-1.5">
-        <button class="profile-btn" onclick="applyPreset('income')">Income</button>
-        <button class="profile-btn" onclick="applyPreset('quality')">Quality</button>
+        <button class="profile-btn" onclick="applyPreset('income')" data-i18n="prof_income">Income</button>
+        <button class="profile-btn" onclick="applyPreset('quality')" data-i18n="prof_quality">Quality</button>
       </div>
     </div>
 
     <!-- Universe Filters -->
     <div>
-      <p class="text-label-caps text-on-surface-variant mb-2">UNIVERSE FILTERS</p>
+      <p class="text-label-caps text-on-surface-variant mb-2 flex items-center justify-between">
+        <span data-i18n="universe_filters">UNIVERSE FILTERS</span>
+        <span class="info-tooltip" data-term="Sector-Neutral Sigmoid Z-Score" tabindex="0">i</span>
+      </p>
       
       <!-- Sector Filter -->
       <div class="space-y-1 mb-3">
-        <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block">Allowed Sectors</label>
+        <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block" data-i18n="allowed_sectors">Allowed Sectors</label>
         <div class="relative">
           <button id="sector-dropdown-btn" onclick="toggleSectorDropdown()" type="button" class="w-full text-left bg-surface-container border border-outline-variant rounded-md px-3 py-1.5 text-xs flex justify-between items-center text-on-surface hover:bg-surface-container-high transition-colors">
-            <span id="sector-btn-text" class="truncate">All Sectors</span>
+            <span id="sector-btn-text" class="truncate" data-i18n="all_sectors">All Sectors</span>
             <span class="material-symbols-outlined text-[14px]">expand_more</span>
           </button>
           <div id="sector-dropdown" class="hidden absolute top-full left-0 w-full bg-surface-container-high border border-outline-variant mt-1 rounded-md max-h-48 overflow-y-auto z-50 p-2 space-y-1.5 shadow-lg">
@@ -139,14 +164,14 @@ tailwind.config = {
       <!-- Market Cap Filter -->
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1">Min Cap ($B)</label>
+          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="min_cap">Min Cap ($B)</label>
           <input type="number" id="min-market-cap" min="0" placeholder="e.g. 10"
-            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40" />
+            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
         <div>
-          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1">Max Cap ($B)</label>
+          <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="max_cap">Max Cap ($B)</label>
           <input type="number" id="max-market-cap" min="0" placeholder="e.g. 500"
-            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40" />
+            class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
       </div>
     </div>
@@ -156,7 +181,7 @@ tailwind.config = {
       <button onclick="toggleSlidersDrawer()" type="button" class="w-full flex items-center justify-between py-2 text-left hover:bg-surface-bright/10 rounded px-2 transition-colors duration-200">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px] text-primary">settings</span>
-          <span class="text-label-caps text-on-surface-variant font-bold">Model Parameters</span>
+          <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="model_parameters">Model Parameters (16)</span>
         </div>
         <span id="sliders-drawer-icon" class="material-symbols-outlined text-[16px] transition-transform duration-300">expand_more</span>
       </button>
@@ -168,7 +193,7 @@ tailwind.config = {
 
   <!-- Calculate button -->
   <div class="px-4 py-4 border-t border-outline-variant flex-shrink-0">
-    <button id="calculate-btn"
+    <button id="calculate-btn" data-i18n="btn_calculate_score"
       class="w-full bg-primary text-on-primary font-bold text-sm py-2.5 px-4 rounded-lg hover:bg-primary-container transition-all shadow-[0_0_20px_rgba(77,142,255,0.25)] hover:shadow-[0_0_28px_rgba(77,142,255,0.4)] active:scale-[.98]">
       ⚡ Calculate Score
     </button>
@@ -178,37 +203,59 @@ tailwind.config = {
 <!-- Main Content -->
 <main id="main-viewport" class="overflow-y-auto p-6 transition-all duration-200" style="margin-left:288px;margin-top:56px;height:calc(100vh - 56px)">
   <div id="workspace-screener" class="max-w-5xl mx-auto">
-    <div class="mb-5">
-      <h2 class="text-headline-lg text-on-surface font-bold">Algorithm Results</h2>
-      <p class="text-body-lg text-on-surface-variant mt-1">Top ranking equities scored by the C-engine weighted dot product.</p>
+    <div class="mb-5 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+      <div>
+        <h2 class="text-headline-lg text-on-surface font-bold flex items-center gap-2">
+          <span data-i18n="screener_title">Algorithm Results</span>
+          <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+        </h2>
+        <p class="text-body-lg text-on-surface-variant mt-1" data-i18n="screener_subtitle">Top ranking equities scored by the C-engine weighted dot product.</p>
+      </div>
+      <!-- Screener Two-Tier Progressive Disclosure Switcher -->
+      <div class="flex items-center bg-surface-container border border-outline-variant p-1 rounded-xl self-start">
+        <button id="scr-tier-standard" onclick="setScreenerViewTier('standard')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px]">format_list_numbered</span>
+          <span data-i18n="tier_standard">Standard Overview</span>
+        </button>
+        <button id="scr-tier-advanced" onclick="setScreenerViewTier('advanced')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px]">science</span>
+          <span data-i18n="tier_advanced_bt">Advanced Backtest Lab</span>
+        </button>
+      </div>
     </div>
 
     <!-- Leaderboard -->
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+    <div id="screener-view-standard" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-surface-container border-b border-[#2a2a2a]">
               <th class="px-4 py-3 text-label-caps text-on-surface-variant w-16 text-center">#</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant">Ticker</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-center w-28">Profile</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-right w-28">Score</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant" data-i18n="th_ticker">Ticker</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-center w-28" data-i18n="th_profile">Profile</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-right w-32">
+                <span data-i18n="th_score">Score</span>
+                <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+              </th>
             </tr>
           </thead>
           <tbody id="leaderboard-body">
-            <tr><td colspan="4" class="px-4 py-12 text-center text-on-surface-variant text-body-md">
-              Set your weights and click <strong class="text-primary">Calculate Score</strong> to rank all 140 stocks.
+            <tr><td colspan="4" class="px-4 py-12 text-center text-on-surface-variant text-body-md" data-i18n="screener_empty_prompt">
+              Set your weights and click Calculate Score to rank all stocks.
             </td></tr>
           </tbody>
         </table>
       </div>
       <div class="px-4 py-3 bg-surface-container-low border-t border-[#2a2a2a] flex flex-col sm:flex-row gap-2 justify-between items-center">
-        <span class="text-label-caps text-on-surface-variant" id="result-count">No results yet</span>
+        <span class="text-label-caps text-on-surface-variant" id="result-count" data-i18n="no_results_yet">No results yet</span>
         <div id="pagination-controls" class="hidden items-center gap-2">
-          <button id="load-more-btn" onclick="loadMoreStocks()" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
-          <button id="toggle-all-btn" onclick="showAllStocks()" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
+          <button id="load-more-btn" onclick="loadMoreStocks()" data-i18n="btn_load_more" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
+          <button id="toggle-all-btn" onclick="showAllStocks()" data-i18n="btn_show_all" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
         </div>
-        <span class="text-label-caps text-on-surface-variant">C Engine · QuickSort · Min-Max Normalized</span>
+        <span class="text-label-caps text-on-surface-variant flex items-center gap-1">
+          <span data-i18n="c_engine_footer">C Engine · QuickSort · Sector-Neutral Sigmoid</span>
+          <span class="info-tooltip" data-term="Sector-Neutral Sigmoid Z-Score" tabindex="0">i</span>
+        </span>
       </div>
     </div>
 
@@ -218,21 +265,21 @@ tailwind.config = {
         <div>
           <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">analytics</span>
-            Historical Backtesting Dashboard
+            <span data-i18n="bt_title">Historical Backtesting Dashboard</span>
           </h3>
-          <p class="text-xs text-on-surface-variant mt-1">Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.</p>
+          <p class="text-xs text-on-surface-variant mt-1" data-i18n="bt_subtitle">Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.</p>
         </div>
         
         <div class="flex items-center gap-3 flex-shrink-0">
           <!-- Time window select -->
           <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg">
-            <button id="bt-window-3y" onclick="setBacktestWindow('3y')" class="px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
-            <button id="bt-window-5y" onclick="setBacktestWindow('5y')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
+            <button id="bt-window-3y" onclick="setBacktestWindow('3y')" data-i18n="bt_3y" class="px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
+            <button id="bt-window-5y" onclick="setBacktestWindow('5y')" data-i18n="bt_5y" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
           </div>
           <!-- Run button -->
           <button id="run-backtest-btn" disabled onclick="runPortfolioBacktest()" class="bg-primary/20 text-primary border border-primary/30 opacity-50 cursor-not-allowed font-bold text-xs py-1.5 px-4 rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center gap-1.5 active:scale-[.98]">
             <span class="material-symbols-outlined text-[14px]">play_arrow</span>
-            📊 Run Trailing Backtest
+            <span data-i18n="btn_run_backtest">📊 Run Trailing Backtest</span>
           </button>
         </div>
       </div>
@@ -240,7 +287,7 @@ tailwind.config = {
       <!-- State Boundary Helper message -->
       <div id="backtest-helper-msg" class="text-center py-6 text-on-surface-variant/80 text-xs bg-surface-container/20 rounded-lg border border-dashed border-outline-variant/30 flex flex-col items-center justify-center gap-2">
         <span class="material-symbols-outlined text-[24px] text-outline">info</span>
-        <span>Rank stocks to generate a portfolio before running a backtest.</span>
+        <span data-i18n="bt_helper_msg">Rank stocks to generate a portfolio before running a backtest.</span>
       </div>
 
       <!-- Backtest Content (hidden initially) -->
@@ -248,35 +295,35 @@ tailwind.config = {
         <!-- Left 2 cols for Chart -->
         <div class="md:col-span-2 bg-surface-container/40 border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-label-caps text-on-surface-variant font-bold">Trailing Cumulative Performance</span>
+            <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="bt_chart_title">Trailing Cumulative Performance</span>
             <div class="flex items-center gap-4 text-[11px] font-bold">
-              <span class="flex items-center gap-1.5 text-secondary"><span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>Portfolio</span>
-              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span>SPY Benchmark</span>
+              <span class="flex items-center gap-1.5 text-secondary"><span class="w-2 h-2 rounded-full bg-secondary inline-block"></span><span data-i18n="lbl_portfolio">Portfolio</span></span>
+              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span><span data-i18n="lbl_spy_bench">SPY Benchmark</span></span>
             </div>
           </div>
-          <div class="relative flex-1" style="height: 250px;">
+          <div class="relative flex-1" style="height: 250px;" dir="ltr">
             <canvas id="backtestchart"></canvas>
           </div>
         </div>
         
         <!-- Right col for KPIs -->
         <div class="space-y-4">
-          <span class="text-label-caps text-on-surface-variant font-bold block">Key Portfolio Metrics</span>
+          <span class="text-label-caps text-on-surface-variant font-bold block" data-i18n="bt_key_metrics">Key Portfolio Metrics</span>
           
           <!-- Sharpe Grid -->
           <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
             <div class="flex justify-between items-center">
-              <span class="text-xs text-on-surface-variant">Annualized Sharpe Ratio</span>
+              <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_sharpe_ratio">Annualized Sharpe Ratio</span><span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span></span>
               <span class="material-symbols-outlined text-[16px] text-primary">assessment</span>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-1">
               <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Portfolio</span>
-                <div id="kpi-port-sharpe" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
+                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
+                <div id="kpi-port-sharpe" class="text-headline-sm font-bold text-on-surface mt-0.5 num-ltr">--</div>
               </div>
               <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
                 <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
-                <div id="kpi-spy-sharpe" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
+                <div id="kpi-spy-sharpe" class="text-headline-sm font-bold text-on-surface-variant mt-0.5 num-ltr">--</div>
               </div>
             </div>
           </div>
@@ -284,17 +331,17 @@ tailwind.config = {
           <!-- Max Drawdown Grid -->
           <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
             <div class="flex justify-between items-center">
-              <span class="text-xs text-on-surface-variant">Maximum Drawdown</span>
+              <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_max_drawdown">Maximum Drawdown</span><span class="info-tooltip" data-term="MDD" tabindex="0">i</span></span>
               <span class="material-symbols-outlined text-[16px] text-tertiary">trending_down</span>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-1">
               <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Portfolio</span>
-                <div id="kpi-port-max-dd" class="text-headline-sm font-bold text-on-surface mt-0.5">--</div>
+                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
+                <div id="kpi-port-max-dd" class="text-headline-sm font-bold text-on-surface mt-0.5 num-ltr">--</div>
               </div>
               <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
                 <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
-                <div id="kpi-spy-max-dd" class="text-headline-sm font-bold text-on-surface-variant mt-0.5">--</div>
+                <div id="kpi-spy-max-dd" class="text-headline-sm font-bold text-on-surface-variant mt-0.5 num-ltr">--</div>
               </div>
             </div>
           </div>
@@ -302,8 +349,8 @@ tailwind.config = {
           <!-- Alpha Grid -->
           <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 flex justify-between items-center">
             <div>
-              <span class="text-[10px] text-secondary uppercase font-bold tracking-wide">Total Excess Return (Alpha)</span>
-              <div id="kpi-total-alpha" class="text-headline-md font-bold text-secondary mt-1">--</div>
+              <span class="text-[10px] text-secondary uppercase font-bold tracking-wide flex items-center"><span data-i18n="lbl_excess_alpha">Total Excess Return (Alpha)</span><span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span></span>
+              <div id="kpi-total-alpha" class="text-headline-md font-bold text-secondary mt-1 num-ltr">--</div>
             </div>
             <div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center border border-secondary/20">
               <span class="material-symbols-outlined text-secondary text-[24px]">insights</span>
@@ -318,29 +365,41 @@ tailwind.config = {
   <!-- WORKSPACE 2: PORTFOLIO INTELLIGENCE (Multi-Currency + Israeli Tax)    -->
   <!-- ===================================================================== -->
   <div id="workspace-portfolio" class="hidden max-w-7xl mx-auto space-y-6 pb-12 fade-in">
-    <!-- Portfolio Header Bar -->
-    <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-[#2a2a2a] pb-4">
+    <!-- Portfolio Header Bar + Two-Screen Progressive Disclosure Switcher -->
+    <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-[#2a2a2a] pb-4">
       <div>
-        <div class="flex items-center gap-2.5">
+        <div class="flex flex-wrap items-center gap-2.5">
           <span class="material-symbols-outlined text-primary text-[24px]">account_balance_wallet</span>
-          <h2 class="text-headline-lg text-on-surface font-bold">Portfolio Intelligence &amp; Tax Engine</h2>
-          <span id="pf-as-of-badge" class="px-2.5 py-0.5 rounded-full bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant">As of --</span>
+          <h2 class="text-headline-lg text-on-surface font-bold" data-i18n="pf_title">Portfolio Intelligence &amp; Tax Engine</h2>
+          <span id="pf-as-of-badge" class="px-2.5 py-0.5 rounded-full bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">As of --</span>
         </div>
-        <p class="text-xs text-on-surface-variant mt-1">Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.</p>
+        <p class="text-xs text-on-surface-variant mt-1" data-i18n="pf_subtitle">Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2.5">
+        <!-- Two-Tier Progressive Disclosure Switcher (Standard Overview vs. Advanced Quant & Tax Lab) -->
+        <div class="flex items-center bg-surface-container border border-outline-variant p-1 rounded-xl shadow-sm">
+          <button id="pf-tier-standard" onclick="setPortfolioViewTier('standard')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[15px]">dashboard</span>
+            <span data-i18n="tier_standard">Standard Overview</span>
+          </button>
+          <button id="pf-tier-advanced" onclick="setPortfolioViewTier('advanced')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[15px]">biotech</span>
+            <span data-i18n="tier_advanced">Advanced Quant &amp; Tax Lab</span>
+          </button>
+        </div>
+
         <!-- Workspace Currency Toggle (synced with Top Header) -->
-        <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg">
+        <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
           <button id="ws-curr-btn-USD" onclick="setPortfolioCurrency('USD')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">USD $</button>
           <button id="ws-curr-btn-ILS" onclick="setPortfolioCurrency('ILS')" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ILS ₪</button>
         </div>
         <button onclick="seedDemoPortfolio()" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center gap-1.5">
           <span class="material-symbols-outlined text-[14px] text-secondary">science</span>
-          Seed Sample Ledger
+          <span data-i18n="btn_seed_demo">Seed Sample Ledger</span>
         </button>
         <button onclick="refreshPortfolioWorkspace()" id="pf-refresh-btn" class="px-3 py-1.5 rounded-lg bg-primary/15 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 text-xs font-bold transition-all flex items-center gap-1.5">
           <span class="material-symbols-outlined text-[14px]">refresh</span>
-          Refresh
+          <span data-i18n="btn_refresh">Refresh</span>
         </button>
       </div>
     </div>
@@ -351,23 +410,29 @@ tailwind.config = {
       <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
         <div>
           <div class="flex justify-between items-center">
-            <span class="text-label-caps text-on-surface-variant font-bold">Total Portfolio NAV</span>
+            <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span data-i18n="kpi_total_nav">Total Portfolio NAV</span>
+              <span class="info-tooltip" data-term="NAV" tabindex="0">i</span>
+            </span>
             <span class="material-symbols-outlined text-primary text-[18px]">account_balance</span>
           </div>
-          <div id="pf-kpi-nav" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight">--</div>
+          <div id="pf-kpi-nav" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight num-ltr">--</div>
           <div class="flex items-center gap-1.5 mt-1 text-xs">
-            <span class="text-on-surface-variant">Net After Tax:</span>
-            <span id="pf-kpi-net-nav" class="font-bold text-secondary font-mono">--</span>
+            <span class="text-on-surface-variant flex items-center">
+              <span data-i18n="kpi_net_after_tax">Net After Tax:</span>
+              <span class="info-tooltip" data-term="Net Liquidation NAV" tabindex="0">i</span>
+            </span>
+            <span id="pf-kpi-net-nav" class="font-bold text-secondary font-mono num-ltr">--</span>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
           <div>
-            <span class="text-on-surface-variant block">Invested Holdings</span>
-            <span id="pf-kpi-mv" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_invested_holdings">Invested Holdings</span>
+            <span id="pf-kpi-mv" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
           <div class="text-right">
-            <span class="text-on-surface-variant block">Cash Balance</span>
-            <span id="pf-kpi-cash" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_cash_balance">Cash Balance</span>
+            <span id="pf-kpi-cash" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
         </div>
       </div>
@@ -376,28 +441,36 @@ tailwind.config = {
       <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
         <div>
           <div class="flex justify-between items-center">
-            <span class="text-label-caps text-on-surface-variant font-bold">TWR vs. MWR (XIRR)</span>
+            <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span data-i18n="kpi_twr_vs_mwr">TWR vs. MWR (XIRR)</span>
+              <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
+            </span>
             <span class="material-symbols-outlined text-secondary text-[18px]">trending_up</span>
           </div>
           <div class="grid grid-cols-2 gap-2 mt-1.5">
             <div>
-              <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Cumulative TWR</span>
-              <div id="pf-kpi-twr" class="text-xl font-extrabold text-on-surface tracking-tight">--</div>
+              <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center">
+                <span data-i18n="kpi_cum_twr">Cumulative TWR</span>
+              </span>
+              <div id="pf-kpi-twr" class="text-xl font-extrabold text-on-surface tracking-tight num-ltr">--</div>
             </div>
-            <div class="border-l border-[#2a2a2a] pl-3">
-              <span class="text-[10px] text-on-surface-variant uppercase font-bold block">XIRR (Annualized)</span>
-              <div id="pf-kpi-xirr" class="text-xl font-extrabold text-primary tracking-tight">--</div>
+            <div class="border-s border-[#2a2a2a] ps-3">
+              <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center">
+                <span data-i18n="kpi_xirr_ann">XIRR (Ann.)</span>
+                <span class="info-tooltip" data-term="MWR / XIRR" tabindex="0">i</span>
+              </span>
+              <div id="pf-kpi-xirr" class="text-xl font-extrabold text-primary tracking-tight num-ltr">--</div>
             </div>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
           <div>
-            <span class="text-on-surface-variant block">Annualized TWR</span>
-            <span id="pf-kpi-twr-ann" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_ann_twr">Annualized TWR</span>
+            <span id="pf-kpi-twr-ann" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
           <div class="text-right">
-            <span class="text-on-surface-variant block">Modified Dietz</span>
-            <span id="pf-kpi-dietz" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_mod_dietz">Modified Dietz</span>
+            <span id="pf-kpi-dietz" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
         </div>
       </div>
@@ -406,23 +479,26 @@ tailwind.config = {
       <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
         <div>
           <div class="flex justify-between items-center">
-            <span class="text-label-caps text-on-surface-variant font-bold">Unrealized &amp; YTD PnL</span>
+            <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span data-i18n="kpi_unr_ytd_pnl">Unrealized &amp; YTD PnL</span>
+              <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
+            </span>
             <span class="material-symbols-outlined text-primary text-[18px]">monitoring</span>
           </div>
-          <div id="pf-kpi-unr-gross" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight">--</div>
+          <div id="pf-kpi-unr-gross" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight num-ltr">--</div>
           <div class="flex items-center gap-1.5 mt-1 text-xs">
-            <span class="text-on-surface-variant">Net Unrealized (After Tax):</span>
-            <span id="pf-kpi-unr-net" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant" data-i18n="kpi_net_unr_after_tax">Net Unrealized (After Tax):</span>
+            <span id="pf-kpi-unr-net" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
           <div>
-            <span class="text-on-surface-variant block">Realized YTD PnL</span>
-            <span id="pf-kpi-real-ytd" class="font-bold text-on-surface font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_real_ytd_pnl">Realized YTD PnL</span>
+            <span id="pf-kpi-real-ytd" class="font-bold text-on-surface font-mono num-ltr">--</span>
           </div>
           <div class="text-right">
-            <span class="text-on-surface-variant block">Est. Liquidation Tax</span>
-            <span id="pf-kpi-est-tax" class="font-bold text-tertiary font-mono">--</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_est_liq_tax">Est. Liquidation Tax</span>
+            <span id="pf-kpi-est-tax" class="font-bold text-tertiary font-mono num-ltr">--</span>
           </div>
         </div>
       </div>
@@ -431,56 +507,50 @@ tailwind.config = {
       <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
         <div>
           <div class="flex justify-between items-center">
-            <span class="text-label-caps text-on-surface-variant font-bold">Israeli Tax Summary (₪ ILS)</span>
+            <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span data-i18n="kpi_il_tax_summary">Israeli Tax Summary (₪ ILS)</span>
+              <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
+            </span>
             <span class="material-symbols-outlined text-tertiary text-[18px]">gavel</span>
           </div>
           <div class="mt-1.5 flex items-baseline justify-between">
-            <span class="text-xs text-on-surface-variant">YTD Realized Tax Due:</span>
-            <span id="pf-tax-realized" class="text-xl font-extrabold text-tertiary font-mono">₪0.00</span>
+            <span class="text-xs text-on-surface-variant flex items-center">
+              <span data-i18n="kpi_ytd_tax_due">YTD Realized Tax Due:</span>
+              <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
+            </span>
+            <span id="pf-tax-realized" class="text-xl font-extrabold text-tertiary font-mono num-ltr">₪0.00</span>
           </div>
           <div class="mt-1 flex items-baseline justify-between text-xs">
-            <span class="text-on-surface-variant">Available Tax Shield:</span>
-            <span id="pf-tax-shield" class="font-bold text-secondary font-mono">₪0.00</span>
+            <span class="text-on-surface-variant flex items-center">
+              <span data-i18n="kpi_avail_tax_shield">Available Tax Shield:</span>
+              <span class="info-tooltip" data-term="YTD Tax Shield" tabindex="0">i</span>
+            </span>
+            <span id="pf-tax-shield" class="font-bold text-secondary font-mono num-ltr">₪0.00</span>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
           <div>
-            <span class="text-on-surface-variant block">Dividend Tax Paid</span>
-            <span id="pf-tax-div" class="font-bold text-on-surface font-mono">₪0.00</span>
+            <span class="text-on-surface-variant block" data-i18n="kpi_div_tax_paid">Dividend Tax Paid</span>
+            <span id="pf-tax-div" class="font-bold text-on-surface font-mono num-ltr">₪0.00</span>
           </div>
           <div class="text-right">
-            <span class="text-on-surface-variant block">Inflationary Exempt</span>
-            <span id="pf-tax-infl" class="font-bold text-primary font-mono">₪0.00</span>
+            <span class="text-on-surface-variant flex items-center justify-end">
+              <span data-i18n="kpi_infl_exempt">Inflationary Exempt</span>
+              <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span>
+            </span>
+            <span id="pf-tax-infl" class="font-bold text-primary font-mono num-ltr">₪0.00</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ILS Return Attribution & TLH Strip -->
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3 flex flex-col lg:flex-row justify-between lg:items-center gap-3 text-xs">
-      <div class="flex flex-wrap items-center gap-4">
-        <span class="text-label-caps text-on-surface-variant font-bold flex items-center gap-1">
-          <span class="material-symbols-outlined text-[14px] text-primary">pie_chart</span>
-          ILS Return Attribution:
-        </span>
-        <div><span class="text-on-surface-variant">Pure Asset:</span> <strong id="pf-attr-asset" class="font-mono text-on-surface">--</strong></div>
-        <div><span class="text-on-surface-variant">FX (USD/ILS) Drift:</span> <strong id="pf-attr-fx" class="font-mono text-on-surface">--</strong></div>
-        <div><span class="text-on-surface-variant">Tax &amp; Fee Drag:</span> <strong id="pf-attr-drag" class="font-mono text-tertiary">--</strong></div>
-        <div><span class="text-on-surface-variant">Net After-Tax TWR:</span> <strong id="pf-attr-net" class="font-mono text-secondary">--</strong></div>
-      </div>
-      <div id="pf-tlh-strip" class="flex items-center gap-2 text-[11px] text-on-surface-variant">
-        <span class="material-symbols-outlined text-[14px] text-secondary">tips_and_updates</span>
-        <span>Tax-Loss Harvesting: No unrealized real-loss positions detected.</span>
-      </div>
-    </div>
-
     <!-- 2. INTERACTIVE MULTI-BENCHMARK & TIME-SLICE CHART PANEL -->
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+    <div id="pf-chart-panel" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
       <!-- Top Chart Toolbar: Window Selector + Date Inputs + Mode Switcher -->
       <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-[#2a2a2a] pb-4">
         <!-- Time-Slice Window Buttons + Custom Dates -->
         <div class="flex flex-wrap items-center gap-2">
-          <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg" id="pf-window-btns">
+          <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg" id="pf-window-btns" dir="ltr">
             <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
             <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
             <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
@@ -491,347 +561,423 @@ tailwind.config = {
             <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ALL</button>
           </div>
           <div class="flex items-center gap-1.5 text-xs">
-            <input type="date" id="pf-start-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            <span class="text-on-surface-variant">to</span>
-            <input type="date" id="pf-end-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            <button onclick="applyCustomDateRange()" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
+            <input type="date" id="pf-start-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            <span class="text-on-surface-variant" data-i18n="lbl_to">to</span>
+            <input type="date" id="pf-end-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            <button onclick="applyCustomDateRange()" data-i18n="btn_apply" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
           </div>
         </div>
 
         <!-- Chart Mode Switcher -->
-        <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg">
-          <button id="pf-mode-TWR" onclick="setPortfolioChartMode('TWR')" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">Rebased TWR (%)</button>
-          <button id="pf-mode-WHAT_IF" onclick="setPortfolioChartMode('WHAT_IF')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">What-If Simulator (NAV)</button>
-          <button id="pf-mode-DRAWDOWN" onclick="setPortfolioChartMode('DRAWDOWN')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">Underwater Drawdown (%)</button>
+        <div class="flex flex-wrap items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg gap-0.5">
+          <div class="flex items-center">
+            <button id="pf-mode-TWR" onclick="setPortfolioChartMode('TWR')" data-i18n="mode_twr" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">Rebased TWR (%)</button>
+            <span class="info-tooltip me-1" data-term="TWR" tabindex="0">i</span>
+          </div>
+          <div class="flex items-center">
+            <button id="pf-mode-WHAT_IF" onclick="setPortfolioChartMode('WHAT_IF')" data-i18n="mode_whatif" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">What-If Simulator (NAV)</button>
+            <span class="info-tooltip me-1" data-term="What-If Opportunity Simulator" tabindex="0">i</span>
+          </div>
+          <div class="flex items-center">
+            <button id="pf-mode-DRAWDOWN" onclick="setPortfolioChartMode('DRAWDOWN')" data-i18n="mode_drawdown" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">Underwater Drawdown (%)</button>
+            <span class="info-tooltip me-1" data-term="Underwater Drawdown" tabindex="0">i</span>
+          </div>
         </div>
       </div>
 
       <!-- Benchmark Selector Bar -->
       <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-xs">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-label-caps text-on-surface-variant font-bold">Benchmarks (Max 3):</span>
-          <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all">SPY ✓</button>
-          <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all">QQQ ✓</button>
-          <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all">SMH</button>
-          <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all">LUMI.TA</button>
-          <div id="custom-bench-chips" class="flex items-center gap-1.5"></div>
-          <div class="flex items-center gap-1 ml-1">
-            <input type="text" id="pf-custom-bench-input" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary" />
-            <button onclick="addCustomBenchmark()" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
+          <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
+          <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
+          <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
+          <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
+          <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
+          <div id="custom-bench-chips" class="flex items-center gap-1.5 num-ltr"></div>
+          <div class="flex items-center gap-1 ms-1">
+            <input type="text" id="pf-custom-bench-input" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+            <button onclick="addCustomBenchmark()" data-i18n="btn_add" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
           </div>
         </div>
-        <div id="pf-chart-subtitle" class="text-[11px] text-on-surface-variant font-mono">Window: ALL</div>
+        <div id="pf-chart-subtitle" class="text-[11px] text-on-surface-variant font-mono num-ltr">Window: ALL</div>
       </div>
 
       <!-- Canvas Container -->
-      <div class="relative w-full bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3" style="height: 340px;">
+      <div class="relative w-full bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3" style="height: 340px;" dir="ltr">
         <canvas id="portfolio-main-chart"></canvas>
       </div>
 
-      <!-- What-If Opportunity Simulator Summary Strip -->
-      <div id="pf-whatif-banner" class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1"></div>
+      <!-- What-If Opportunity Simulator Summary Strip (Advanced View / What-If Mode) -->
+      <div id="pf-whatif-banner" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 pt-1"></div>
 
-      <!-- Slice Risk KPI Strip (7 Metrics) -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-[#2a2a2a]">
+      <!-- Slice Risk KPI Strip (7 Institutional Metrics — Revealed in Advanced Quant & Tax Lab) -->
+      <div id="pf-slice-risk-strip" class="hidden grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-[#2a2a2a]">
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Annualized TWR</span>
-          <span id="pf-slice-ann-ret" class="text-sm font-bold text-on-surface font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_ann_twr">Annualized TWR</span>
+            <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-ann-ret" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Volatility (Ann.)</span>
-          <span id="pf-slice-vol" class="text-sm font-bold text-on-surface font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_volatility">Volatility (Ann.)</span>
+            <span class="info-tooltip" data-term="Annualized Volatility" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-vol" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Sharpe Ratio</span>
-          <span id="pf-slice-sharpe" class="text-sm font-bold text-primary font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_sharpe">Sharpe Ratio</span>
+            <span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-sharpe" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Sortino Ratio</span>
-          <span id="pf-slice-sortino" class="text-sm font-bold text-primary font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_sortino">Sortino Ratio</span>
+            <span class="info-tooltip" data-term="Sortino Ratio" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-sortino" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Beta vs Bench</span>
-          <span id="pf-slice-beta" class="text-sm font-bold text-on-surface font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_beta_bench">Beta vs Bench</span>
+            <span class="info-tooltip" data-term="Beta" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-beta" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Jensen's Alpha</span>
-          <span id="pf-slice-alpha" class="text-sm font-bold text-secondary font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_jensens_alpha">Jensen's Alpha</span>
+            <span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-alpha" class="text-sm font-bold text-secondary font-mono mt-0.5 block num-ltr">--</span>
         </div>
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
-          <span class="text-[10px] text-on-surface-variant uppercase font-bold block">Max Drawdown</span>
-          <span id="pf-slice-maxdd" class="text-sm font-bold text-tertiary font-mono mt-0.5 block">--</span>
+          <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+            <span data-i18n="kpi_max_dd">Max Drawdown</span>
+            <span class="info-tooltip" data-term="MDD" tabindex="0">i</span>
+          </span>
+          <span id="pf-slice-maxdd" class="text-sm font-bold text-tertiary font-mono mt-0.5 block num-ltr">--</span>
         </div>
       </div>
     </div>
 
-    <!-- 2B. PHASE 6: PORTFOLIO FACTOR DNA RADAR & GICS SECTOR ATTRIBUTION -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Left Card: Portfolio Factor DNA Radar (C-FFI 16-Indicator Engine) -->
-      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-[#2a2a2a] pb-3">
-          <div>
+    <!-- =================================================================== -->
+    <!-- SCREEN 1: STANDARD OVERVIEW (Holdings Table + Record Transaction)   -->
+    <!-- =================================================================== -->
+    <div id="pf-view-standard" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left 2 Cols: Live Holdings Table & Expandable FIFO Tax Lots -->
+        <div class="lg:col-span-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+          <div class="px-5 py-4 border-b border-[#2a2a2a] flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div>
+              <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[18px]">layers</span>
+                <span data-i18n="holdings_title">Open Positions &amp; Expandable FIFO Tax Lots</span>
+                <span class="info-tooltip" data-term="FIFO Tax Lots" tabindex="0">i</span>
+              </h3>
+              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="holdings_subtitle">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
+            </div>
+            <span id="pf-positions-count" class="text-label-caps text-on-surface-variant">0 Open Positions</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
+                  <th class="px-4 py-3" data-i18n="th_ticker_sector">Ticker &amp; Sector</th>
+                  <th class="px-3 py-3 text-center">
+                    <span data-i18n="th_quant_score">Quant Score</span>
+                    <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+                  </th>
+                  <th class="px-3 py-3 text-center" data-i18n="th_native_ccy">Native CCY</th>
+                  <th class="px-3 py-3 text-right" data-i18n="th_quantity">Quantity</th>
+                  <th class="px-3 py-3 text-right">
+                    <span data-i18n="th_avg_cost">Avg Cost</span>
+                    <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
+                  </th>
+                  <th class="px-3 py-3 text-right" data-i18n="th_curr_price">Current Price</th>
+                  <th class="px-4 py-3 text-right" data-i18n="th_mkt_val">Market Value</th>
+                  <th class="px-3 py-3 text-right" data-i18n="th_weight">Weight</th>
+                  <th class="px-4 py-3 text-right" data-i18n="th_unr_gross">Unrealized Gross</th>
+                  <th class="px-3 py-3 text-right">
+                    <span data-i18n="th_est_tax">Est. Tax (25% Real)</span>
+                    <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
+                  </th>
+                  <th class="px-4 py-3 text-right" data-i18n="th_unr_net">Unrealized Net</th>
+                </tr>
+              </thead>
+              <tbody id="portfolio-holdings-body">
+                <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="loading_positions">Loading portfolio positions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right 1 Col: Add Transaction Form & CSV Import/Export -->
+        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+          <div class="border-b border-[#2a2a2a] pb-3">
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[18px]">radar</span>
-              Portfolio Factor DNA (C-FFI Engine)
+              <span class="material-symbols-outlined text-secondary text-[18px]">add_circle</span>
+              <span data-i18n="tx_form_title">Record Transaction</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5">Value-weighted 5-pillar &amp; 16-indicator profile vs. Market Universe Baseline.</p>
+            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_form_subtitle">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
           </div>
-          <div class="flex items-center gap-2">
-            <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant">Factor Coverage: --%</span>
-            <span id="pf-dna-score-badge" class="px-2.5 py-1 rounded-md bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary">Score: --</span>
+
+          <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-3 text-xs">
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_date">Date</label>
+                <input type="date" id="tx-date" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_action_type">Action Type</label>
+                <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                  <option value="DIVIDEND">DIVIDEND</option>
+                  <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
+                  <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_ticker_sym">Ticker Symbol</label>
+                <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_currency">Currency</label>
+                <select id="tx-currency" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
+                  <option value="AUTO" data-i18n="opt_ccy_auto">Auto (.TA → ILS, else USD)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="ILS">ILS (₪)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="th_quantity">Quantity</label>
+                <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_unit_price">Unit Price</label>
+                <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_fee_comm">Fee / Comm.</label>
+                <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_notes_opt">Notes (Optional)</label>
+              <input type="text" id="tx-notes" data-i18n-placeholder="ph_tx_notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
+            </div>
+
+            <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-md"></div>
+
+            <button type="submit" id="tx-submit-btn" data-i18n="btn_commit_tx" class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs py-2.5 px-4 rounded-lg transition-all shadow-sm">
+              + Commit Transaction to Ledger
+            </button>
+          </form>
+
+          <!-- CSV Import / Export / Clear Controls -->
+          <div class="border-t border-[#2a2a2a] pt-3 space-y-2">
+            <span class="text-[10px] font-bold uppercase text-on-surface-variant block" data-i18n="lbl_batch_csv">Batch CSV Operations</span>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="exportPortfolioCsv()" class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-[14px]">download</span>
+                <span data-i18n="btn_export_csv">Export CSV</span>
+              </button>
+              <label class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">upload</span>
+                <span data-i18n="btn_import_csv">Import CSV</span>
+                <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
+              </label>
+            </div>
+            <button type="button" onclick="clearPortfolioLedger()" data-i18n="btn_clear_tx" class="w-full px-3 py-1.5 rounded bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
+              Clear All Transactions
+            </button>
+            <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
+            <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- Radar Canvas -->
-        <div class="relative w-full flex items-center justify-center" style="height: 270px;">
-          <canvas id="portfolio-dna-radar-chart"></canvas>
+    <!-- =================================================================== -->
+    <!-- SCREEN 2: ADVANCED QUANT & TAX LAB (DNA Radar, Sector, TLH, Ledger) -->
+    <!-- =================================================================== -->
+    <div id="pf-view-advanced" class="hidden space-y-6">
+      <!-- ILS Return Attribution & TLH Strip -->
+      <div id="pf-attr-bar" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3 flex flex-col lg:flex-row justify-between lg:items-center gap-3 text-xs">
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="text-label-caps text-on-surface-variant font-bold flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px] text-primary">pie_chart</span>
+            <span data-i18n="lbl_ils_attr">ILS Return Attribution:</span>
+            <span class="info-tooltip" data-term="FX Attribution & Tax Drag" tabindex="0">i</span>
+          </span>
+          <div><span class="text-on-surface-variant" data-i18n="lbl_pure_asset">Pure Asset:</span> <strong id="pf-attr-asset" class="font-mono text-on-surface num-ltr">--</strong></div>
+          <div><span class="text-on-surface-variant" data-i18n="lbl_fx_drift">FX (USD/ILS) Drift:</span> <strong id="pf-attr-fx" class="font-mono text-on-surface num-ltr">--</strong></div>
+          <div><span class="text-on-surface-variant" data-i18n="lbl_tax_fee_drag">Tax &amp; Fee Drag:</span> <strong id="pf-attr-drag" class="font-mono text-tertiary num-ltr">--</strong></div>
+          <div><span class="text-on-surface-variant" data-i18n="lbl_net_after_tax_twr">Net After-Tax TWR:</span> <strong id="pf-attr-net" class="font-mono text-secondary num-ltr">--</strong></div>
         </div>
-
-        <!-- 5 Pillar Summary Chips -->
-        <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2 text-center pt-1"></div>
-
-        <!-- Expandable 16-Indicator Breakdown Drawer -->
-        <div class="border-t border-[#2a2a2a] pt-2.5">
-          <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs font-bold text-primary hover:text-on-surface transition-colors py-1">
-            <span>Inspect All 16 Normalized C-FFI Factor Exposures</span>
-            <span id="pf-dna-16-icon" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
-          </button>
-          <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1"></div>
+        <div id="pf-tlh-strip" class="flex items-center gap-2 text-[11px] text-on-surface-variant">
+          <span class="material-symbols-outlined text-[14px] text-secondary">tips_and_updates</span>
+          <span data-i18n="tlh_none_detected">Tax-Loss Harvesting: No unrealized real-loss positions detected.</span>
         </div>
       </div>
 
-      <!-- Right Card: GICS Sector Allocation & Return Attribution -->
-      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-        <div class="flex justify-between items-center border-b border-[#2a2a2a] pb-3">
+      <!-- PHASE 6: PORTFOLIO FACTOR DNA RADAR & GICS SECTOR ATTRIBUTION -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Card: Portfolio Factor DNA Radar (C-FFI 16-Indicator Engine) -->
+        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-[#2a2a2a] pb-3">
+            <div>
+              <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[18px]">radar</span>
+                <span data-i18n="dna_title">Portfolio Factor DNA (C-FFI Engine)</span>
+                <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+              </h3>
+              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="dna_subtitle">Value-weighted 5-pillar &amp; 16-indicator profile vs. Market Universe Baseline.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center">
+                <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">Factor Coverage: --%</span>
+                <span class="info-tooltip" data-term="Factor Coverage %" tabindex="0">i</span>
+              </span>
+              <span id="pf-dna-score-badge" class="px-2.5 py-1 rounded-md bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary num-ltr">Score: --</span>
+            </div>
+          </div>
+
+          <!-- Radar Canvas -->
+          <div class="relative w-full flex items-center justify-center" style="height: 270px;" dir="ltr">
+            <canvas id="portfolio-dna-radar-chart"></canvas>
+          </div>
+
+          <!-- 5 Pillar Summary Chips -->
+          <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2 text-center pt-1"></div>
+
+          <!-- Expandable 16-Indicator Breakdown Drawer -->
+          <div class="border-t border-[#2a2a2a] pt-2.5">
+            <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs font-bold text-primary hover:text-on-surface transition-colors py-1">
+              <span data-i18n="btn_inspect_16_dna">Inspect All 16 Normalized C-FFI Factor Exposures</span>
+              <span id="pf-dna-16-icon" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
+            </button>
+            <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+
+        <!-- Right Card: GICS Sector Allocation & Return Attribution -->
+        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+          <div class="flex justify-between items-center border-b border-[#2a2a2a] pb-3">
+            <div>
+              <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-secondary text-[18px]">donut_large</span>
+                <span data-i18n="sector_title">GICS Sector Allocation &amp; Attribution</span>
+              </h3>
+              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="sector_subtitle">Portfolio weight concentration, unrealized PnL contribution, and sector quant health.</p>
+            </div>
+            <span id="pf-sector-count-badge" class="text-label-caps text-on-surface-variant">0 Sectors</span>
+          </div>
+
+          <!-- Horizontal Bar Chart Canvas -->
+          <div class="relative w-full" style="height: 190px;" dir="ltr">
+            <canvas id="portfolio-sector-chart"></canvas>
+          </div>
+
+          <!-- Sector Breakdown Table -->
+          <div class="overflow-x-auto max-h-48 overflow-y-auto border border-[#262626] rounded-lg">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
+                <tr>
+                  <th class="py-2 px-3" data-i18n="th_gics_sector">GICS Sector</th>
+                  <th class="py-2 px-2 text-right" data-i18n="th_weight">Weight</th>
+                  <th class="py-2 px-3 text-right" data-i18n="th_mkt_val">Market Value</th>
+                  <th class="py-2 px-3 text-right" data-i18n="th_unr_gross">Unrealized PnL</th>
+                  <th class="py-2 px-2 text-center" data-i18n="th_quant_health">Quant Health</th>
+                </tr>
+              </thead>
+              <tbody id="pf-sector-table-body">
+                <tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs" data-i18n="no_sector_data">No sector data available.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHASE 6: INTERACTIVE ISRAELI TAX-LOSS HARVESTING (TLH) SIMULATOR -->
+      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-[#2a2a2a] pb-3">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-secondary text-[18px]">donut_large</span>
-              GICS Sector Allocation &amp; Attribution
+              <span class="material-symbols-outlined text-secondary text-[18px]">savings</span>
+              <span data-i18n="tlh_title">Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Section 92)</span>
+              <span class="info-tooltip" data-term="Tax-Loss Harvesting (TLH)" tabindex="0">i</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5">Portfolio weight concentration, unrealized PnL contribution, and sector quant health.</p>
+            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tlh_subtitle">Select open FIFO tax lots carrying a real ILS capital loss (real_loss_ils &lt; 0) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.</p>
           </div>
-          <span id="pf-sector-count-badge" class="text-label-caps text-on-surface-variant">0 Sectors</span>
+          <span id="pf-tlh-count-badge" class="px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-secondary text-label-caps">0 Harvestable Lots</span>
         </div>
 
-        <!-- Horizontal Bar / Doughnut Chart Canvas -->
-        <div class="relative w-full" style="height: 190px;">
-          <canvas id="portfolio-sector-chart"></canvas>
+        <!-- Simulated Tax Impact Ribbon -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_selected_loss">Selected Real Capital Loss</span>
+            <span id="tlh-sim-loss" class="text-lg font-extrabold text-tertiary font-mono mt-0.5 block num-ltr">₪0.00</span>
+          </div>
+          <div class="bg-surface-container/40 border border-secondary/30 rounded-lg p-3">
+            <span class="text-[10px] uppercase font-bold text-secondary flex items-center">
+              <span data-i18n="tlh_shield_gen">Immediate 25% Tax Shield Generated</span>
+              <span class="info-tooltip" data-term="YTD Tax Shield" tabindex="0">i</span>
+            </span>
+            <span id="tlh-sim-shield" class="text-lg font-extrabold text-secondary font-mono mt-0.5 block num-ltr">₪0.00</span>
+          </div>
+          <div class="bg-surface-container/40 border border-primary/30 rounded-lg p-3">
+            <span class="text-[10px] uppercase font-bold text-primary block" data-i18n="tlh_ytd_wiped">YTD Capital Gains Tax Wiped Out</span>
+            <span id="tlh-sim-ytd-wiped" class="text-lg font-extrabold text-primary font-mono mt-0.5 block num-ltr">₪0.00</span>
+          </div>
+          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_carry_forward">Carry-Forward Shield (Future Years)</span>
+            <span id="tlh-sim-carry" class="text-lg font-extrabold text-on-surface font-mono mt-0.5 block num-ltr">₪0.00</span>
+          </div>
         </div>
 
-        <!-- Sector Breakdown Table -->
-        <div class="overflow-x-auto max-h-48 overflow-y-auto border border-[#262626] rounded-lg">
+        <!-- Harvestable FIFO Lots Table -->
+        <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-xs">
-            <thead class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
-              <tr>
-                <th class="py-2 px-3">GICS Sector</th>
-                <th class="py-2 px-2 text-right">Weight</th>
-                <th class="py-2 px-3 text-right">Market Value</th>
-                <th class="py-2 px-3 text-right">Unrealized PnL</th>
-                <th class="py-2 px-2 text-center">Quant Health</th>
+            <thead>
+              <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
+                <th class="py-2.5 px-3 w-10 text-center" data-i18n="th_sim">Sim</th>
+                <th class="py-2.5 px-3" data-i18n="th_ticker_lot">Ticker &amp; Lot</th>
+                <th class="py-2.5 px-3" data-i18n="th_acq_date">Acquisition Date</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="th_quantity">Quantity</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="th_idx_cost">Indexed Cost (₪)</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="th_curr_proceeds">Current Proceeds (₪)</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="th_unr_real_loss">Unrealized Real Loss (₪)</th>
+                <th class="py-2.5 px-3 text-right" data-i18n="th_tax_shield_25">25% Tax Shield (₪)</th>
               </tr>
             </thead>
-            <tbody id="pf-sector-table-body">
-              <tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs">No sector data available.</td></tr>
+            <tbody id="portfolio-tlh-body">
+              <tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs" data-i18n="tlh_empty_table">No open FIFO lots with an unrealized real ILS loss detected.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- 2C. PHASE 6: INTERACTIVE ISRAELI TAX-LOSS HARVESTING (TLH) SIMULATOR -->
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
-      <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-[#2a2a2a] pb-3">
-        <div>
-          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary text-[18px]">savings</span>
-            Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Section 92)
-          </h3>
-          <p class="text-xs text-on-surface-variant mt-0.5">Select open FIFO tax lots carrying a real ILS capital loss (<code class="text-tertiary">real_loss_ils &lt; 0</code>) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.</p>
-        </div>
-        <span id="pf-tlh-count-badge" class="px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-secondary text-label-caps">0 Harvestable Lots</span>
-      </div>
-
-      <!-- Simulated Tax Impact Ribbon -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
-          <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Selected Real Capital Loss</span>
-          <span id="tlh-sim-loss" class="text-lg font-extrabold text-tertiary font-mono mt-0.5 block">₪0.00</span>
-        </div>
-        <div class="bg-surface-container/40 border border-secondary/30 rounded-lg p-3">
-          <span class="text-[10px] uppercase font-bold text-secondary block">Immediate 25% Tax Shield Generated</span>
-          <span id="tlh-sim-shield" class="text-lg font-extrabold text-secondary font-mono mt-0.5 block">₪0.00</span>
-        </div>
-        <div class="bg-surface-container/40 border border-primary/30 rounded-lg p-3">
-          <span class="text-[10px] uppercase font-bold text-primary block">YTD Capital Gains Tax Wiped Out</span>
-          <span id="tlh-sim-ytd-wiped" class="text-lg font-extrabold text-primary font-mono mt-0.5 block">₪0.00</span>
-        </div>
-        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
-          <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Carry-Forward Shield (Future Years)</span>
-          <span id="tlh-sim-carry" class="text-lg font-extrabold text-on-surface font-mono mt-0.5 block">₪0.00</span>
-        </div>
-      </div>
-
-      <!-- Harvestable FIFO Lots Table -->
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-              <th class="py-2.5 px-3 w-10 text-center">Sim</th>
-              <th class="py-2.5 px-3">Ticker &amp; Lot</th>
-              <th class="py-2.5 px-3">Acquisition Date</th>
-              <th class="py-2.5 px-3 text-right">Quantity</th>
-              <th class="py-2.5 px-3 text-right">Indexed Cost (₪)</th>
-              <th class="py-2.5 px-3 text-right">Current Proceeds (₪)</th>
-              <th class="py-2.5 px-3 text-right">Unrealized Real Loss (₪)</th>
-              <th class="py-2.5 px-3 text-right">25% Tax Shield (₪)</th>
-            </tr>
-          </thead>
-          <tbody id="portfolio-tlh-body">
-            <tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs">No open FIFO lots with an unrealized real ILS loss detected.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 3. LIVE HOLDINGS TABLE & EXPANDABLE FIFO TAX LOTS -->
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
-      <div class="px-5 py-4 border-b border-[#2a2a2a] flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-        <div>
-          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-[18px]">layers</span>
-            Open Positions &amp; Expandable FIFO Tax Lots
-          </h3>
-          <p class="text-xs text-on-surface-variant mt-0.5">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
-        </div>
-        <span id="pf-positions-count" class="text-label-caps text-on-surface-variant">0 Open Positions</span>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-              <th class="px-4 py-3">Ticker &amp; Sector</th>
-              <th class="px-3 py-3 text-center">Quant Score</th>
-              <th class="px-3 py-3 text-center">Native CCY</th>
-              <th class="px-3 py-3 text-right">Quantity</th>
-              <th class="px-3 py-3 text-right">Avg Cost</th>
-              <th class="px-3 py-3 text-right">Current Price</th>
-              <th class="px-4 py-3 text-right">Market Value</th>
-              <th class="px-3 py-3 text-right">Weight</th>
-              <th class="px-4 py-3 text-right">Unrealized Gross</th>
-              <th class="px-3 py-3 text-right">Est. Tax (25% Real)</th>
-              <th class="px-4 py-3 text-right">Unrealized Net</th>
-            </tr>
-          </thead>
-          <tbody id="portfolio-holdings-body">
-            <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs">Loading portfolio positions...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 4. TRANSACTION MANAGER & LEDGER HISTORY -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Left Col: Add Transaction Form & CSV Import/Export -->
-      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
-        <div class="border-b border-[#2a2a2a] pb-3">
-          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary text-[18px]">add_circle</span>
-            Record Transaction
-          </h3>
-          <p class="text-xs text-on-surface-variant mt-0.5">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
-        </div>
-
-        <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-3 text-xs">
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Date</label>
-              <input type="date" id="tx-date" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Action Type</label>
-              <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
-                <option value="DIVIDEND">DIVIDEND</option>
-                <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
-                <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Ticker Symbol</label>
-              <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface uppercase focus:outline-none focus:border-primary" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Currency</label>
-              <select id="tx-currency" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                <option value="AUTO">Auto (.TA → ILS, else USD)</option>
-                <option value="USD">USD ($)</option>
-                <option value="ILS">ILS (₪)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Quantity</label>
-              <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Unit Price</label>
-              <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Fee / Comm.</label>
-              <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            </div>
-          </div>
-
-          <div>
-            <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Notes (Optional)</label>
-            <input type="text" id="tx-notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-          </div>
-
-          <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-md"></div>
-
-          <button type="submit" id="tx-submit-btn" class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs py-2.5 px-4 rounded-lg transition-all shadow-sm">
-            + Commit Transaction to Ledger
-          </button>
-        </form>
-
-        <!-- CSV Import / Export / Clear Controls -->
-        <div class="border-t border-[#2a2a2a] pt-3 space-y-2">
-          <span class="text-[10px] font-bold uppercase text-on-surface-variant block">Batch CSV Operations</span>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="exportPortfolioCsv()" class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center justify-center gap-1.5">
-              <span class="material-symbols-outlined text-[14px]">download</span>
-              Export CSV
-            </button>
-            <label class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-              <span class="material-symbols-outlined text-[14px]">upload</span>
-              Import CSV
-              <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
-            </label>
-          </div>
-          <button type="button" onclick="clearPortfolioLedger()" class="w-full px-3 py-1.5 rounded bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
-            Clear All Transactions
-          </button>
-          <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
-          <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
-        </div>
-      </div>
-
-      <!-- Right 2 Cols: Transaction History Table -->
-      <div class="lg:col-span-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col">
+      <!-- Full Chronological Transaction History Table -->
+      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col">
         <div class="px-5 py-4 border-b border-[#2a2a2a] flex justify-between items-center">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
               <span class="material-symbols-outlined text-primary text-[18px]">receipt_long</span>
-              Transaction Ledger History
+              <span data-i18n="tx_history_title">Transaction Ledger History</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5">Chronological audit trail of all trades, dividends, and cash flows.</p>
+            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_history_subtitle">Chronological audit trail of all trades, dividends, and cash flows.</p>
           </div>
           <span id="pf-tx-count" class="text-label-caps text-on-surface-variant">0 Transactions</span>
         </div>
@@ -839,19 +985,19 @@ tailwind.config = {
           <table class="w-full text-left border-collapse">
             <thead class="sticky top-0 bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold z-10">
               <tr>
-                <th class="px-3 py-2.5">Date</th>
-                <th class="px-3 py-2.5">Type</th>
-                <th class="px-3 py-2.5">Ticker</th>
-                <th class="px-3 py-2.5 text-right">Qty</th>
-                <th class="px-3 py-2.5 text-right">Price</th>
-                <th class="px-3 py-2.5 text-right">Fee</th>
-                <th class="px-3 py-2.5 text-center">CCY</th>
-                <th class="px-3 py-2.5">Notes</th>
-                <th class="px-3 py-2.5 text-center">Action</th>
+                <th class="px-3 py-2.5" data-i18n="lbl_date">Date</th>
+                <th class="px-3 py-2.5" data-i18n="th_type">Type</th>
+                <th class="px-3 py-2.5" data-i18n="th_ticker">Ticker</th>
+                <th class="px-3 py-2.5 text-right" data-i18n="th_qty">Qty</th>
+                <th class="px-3 py-2.5 text-right" data-i18n="th_price">Price</th>
+                <th class="px-3 py-2.5 text-right" data-i18n="th_fee">Fee</th>
+                <th class="px-3 py-2.5 text-center" data-i18n="th_ccy">CCY</th>
+                <th class="px-3 py-2.5" data-i18n="th_notes">Notes</th>
+                <th class="px-3 py-2.5 text-center" data-i18n="th_action">Action</th>
               </tr>
             </thead>
             <tbody id="portfolio-tx-body">
-              <tr><td colspan="9" class="px-4 py-8 text-center text-on-surface-variant text-xs">No transactions recorded yet.</td></tr>
+              <tr><td colspan="9" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="no_tx_yet">No transactions recorded yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1065,13 +1211,10 @@ function toggleSlidersDrawer() {
       <div class="flex justify-between items-center mb-1">
         <div class="flex items-center gap-1.5">
           <span class="material-symbols-outlined text-outline" style="font-size:14px">${ind.icon}</span>
-          <span class="text-body-md text-on-surface">${ind.label}</span>
-          <span class="tooltip-wrap">
-            <span class="text-outline text-[10px] font-bold cursor-help select-none">(?)</span>
-            <span class="tip">${ind.tip}</span>
-          </span>
+          <span class="text-body-md text-on-surface" data-ind-col="${ind.col}">${ind.label}</span>
+          <span class="info-tooltip" data-term="${ind.col}" tabindex="0">i</span>
         </div>
-        <span class="text-data-display text-primary text-[13px] font-bold tabular-nums" id="val-${ind.id}">0</span>
+        <span class="text-data-display text-primary text-[13px] font-bold tabular-nums num-ltr" id="val-${ind.id}">0</span>
       </div>
       <input type="range" id="${ind.id}" min="0" max="100" value="0"
         class="w-full focus:outline-none"
@@ -1567,10 +1710,437 @@ function renderBacktestChart(series) {
 }
 
 // ============================================================================
-// PHASE 5: PORTFOLIO INTELLIGENCE FRONTEND WORKSPACE CONTROLLER
+// BILINGUAL I18N DICTIONARY (EN / HE), TOOLTIPS & PROGRESSIVE DISCLOSURE
+// ============================================================================
+const I18N = {
+  en: {
+    app_title: 'Financial Intelligence Dashboard',
+    tab_screener: 'Screener & Backtester',
+    tab_portfolio: 'Portfolio Intelligence',
+    live_data: 'Live Data',
+    sidebar_subtitle: 'Market Intelligence v3.3',
+    investment_profiles: 'INVESTMENT PROFILES',
+    prof_deep_value: 'Deep Value',
+    prof_hyper_growth: 'Hyper-Growth',
+    prof_momentum: 'Momentum',
+    prof_income: 'Income',
+    prof_quality: 'Quality',
+    universe_filters: 'UNIVERSE FILTERS',
+    allowed_sectors: 'Allowed Sectors',
+    all_sectors: 'All Sectors',
+    min_cap: 'Min Cap ($B)',
+    max_cap: 'Max Cap ($B)',
+    model_parameters: 'Model Parameters (16)',
+    btn_calculate_score: '⚡ Calculate Score',
+    screener_title: 'Algorithm Results',
+    screener_subtitle: 'Top ranking equities scored by the C-engine weighted dot product.',
+    tier_standard: 'Standard Overview',
+    tier_advanced: 'Advanced Quant & Tax Lab',
+    tier_advanced_bt: 'Advanced Backtest Lab',
+    th_ticker: 'Ticker',
+    th_profile: 'Profile',
+    th_score: 'Score',
+    screener_empty_prompt: 'Set your weights and click Calculate Score to rank all stocks.',
+    no_results_yet: 'No results yet',
+    btn_load_more: 'Load 10 More',
+    btn_show_all: 'Show All',
+    btn_hide_all: 'Hide All',
+    c_engine_footer: 'C Engine · QuickSort · Sector-Neutral Sigmoid',
+    bt_title: 'Historical Backtesting Dashboard',
+    bt_subtitle: 'Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.',
+    bt_3y: '3 Years',
+    bt_5y: '5 Years',
+    btn_run_backtest: '📊 Run Trailing Backtest',
+    bt_helper_msg: 'Rank stocks to generate a portfolio before running a backtest.',
+    bt_chart_title: 'Trailing Cumulative Performance',
+    lbl_portfolio: 'Portfolio',
+    lbl_spy_bench: 'SPY Benchmark',
+    bt_key_metrics: 'Key Portfolio Metrics',
+    lbl_sharpe_ratio: 'Annualized Sharpe Ratio',
+    lbl_max_drawdown: 'Maximum Drawdown',
+    lbl_excess_alpha: 'Total Excess Return (Alpha)',
+    pf_title: 'Portfolio Intelligence & Tax Engine',
+    pf_subtitle: 'Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.',
+    btn_seed_demo: 'Seed Sample Ledger',
+    btn_refresh: 'Refresh',
+    kpi_total_nav: 'Total Portfolio NAV',
+    kpi_net_after_tax: 'Net After Tax:',
+    kpi_invested_holdings: 'Invested Holdings',
+    kpi_cash_balance: 'Cash Balance',
+    kpi_twr_vs_mwr: 'TWR vs. MWR (XIRR)',
+    kpi_cum_twr: 'Cumulative TWR',
+    kpi_xirr_ann: 'XIRR (Ann.)',
+    kpi_ann_twr: 'Annualized TWR',
+    kpi_mod_dietz: 'Modified Dietz',
+    kpi_unr_ytd_pnl: 'Unrealized & YTD PnL',
+    kpi_net_unr_after_tax: 'Net Unrealized (After Tax):',
+    kpi_real_ytd_pnl: 'Realized YTD PnL',
+    kpi_est_liq_tax: 'Est. Liquidation Tax',
+    kpi_il_tax_summary: 'Israeli Tax Summary (₪ ILS)',
+    kpi_ytd_tax_due: 'YTD Realized Tax Due:',
+    kpi_avail_tax_shield: 'Available Tax Shield:',
+    kpi_div_tax_paid: 'Dividend Tax Paid',
+    kpi_infl_exempt: 'Inflationary Exempt',
+    lbl_ils_attr: 'ILS Return Attribution:',
+    lbl_pure_asset: 'Pure Asset:',
+    lbl_fx_drift: 'FX (USD/ILS) Drift:',
+    lbl_tax_fee_drag: 'Tax & Fee Drag:',
+    lbl_net_after_tax_twr: 'Net After-Tax TWR:',
+    tlh_none_detected: 'Tax-Loss Harvesting: No unrealized real-loss positions detected.',
+    lbl_to: 'to',
+    btn_apply: 'Apply',
+    mode_twr: 'Rebased TWR (%)',
+    mode_whatif: 'What-If Simulator (NAV)',
+    mode_drawdown: 'Underwater Drawdown (%)',
+    lbl_benchmarks: 'Benchmarks (Max 3):',
+    ph_custom_bench: '+ Ticker (e.g. AAPL)',
+    btn_add: 'Add',
+    kpi_volatility: 'Volatility (Ann.)',
+    kpi_sharpe: 'Sharpe Ratio',
+    kpi_sortino: 'Sortino Ratio',
+    kpi_beta_bench: 'Beta vs Bench',
+    kpi_jensens_alpha: "Jensen's Alpha",
+    kpi_max_dd: 'Max Drawdown',
+    dna_title: 'Portfolio Factor DNA (C-FFI Engine)',
+    dna_subtitle: 'Value-weighted 5-pillar & 16-indicator profile vs. Market Universe Baseline.',
+    btn_inspect_16_dna: 'Inspect All 16 Normalized C-FFI Factor Exposures',
+    sector_title: 'GICS Sector Allocation & Attribution',
+    sector_subtitle: 'Portfolio weight concentration, unrealized PnL contribution, and sector quant health.',
+    th_gics_sector: 'GICS Sector',
+    th_weight: 'Weight',
+    th_mkt_val: 'Market Value',
+    th_unr_gross: 'Unrealized Gross',
+    th_quant_health: 'Quant Health',
+    no_sector_data: 'No sector data available.',
+    tlh_title: 'Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Section 92)',
+    tlh_subtitle: 'Select open FIFO tax lots carrying a real ILS capital loss (real_loss_ils < 0) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.',
+    tlh_selected_loss: 'Selected Real Capital Loss',
+    tlh_shield_gen: 'Immediate 25% Tax Shield Generated',
+    tlh_ytd_wiped: 'YTD Capital Gains Tax Wiped Out',
+    tlh_carry_forward: 'Carry-Forward Shield (Future Years)',
+    th_sim: 'Sim',
+    th_ticker_lot: 'Ticker & Lot',
+    th_acq_date: 'Acquisition Date',
+    th_quantity: 'Quantity',
+    th_idx_cost: 'Indexed Cost (₪)',
+    th_curr_proceeds: 'Current Proceeds (₪)',
+    th_unr_real_loss: 'Unrealized Real Loss (₪)',
+    th_tax_shield_25: '25% Tax Shield (₪)',
+    tlh_empty_table: 'No open FIFO lots with an unrealized real ILS loss detected.',
+    holdings_title: 'Open Positions & Expandable FIFO Tax Lots',
+    holdings_subtitle: 'Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.',
+    th_ticker_sector: 'Ticker & Sector',
+    th_quant_score: 'Quant Score',
+    th_native_ccy: 'Native CCY',
+    th_avg_cost: 'Avg Cost',
+    th_curr_price: 'Current Price',
+    th_est_tax: 'Est. Tax (25% Real)',
+    th_unr_net: 'Unrealized Net',
+    loading_positions: 'Loading portfolio positions...',
+    tx_form_title: 'Record Transaction',
+    tx_form_subtitle: 'Add equity trades, dividends, or cash movements to the persistent ledger.',
+    lbl_date: 'Date',
+    lbl_action_type: 'Action Type',
+    lbl_ticker_sym: 'Ticker Symbol',
+    lbl_currency: 'Currency',
+    opt_ccy_auto: 'Auto (.TA → ILS, else USD)',
+    lbl_unit_price: 'Unit Price',
+    lbl_fee_comm: 'Fee / Comm.',
+    lbl_notes_opt: 'Notes (Optional)',
+    ph_tx_notes: 'Strategy / tax lot memo',
+    btn_commit_tx: '+ Commit Transaction to Ledger',
+    lbl_batch_csv: 'Batch CSV Operations',
+    btn_export_csv: 'Export CSV',
+    btn_import_csv: 'Import CSV',
+    btn_clear_tx: 'Clear All Transactions',
+    tx_history_title: 'Transaction Ledger History',
+    tx_history_subtitle: 'Chronological audit trail of all trades, dividends, and cash flows.',
+    th_type: 'Type',
+    th_qty: 'Qty',
+    th_price: 'Price',
+    th_fee: 'Fee',
+    th_ccy: 'CCY',
+    th_notes: 'Notes',
+    th_action: 'Action',
+    no_tx_yet: 'No transactions recorded yet.',
+    as_of_prefix: 'As of',
+    open_positions_suffix: 'Open Positions',
+    sectors_suffix: 'Sectors',
+    harvestable_lots_suffix: 'Harvestable Lots',
+    transactions_suffix: 'Transactions',
+    factor_coverage_prefix: 'Factor Coverage',
+    c_ffi_score_prefix: 'C-FFI Score'
+  },
+  he: {
+    app_title: 'לוח בקרה פיננסי ומודיעין השקעות',
+    tab_screener: 'סורק מניות ובק-טסט',
+    tab_portfolio: 'מודיעין תיק השקעות ומיסוי',
+    live_data: 'נתונים בזמן אמת',
+    sidebar_subtitle: 'מודיעין שוק v3.3',
+    investment_profiles: 'פרופילי השקעה מובנים',
+    prof_deep_value: 'ערך עמוק',
+    prof_hyper_growth: 'צמיחה מואצת',
+    prof_momentum: 'מומנטום',
+    prof_income: 'הכנסה ודיבידנד',
+    prof_quality: 'איכות ורווחיות',
+    universe_filters: 'סינון יקום המניות',
+    allowed_sectors: 'סקטורים מותרים (GICS)',
+    all_sectors: 'כל הסקטורים',
+    min_cap: 'שווי שוק מינ׳ ($B)',
+    max_cap: 'שווי שוק מקס׳ ($B)',
+    model_parameters: 'משקולות מודל (16 פקטורים)',
+    btn_calculate_score: '⚡ חשב דירוג כמותי',
+    screener_title: 'תוצאות דירוג אלגוריתמי',
+    screener_subtitle: 'המניות המובילות בדירוג מנוע ה-C המהיר לפי מכפלה פנימית משוקללת.',
+    tier_standard: 'תצוגה סטנדרטית',
+    tier_advanced: 'מעבדת קוואנט ומיסוי מתקדמת',
+    tier_advanced_bt: 'מעבדת בק-טסט וקוואנט',
+    th_ticker: 'סימול',
+    th_profile: 'פרופיל',
+    th_score: 'ציון כמותי',
+    screener_empty_prompt: 'הגדר משקולות ולחץ על "חשב דירוג כמותי" כדי לדרג את המניות.',
+    no_results_yet: 'טרם חושבו תוצאות',
+    btn_load_more: 'טען 10 נוספות',
+    btn_show_all: 'הצג הכל',
+    btn_hide_all: 'צמצם רשימה',
+    c_engine_footer: 'מנוע C · מיון מהיר · נרמול סיגמואיד סקטוריאלי',
+    bt_title: 'סימולציית בק-טסט היסטורית',
+    bt_subtitle: 'הדמיית תשואת תיק שווה-משקל של 10 המניות המובילות מול מדד הייחוס SPY.',
+    bt_3y: '3 שנים',
+    bt_5y: '5 שנים',
+    btn_run_backtest: '📊 הרץ סימולציית בק-טסט',
+    bt_helper_msg: 'דרג מניות תחילה כדי להריץ סימולציית בק-טסט היסטורית.',
+    bt_chart_title: 'תשואה מצטברת היסטורית',
+    lbl_portfolio: 'תיק השקעות',
+    lbl_spy_bench: 'מדד SPY',
+    bt_key_metrics: 'מדדי סיכון וביצוע מרכזיים',
+    lbl_sharpe_ratio: 'מדד שארפ שנתי',
+    lbl_max_drawdown: 'ירידה מקסימלית (MDD)',
+    lbl_excess_alpha: 'תשואה עודפת מצטברת (אלפא)',
+    pf_title: 'מודיעין תיק השקעות ומנוע מס ישראלי',
+    pf_subtitle: 'ניהול שכבות מס FIFO דו-מטבעי (חלק ה׳ סעיף 88), ייחוס תשואות TWR מול XIRR וסימולציית השוואת תזרימים.',
+    btn_seed_demo: 'טען תיק לדוגמה',
+    btn_refresh: 'רענן נתונים',
+    kpi_total_nav: 'שווי תיק כולל (NAV)',
+    kpi_net_after_tax: 'שווי נטו לאחר מס:',
+    kpi_invested_holdings: 'שווי אחזקות בני״ע',
+    kpi_cash_balance: 'יתרת מזומן',
+    kpi_twr_vs_mwr: 'תשואת TWR מול XIRR',
+    kpi_cum_twr: 'TWR מצטבר',
+    kpi_xirr_ann: 'XIRR (שנתי)',
+    kpi_ann_twr: 'TWR שנתי',
+    kpi_mod_dietz: 'דיץ מתוקן (Dietz)',
+    kpi_unr_ytd_pnl: 'רווח לא-ממומש ורווח השנה',
+    kpi_net_unr_after_tax: 'רווח לא-ממומש נטו (אחרי מס):',
+    kpi_real_ytd_pnl: 'רווח ממומש מתחילת השנה',
+    kpi_est_liq_tax: 'אומדן מס פדיון (25%)',
+    kpi_il_tax_summary: 'סיכום מס רווחי הון (₪ ILS)',
+    kpi_ytd_tax_due: 'חבות מס ממומשת השנה:',
+    kpi_avail_tax_shield: 'מגן מס זמין לקיזוז:',
+    kpi_div_tax_paid: 'מס דיבידנד שנוכה (25%)',
+    kpi_infl_exempt: 'רווח אינפלציוני פטור',
+    lbl_ils_attr: 'פירוק תשואה שקלית (ILS):',
+    lbl_pure_asset: 'תשואת נכס נטו:',
+    lbl_fx_drift: 'השפעת שער חליפין (USD/ILS):',
+    lbl_tax_fee_drag: 'שחיקת מס ועמלות:',
+    lbl_net_after_tax_twr: 'TWR נטו לאחר מס:',
+    tlh_none_detected: 'קיזוז הפסדים (TLH): לא נמצאו שכבות בהפסד ריאלי.',
+    lbl_to: 'עד',
+    btn_apply: 'החל',
+    mode_twr: 'תשואת TWR מנורמלת (%)',
+    mode_whatif: 'סימולטור חלופה (What-If NAV)',
+    mode_drawdown: 'עומק ירידה מהשיא (Drawdown %)',
+    lbl_benchmarks: 'מדדי השוואה (עד 3):',
+    ph_custom_bench: '+ סימול (למשל AAPL)',
+    btn_add: 'הוסף',
+    kpi_volatility: 'תנודתיות שנתית',
+    kpi_sharpe: 'מדד שארפ',
+    kpi_sortino: 'מדד סורטינו',
+    kpi_beta_bench: 'בטא מול השוק',
+    kpi_jensens_alpha: 'אלפא של ג׳נסן',
+    kpi_max_dd: 'ירידה מקסימלית (MDD)',
+    dna_title: 'פרופיל DNA כמותי של התיק (מנוע C-FFI)',
+    dna_subtitle: 'חשיפה משוקללת-שווי ל-5 עמודי תווך ו-16 אינדיקטורים לעומת ממוצע השוק.',
+    btn_inspect_16_dna: 'הצג פירוט מלא של 16 אינדיקטורי C-FFI מנורמלים',
+    sector_title: 'הקצאת סקטורים (GICS) וייחוס רווחים',
+    sector_subtitle: 'ריכוזיות משקל בתיק, תרומה לרווח הלא-ממומש וציון בריאות כמותי לכל סקטור.',
+    th_gics_sector: 'סקטור GICS',
+    th_weight: 'משקל',
+    th_mkt_val: 'שווי שוק',
+    th_unr_gross: 'רווח גולמי',
+    th_quant_health: 'ציון כמותי',
+    no_sector_data: 'אין נתוני סקטורים להצגה.',
+    tlh_title: 'סימולטור קצירת הפסדי מס (TLH — סעיף 92 לפקודה)',
+    tlh_subtitle: 'בחר שכבות FIFO הפסדיות במונחים ריאליים (real_loss_ils < 0) להדמיית יצירת מגן מס מיידי (25%) וקיזוז חבות המס השנתית.',
+    tlh_selected_loss: 'הפסד הון ריאלי שנבחר',
+    tlh_shield_gen: 'מגן מס מיידי שנוצר (25%)',
+    tlh_ytd_wiped: 'מס רווחי הון השנה שקוזז',
+    tlh_carry_forward: 'יתרת מגן מס להעברה לשנים הבאות',
+    th_sim: 'בחר',
+    th_ticker_lot: 'סימול ושכבה',
+    th_acq_date: 'תאריך רכישה',
+    th_quantity: 'כמות',
+    th_idx_cost: 'עלות מתואמת (₪)',
+    th_curr_proceeds: 'תמורה נוכחית (₪)',
+    th_unr_real_loss: 'הפסד ריאלי (₪)',
+    th_tax_shield_25: 'מגן מס 25% (₪)',
+    tlh_empty_table: 'לא נמצאו שכבות פתוחות עם הפסד הון ריאלי בשקלים.',
+    holdings_title: 'אחזקות פתוחות ושכבות מס FIFO מתרחבות',
+    holdings_subtitle: 'לחץ על כל שורת נייר ערך לפתיחת שכבות הרכישה (FIFO), הצמדת מט״ח/מדד, פיצול רווח אינפלציוני מול ריאלי ואומדן מס (סעיף 88).',
+    th_ticker_sector: 'סימול וסקטור',
+    th_quant_score: 'ציון קוואנט',
+    th_native_ccy: 'מטבע מקור',
+    th_avg_cost: 'מחיר ממוצע',
+    th_curr_price: 'מחיר נוכחי',
+    th_est_tax: 'אומדן מס (25% ריאלי)',
+    th_unr_net: 'רווח נטו',
+    loading_positions: 'טוען אחזקות תיק...',
+    tx_form_title: 'תיעוד עסקה חדשה',
+    tx_form_subtitle: 'הוסף קנייה, מכירה, דיבידנד או הפקדת/משיכת מזומן ליומן העסקאות.',
+    lbl_date: 'תאריך',
+    lbl_action_type: 'סוג פעולה',
+    lbl_ticker_sym: 'סימול נייר (Ticker)',
+    lbl_currency: 'מטבע',
+    opt_ccy_auto: 'אוטומטי (.TA ← ₪, אחרת $)',
+    lbl_unit_price: 'מחיר יחידה',
+    lbl_fee_comm: 'עמלה',
+    lbl_notes_opt: 'הערות (אופציונלי)',
+    ph_tx_notes: 'אסטרטגיה / הערת שכבת מס',
+    btn_commit_tx: '+ שמור עסקה ביומן התיק',
+    lbl_batch_csv: 'ייבוא וייצוא קובצי CSV',
+    btn_export_csv: 'ייצוא CSV',
+    btn_import_csv: 'ייבוא CSV',
+    btn_clear_tx: 'נקה את כל העסקאות',
+    tx_history_title: 'היסטוריית יומן עסקאות מלאה',
+    tx_history_subtitle: 'תיעוד כרונולוגי מבוקר של כלל העסקאות, הדיבידנדים ותנועות המזומן.',
+    th_type: 'סוג',
+    th_qty: 'כמות',
+    th_price: 'מחיר',
+    th_fee: 'עמלה',
+    th_ccy: 'מטבע',
+    th_notes: 'הערות',
+    th_action: 'פעולה',
+    no_tx_yet: 'טרם נרשמו עסקאות בתיק.',
+    as_of_prefix: 'נכון ל-',
+    open_positions_suffix: 'פוזיציות פתוחות',
+    sectors_suffix: 'סקטורים',
+    harvestable_lots_suffix: 'שכבות לקיזוז',
+    transactions_suffix: 'עסקאות',
+    factor_coverage_prefix: 'כיסוי פקטורים',
+    c_ffi_score_prefix: 'ציון C-FFI'
+  }
+};
+
+// Contextual Info (i) Bilingual Tooltip Dictionary
+const TOOLTIPS = {
+  en: {
+    // Portfolio & Return Metrics
+    'NAV': 'Net Asset Value — total market value of all open equity positions plus uninvested cash balances in the selected display currency.',
+    'Net Liquidation NAV': 'Estimated liquidation value after deducting 25% Israeli statutory tax on net unrealized real capital gains (offset by available YTD loss shields).',
+    'TWR': 'Time-Weighted Return — compounds daily sub-period returns while neutralizing external cash-flow timing, enabling fair comparison against market benchmarks.',
+    'MWR / XIRR': 'Money-Weighted Return (Annualized XIRR) — internal rate of return accounting for the exact timing and size of every deposit, purchase, and sale.',
+    'What-If Opportunity Simulator': 'Cash-flow matched benchmark simulation: models the exact terminal NAV you would have achieved if every historical trade had been invested in the benchmark on the same date.',
+    'Underwater Drawdown': 'Percentage decline from the portfolio’s historical peak cumulative TWR value at each point in time.',
+    'MDD': 'Maximum Drawdown — worst peak-to-trough percentage decline experienced during the selected time window.',
+    'Sharpe Ratio': 'Annualized excess return over the 4.0% risk-free rate divided by annualized portfolio volatility.',
+    'Sortino Ratio': 'Risk-adjusted return metric that penalizes only downside volatility (negative return days) relative to the 4.0% risk-free rate.',
+    'Beta': 'Sensitivity of daily portfolio returns to movements in the primary benchmark (Beta = 1.0 moves in line with the market).',
+    "Jensen's Alpha": 'Annualized excess return generated above the return predicted by CAPM given the portfolio’s Beta and benchmark performance.',
+    'Annualized Volatility': 'Standard deviation of daily portfolio returns scaled by √252 trading days per year.',
+    // Israeli Tax & Dual-Currency Terms
+    'FIFO Tax Lots': 'First-In, First-Out accounting queues — Israeli tax law mandates that the earliest acquired shares of a security are sold first.',
+    'Original vs. Adjusted Cost Basis': 'Under Israeli Part E (Section 88), original cost in ILS is indexed to USD/ILS exchange rate changes for foreign assets or to the Known Israeli CPI ("המדד הידוע") for TASE (.TA) assets.',
+    'Inflationary Exempt Gain': 'Portion of nominal ILS gain attributable purely to USD/ILS currency appreciation or Israeli CPI inflation; exempt from capital gains tax (0% rate).',
+    'Real Taxable Gain': 'Gain exceeding the FX- or CPI-adjusted cost basis in ILS, subject to the 25% Israeli real capital gains tax rate.',
+    'YTD Tax Shield': 'Accumulated realized real capital losses (and carried-forward losses) available to offset taxable real capital gains shekel-for-shekel.',
+    'Tax-Loss Harvesting (TLH)': 'Strategic realization of open FIFO lots carrying a real ILS loss (Section 92) to generate an immediate 25% tax shield against current or future gains.',
+    'FX Attribution & Tax Drag': 'Decomposes total ILS return into pure local-currency asset performance, USD/ILS exchange rate drift, and brokerage fee + Israeli tax drag.',
+    // Screener & Quant DNA Terms
+    'C-FFI Quant Score': 'Composite [0, 100] score computed in microseconds by the compiled C kernel (libsortbuslines.so) via an 80-byte aligned struct weighted dot product.',
+    'Factor Coverage %': 'Percentage of total invested portfolio market value covered by the 16-indicator institutional fundamental dataset (ETFs and TASE holdings are excluded from factor averaging to prevent zero-bias).',
+    'Goldilocks Normalization': 'Bell-curve Gaussian decay transformation that rewards optimal target zones (e.g. moderate payout ratios or neutral RSI) and penalizes extreme tails.',
+    'Sector-Neutral Sigmoid Z-Score': 'Normalizes company metrics relative to GICS sector peers using median/IQR Z-scores mapped through a logistic sigmoid into [0, 100].',
+    'Valuation': 'Factor Pillar combining Trailing P/E, EV/EBITDA, and Free Cash Flow Yield to measure price attractiveness relative to intrinsic cash generation.',
+    'Growth': 'Factor Pillar combining YoY Revenue Growth and EPS Growth to capture top- and bottom-line expansion momentum.',
+    'Quality': 'Factor Pillar combining Gross Margin, Operating Margin, and ROIC to evaluate moat durability, pricing power, and capital efficiency.',
+    'Safety & Income': 'Factor Pillar combining Net Debt/EBITDA, Shareholder Yield, Dividend Safety, Payout Ratio, and Beta for balance-sheet resilience.',
+    'Momentum': 'Factor Pillar combining 14-day RSI, Price vs. 200-day SMA, and 1-Year Relative Strength vs. SPY.',
+    // 16 Individual Indicators
+    'TrailingPE': 'Price-to-Trailing-12M-Earnings ratio (sector-neutral inverted sigmoid; lower multiple scores higher).',
+    'EV_EBITDA': 'Enterprise Value to EBITDA multiple accounting for debt and cash (lower multiple scores higher).',
+    'FCFYield': 'Free Cash Flow divided by Market Capitalization (higher cash yield scores higher).',
+    'RevenueGrowth': 'Year-over-Year top-line revenue growth rate normalized within GICS sector.',
+    'EPSGrowth': 'Year-over-Year diluted Earnings Per Share growth rate.',
+    'GrossMargin': 'Gross profit as a percentage of total revenue, measuring direct pricing power.',
+    'OperatingMargin': 'Operating income (EBIT) as a percentage of revenue, measuring operational leverage.',
+    'ROIC': 'Return on Invested Capital (ROA proxy), measuring profit generated per unit of capital deployed.',
+    'NetDebt_EBITDA': 'Net Debt divided by EBITDA leverage ratio (lower leverage scores higher; >5.0x triggers knock-out penalty).',
+    'ShareholderYield': 'Combined cash yield from dividends, net share repurchases, and net debt paydown.',
+    'FiveYDivGrowth': '5-year dividend growth & sustainability proxy.',
+    'PayoutRatio': 'Percentage of net earnings paid as dividends (Goldilocks bell-curve centered around sustainable 35%–50% payout).',
+    'RSI': 'Wilder’s 14-day Relative Strength Index (Goldilocks bell-curve rewarding healthy 50–65 trend without extreme overbought >80 risk).',
+    'PriceVs200SMA': 'Current share price divided by its 200-day simple moving average (>1.0 indicates long-term uptrend).',
+    'RelativeStrength': '1-year trailing stock return minus 1-year SPY benchmark return (positive values indicate market outperformance).'
+  },
+  he: {
+    // Portfolio & Return Metrics
+    'NAV': 'שווי נכסים נקי (Net Asset Value) — השווי הכולל של כל אחזקות המניות הפתוחות בתוספת יתרות המזומן במטבע התצוגה הנבחר.',
+    'Net Liquidation NAV': 'שווי פדיון נטו משוער לאחר ניכוי מס רווחי הון ריאלי בישראל (25%) על רווחים לא-ממומשים (לאחר קיזוז מגני מס זמינים).',
+    'TWR': 'תשואה משוקללת-זמן (Time-Weighted Return) — מנטרלת את השפעת עיתוי הפקדות ומשיכות מזומן ומאפשרת השוואה הוגנת מול מדדי השוק.',
+    'MWR / XIRR': 'תשואה משוקללת-כסף (XIRR שנתי) — שיעור התשואה הפנימי המשקלל את העיתוי והיקף הכספים המדויק של כל עסקה והפקדה.',
+    'What-If Opportunity Simulator': 'סימולטור חלופת השקעה — מחשב מה היה שווי התיק הנוכחי אילו כל הפקדה או רכישה היסטורית הייתה מושקעת במדד הייחוס באותו תאריך מדויק.',
+    'Underwater Drawdown': 'שיעור הירידה באחוזים מהשיא ההיסטורי של תשואת ה-TWR המצטברת בכל נקודת זמן.',
+    'MDD': 'ירידה מקסימלית מהשיא לשפל (Maximum Drawdown) — עומק המשבר החד ביותר שחווה התיק בחלון הזמן הנבחר.',
+    'Sharpe Ratio': 'מדד שארפ — תשואה עודפת שנתית מעל ריבית חסרת סיכון (4.0%) חלקי סטיית התקן השנתית של התיק.',
+    'Sortino Ratio': 'מדד סורטינו — מודד תשואה עודפת ביחס לתנודתיות השלילית בלבד (ימי ירידות), ללא ענישה על תנודתיות חיובית.',
+    'Beta': 'מקדם בטא — רגישות תנודות התיק היומיות לתנודות מדד הייחוס (בטא 1.0 משמעותה תנודתיות זהה לשוק).',
+    "Jensen's Alpha": 'אלפא של ג׳נסן — תשואה עודפת שנתית שהשיג התיק מעבר לתשואה הצפויה לפי מודל ה-CAPM בהינתן הבטא של התיק.',
+    'Annualized Volatility': 'תנודתיות שנתית — סטיית התקן של התשואות היומיות מוכפלת ב-√252 ימי מסחר בשנה.',
+    // Israeli Tax & Dual-Currency Terms
+    'FIFO Tax Lots': 'שכבות מס בשיטת FIFO (נכנס ראשון יוצא ראשון) — לפי פקודת מס הכנסה, במכירת נייר ערך נמכרות תחילה היחידות שנרכשו במועד המוקדם ביותר.',
+    'Original vs. Adjusted Cost Basis': 'לפי חלק ה׳ לפקודת מס הכנסה (סעיף 88), עלות הרכישה המקורית בשקלים מוצמדת לשינוי בשער הדולר היציג (לני״ע זרים) או ל"מדד הידוע" (לני״ע ישראליים .TA).',
+    'Inflationary Exempt Gain': 'סכום אינפלציוני פטור ממס (0%) — חלק הרווח הנומינלי בשקלים הנובע מעליית שער החליפין (USD/ILS) או מעליית מדד המחירים לצרכן.',
+    'Real Taxable Gain': 'רווח הון ריאלי חייב במס — הרווח בשקלים מעבר לעלות המתואמת (לאחר הצמדה למט״ח או למדד), החייב במס של 25%.',
+    'YTD Tax Shield': 'מגן מס צבור — הפסדי הון ריאליים שמומשו השנה (או הועברו משנים קודמות) המקזזים שקל-מול-שקל רווחי הון ריאליים חייבים במס.',
+    'Tax-Loss Harvesting (TLH)': 'קצירת הפסדי מס (סעיף 92) — מימוש יזום של שכבות FIFO המצויות בהפסד ריאלי לצורך יצירת מגן מס מיידי בגובה 25% לקיזוז מס השנה.',
+    'FX Attribution & Tax Drag': 'פירוק התשואה השקלית לשלושה רכיבים: תשואת הנכס במטבע המקור, השפעת שינויי שער החליפין (USD/ILS), ושחיקה מעמלות ומס רווחי הון.',
+    // Screener & Quant DNA Terms
+    'C-FFI Quant Score': 'ציון כמותי משוקלל [0, 100] המחושב במיקרו-שניות בליבת ה-C (libsortbuslines.so) על בסיס מבנה זיכרון מיושר של 80 בתים.',
+    'Factor Coverage %': 'שיעור שווי המניות בתיק המכוסה על ידי מאגר 16 הפקטורים הפונדמנטליים (קרנות סל ומניות ת״א מוחרגות מהממוצע למניעת הטיית אפס).',
+    'Goldilocks Normalization': 'נרמול פעמון גאוסיאני המתגמל ערכים בטווח האידיאלי (כגון יחס חלוקת דיבידנד מאוזן או RSI בריא) ומעניש ערכי קיצון.',
+    'Sector-Neutral Sigmoid Z-Score': 'נרמול סקטוריאלי המשווה כל חברה לחציון ולטווח הבין-רבעוני (IQR) של הסקטור שלה וממפה את הציון לטווח [0, 100].',
+    'Valuation': 'עמוד תווך תמחור — משלב מכפיל רווח (P/E), מכפיל EV/EBITDA ותשואת תזרים מזומנים חופשי (FCF Yield).',
+    'Growth': 'עמוד תווך צמיחה — משלב קצב צמיחת הכנסות שנתית וצמיחת רווח למניה (EPS Growth).',
+    'Quality': 'עמוד תווך איכות ורווחיות — משלב שולי רווח גולמי, שולי רווח תפעולי ותשואה על ההון המושקע (ROIC).',
+    'Safety & Income': 'עמוד תווך יציבות והכנסה — משלב יחס חוב נטו ל-EBITDA, תשואת בעלי מניות, יציבות דיבידנד, יחס חלוקה ובטא.',
+    'Momentum': 'עמוד תווך מומנטום טכני — משלב מדד עוצמה יחסית (RSI), מחיר מול ממוצע נע 200 יום, ועוצמה יחסית מול SPY.',
+    // 16 Individual Indicators
+    'TrailingPE': 'מכפיל רווח היסטורי (P/E ל-12 חודשים אחרונים) מנורמל סקטוריאלית — מכפיל נמוך יותר מזכה בציון גבוה יותר.',
+    'EV_EBITDA': 'שווי פעילות (Enterprise Value) חלקי EBITDA — מתחשב בחוב ובמזומן (מכפיל נמוך יותר = תמחור זול יותר).',
+    'FCFYield': 'תשואת תזרים מזומנים חופשי (Free Cash Flow חלקי שווי שוק) — גבוה יותר מעיד על ייצור מזומנים חזק.',
+    'RevenueGrowth': 'קצב צמיחת ההכנסות השנתי (YoY) בהשוואה לחברות באותו סקטור.',
+    'EPSGrowth': 'קצב צמיחת הרווח המדולל למניה (YoY EPS Growth).',
+    'GrossMargin': 'שיעור הרווח הגולמי מתוך ההכנסות — מודד כוח תמחור ויתרון תחרותי.',
+    'OperatingMargin': 'שיעור הרווח התפעולי (EBIT) מתוך ההכנסות — מודד יעילות תפעולית.',
+    'ROIC': 'תשואה על ההון המושקע (אומדן ROA) — מודד כמה רווח מייצרת החברה על כל דולר של נכסים.',
+    'NetDebt_EBITDA': 'חוב פיננסי נטו חלקי EBITDA — מודד רמת מינוף (יחס נמוך = מאזן בטוח יותר; מעל 5.0x מופעל קנס סיכון).',
+    'ShareholderYield': 'תשואת בעלי מניות כוללת — דיבידנדים + רכישה עצמית של מניות (Buybacks) + הקטנת חוב נטו.',
+    'FiveYDivGrowth': 'מדד עקביות וצמיחת דיבידנד לאורך 5 שנים.',
+    'PayoutRatio': 'יחס חלוקת דיבידנד מתוך הרווח הנקי (נרמול פעמון סביב טווח בר-קיימא של 35%–50%).',
+    'RSI': 'מדד עוצמה יחסית ל-14 יום (Wilder RSI) — מתגמל מגמה חיובית מאוזנת (50–65) ומעניש קניית-יתר קיצונית.',
+    'PriceVs200SMA': 'מחיר המניה הנוכחי חלקי ממוצע נע ל-200 ימים (ערך מעל 1.0 מעיד על מגמת עלייה ארוכת טווח).',
+    'RelativeStrength': 'תשואת המניה ב-12 החודשים האחרונים פחות תשואת מדד SPY באותה תקופה.'
+  }
+};
+
+// ============================================================================
+// PHASE 5 & 6: PORTFOLIO INTELLIGENCE FRONTEND WORKSPACE CONTROLLER
 // ============================================================================
 const portfolioState = {
   workspace: 'screener',
+  lang: localStorage.getItem('aq_lang') || 'en',
+  viewTier: 'standard',     // 'standard' | 'advanced'
+  screenerTier: 'standard', // 'standard' | 'advanced'
   viewCurrency: 'ILS',
   window: 'ALL',
   startDate: '',
@@ -1584,6 +2154,225 @@ const portfolioState = {
   lastAnalytics: null,
   initialized: false
 };
+
+function t(key) {
+  const dict = I18N[portfolioState.lang] || I18N.en;
+  return dict[key] ?? I18N.en[key] ?? key;
+}
+
+function getTooltipText(term) {
+  const dict = TOOLTIPS[portfolioState.lang] || TOOLTIPS.en;
+  return dict[term] || TOOLTIPS.en[term] || '';
+}
+
+function applyLayoutDirection() {
+  const isHe = portfolioState.lang === 'he';
+  const isScreener = portfolioState.workspace === 'screener';
+  document.documentElement.lang = isHe ? 'he' : 'en';
+  document.documentElement.dir = isHe ? 'rtl' : 'ltr';
+
+  const sidebar = document.getElementById('screener-sidebar');
+  const header = document.getElementById('top-header');
+  const main = document.getElementById('main-viewport');
+
+  if (sidebar) {
+    sidebar.classList.toggle('hidden', !isScreener);
+    if (isHe) {
+      sidebar.style.left = 'auto';
+      sidebar.style.right = '0px';
+      sidebar.classList.remove('border-r');
+      sidebar.classList.add('border-l');
+    } else {
+      sidebar.style.right = 'auto';
+      sidebar.style.left = '0px';
+      sidebar.classList.remove('border-l');
+      sidebar.classList.add('border-r');
+    }
+  }
+
+  if (header) {
+    if (isScreener) {
+      header.style.left = isHe ? '0px' : '288px';
+      header.style.right = isHe ? '288px' : '0px';
+    } else {
+      header.style.left = '0px';
+      header.style.right = '0px';
+    }
+  }
+
+  if (main) {
+    if (isScreener) {
+      main.style.marginLeft = isHe ? '0px' : '288px';
+      main.style.marginRight = isHe ? '288px' : '0px';
+    } else {
+      main.style.marginLeft = '0px';
+      main.style.marginRight = '0px';
+    }
+  }
+}
+
+function setAppLanguage(lang) {
+  portfolioState.lang = (lang === 'he') ? 'he' : 'en';
+  try { localStorage.setItem('aq_lang', portfolioState.lang); } catch (e) {}
+
+  ['en', 'he'].forEach(l => {
+    const btn = document.getElementById(`lang-btn-${l}`);
+    if (!btn) return;
+    btn.className = (l === portfolioState.lang)
+      ? 'px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
+      : 'px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+  });
+
+  applyLayoutDirection();
+
+  // Translate all static [data-i18n] nodes
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (val) el.textContent = val;
+  });
+
+  // Translate placeholders
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    const val = t(key);
+    if (val) el.setAttribute('placeholder', val);
+  });
+
+  // Re-render dynamic views if loaded
+  if (portfolioState.lastSummary) renderPortfolioSummary(portfolioState.lastSummary);
+  if (portfolioState.lastAnalytics) {
+    renderPortfolioAnalyticsKPIs(portfolioState.lastAnalytics);
+    renderPortfolioChart(portfolioState.lastAnalytics);
+  }
+}
+
+function setPortfolioViewTier(tier) {
+  portfolioState.viewTier = (tier === 'advanced') ? 'advanced' : 'standard';
+  const isAdv = portfolioState.viewTier === 'advanced';
+
+  const btnStd = document.getElementById('pf-tier-standard');
+  const btnAdv = document.getElementById('pf-tier-advanced');
+  if (btnStd && btnAdv) {
+    btnStd.className = !isAdv
+      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
+      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+    btnAdv.className = isAdv
+      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
+      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+  }
+
+  const stdView = document.getElementById('pf-view-standard');
+  const advView = document.getElementById('pf-view-advanced');
+  const whatIfBanner = document.getElementById('pf-whatif-banner');
+  const riskStrip = document.getElementById('pf-slice-risk-strip');
+
+  if (stdView) stdView.classList.toggle('hidden', isAdv);
+  if (advView) advView.classList.toggle('hidden', !isAdv);
+  if (whatIfBanner) whatIfBanner.classList.toggle('hidden', !isAdv && portfolioState.chartMode !== 'WHAT_IF');
+  if (riskStrip) riskStrip.classList.toggle('hidden', !isAdv);
+
+  // Re-render / resize Chart.js instances cleanly when switching sub-views
+  requestAnimationFrame(() => {
+    if (portfolioChartInstance) portfolioChartInstance.resize();
+    if (isAdv && portfolioState.lastSummary?.quant_dna) {
+      renderPortfolioQuantDNA(portfolioState.lastSummary.quant_dna, portfolioState.viewCurrency);
+    }
+  });
+}
+
+function setScreenerViewTier(tier) {
+  portfolioState.screenerTier = (tier === 'advanced') ? 'advanced' : 'standard';
+  const isAdv = portfolioState.screenerTier === 'advanced';
+  const btnStd = document.getElementById('scr-tier-standard');
+  const btnAdv = document.getElementById('scr-tier-advanced');
+  if (btnStd && btnAdv) {
+    btnStd.className = !isAdv
+      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
+      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+    btnAdv.className = isAdv
+      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
+      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+  }
+  const btPanel = document.getElementById('backtest-panel');
+  if (btPanel && isAdv) {
+    btPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (backtestChart) backtestChart.resize();
+  }
+}
+
+// Global Viewport-Aware Contextual Info (i) Tooltip Popover Controller
+(function initGlobalInfoTooltips() {
+  const popover = document.getElementById('global-info-popover');
+  if (!popover) return;
+
+  function showTipFor(target) {
+    const term = target.getAttribute('data-term');
+    if (!term) return;
+    const desc = getTooltipText(term);
+    if (!desc) return;
+
+    const isHe = portfolioState.lang === 'he';
+    popover.dir = isHe ? 'rtl' : 'ltr';
+    popover.innerHTML = `
+      <div class="font-bold text-primary text-[11px] mb-1 border-b border-outline-variant/40 pb-1 flex items-center justify-between gap-2">
+        <span>${escapeHTML(term)}</span>
+        <span class="text-[9px] uppercase font-mono text-secondary">AlphaQuant</span>
+      </div>
+      <div class="text-on-surface-variant text-[11px] leading-relaxed">${escapeHTML(desc)}</div>
+    `;
+    popover.classList.add('visible');
+    popover.setAttribute('aria-hidden', 'false');
+
+    const rect = target.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    const pad = 10;
+
+    let top = rect.top - popRect.height - 8;
+    if (top < pad) {
+      top = rect.bottom + 8;
+    }
+    let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+    if (left < pad) left = pad;
+    if (left + popRect.width > window.innerWidth - pad) {
+      left = window.innerWidth - popRect.width - pad;
+    }
+
+    popover.style.top = `${Math.round(top)}px`;
+    popover.style.left = `${Math.round(left)}px`;
+  }
+
+  function hideTip() {
+    popover.classList.remove('visible');
+    popover.setAttribute('aria-hidden', 'true');
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const badge = e.target.closest('.info-tooltip');
+    if (badge) showTipFor(badge);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const badge = e.target.closest('.info-tooltip');
+    if (badge) hideTip();
+  });
+  document.addEventListener('focusin', (e) => {
+    const badge = e.target.closest('.info-tooltip');
+    if (badge) showTipFor(badge);
+  });
+  document.addEventListener('focusout', (e) => {
+    const badge = e.target.closest('.info-tooltip');
+    if (badge) hideTip();
+  });
+  document.addEventListener('click', (e) => {
+    const badge = e.target.closest('.info-tooltip');
+    if (badge) {
+      e.stopPropagation();
+      showTipFor(badge);
+    } else {
+      hideTip();
+    }
+  });
+})();
 
 let portfolioChartInstance = null;
 let portfolioRadarChartInstance = null;
@@ -1626,8 +2415,6 @@ function switchWorkspace(mode) {
   const isScreener = mode === 'screener';
 
   const sidebar = document.getElementById('screener-sidebar');
-  const header = document.getElementById('top-header');
-  const main = document.getElementById('main-viewport');
   const wsScreener = document.getElementById('workspace-screener');
   const wsPortfolio = document.getElementById('workspace-portfolio');
   const pfHeaderCtrls = document.getElementById('portfolio-header-controls');
@@ -1635,8 +2422,7 @@ function switchWorkspace(mode) {
   const tabPortfolio = document.getElementById('nav-tab-portfolio');
 
   if (sidebar) sidebar.classList.toggle('hidden', !isScreener);
-  if (header) header.style.left = isScreener ? '288px' : '0px';
-  if (main) main.style.marginLeft = isScreener ? '288px' : '0px';
+  applyLayoutDirection();
   if (wsScreener) wsScreener.classList.toggle('hidden', !isScreener);
   if (wsPortfolio) wsPortfolio.classList.toggle('hidden', isScreener);
 
@@ -1717,9 +2503,13 @@ function setPortfolioChartMode(mode) {
     const btn = document.getElementById(`pf-mode-${m}`);
     if (!btn) return;
     btn.className = (m === mode)
-      ? 'px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
-      : 'px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+      ? 'px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1'
+      : 'px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1';
   });
+  const whatIfBanner = document.getElementById('pf-whatif-banner');
+  if (whatIfBanner) {
+    whatIfBanner.classList.toggle('hidden', portfolioState.viewTier !== 'advanced' && mode !== 'WHAT_IF');
+  }
   if (portfolioState.lastAnalytics) {
     renderPortfolioChart(portfolioState.lastAnalytics);
   }
@@ -1996,9 +2786,9 @@ function renderHoldingsTable(positions, allLots, ccy) {
                     <th class="py-1.5 px-3">Buy Date</th>
                     <th class="py-1.5 px-3 text-right">Open Qty</th>
                     <th class="py-1.5 px-3 text-right">Buy Price</th>
-                    <th class="py-1.5 px-3">Base Index Drift (FX / Known CPI)</th>
-                    <th class="py-1.5 px-3 text-right">Inflationary Gain (0% Tax)</th>
-                    <th class="py-1.5 px-3 text-right">Real Gain / Loss (₪)</th>
+                    <th class="py-1.5 px-3">Base Index Drift <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span></th>
+                    <th class="py-1.5 px-3 text-right">Inflationary Gain (0%) <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span></th>
+                    <th class="py-1.5 px-3 text-right">Real Gain / Loss (₪) <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span></th>
                     <th class="py-1.5 px-3 text-right">Est. Real Tax (25%)</th>
                   </tr>
                 </thead>
@@ -2107,9 +2897,12 @@ function renderPortfolioQuantDNA(dna, ccy) {
       const tiltColor = colorClassForVal(tilt);
       return `
         <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2">
-          <span class="text-[9px] uppercase font-bold text-on-surface-variant block truncate">${p}</span>
-          <span class="text-xs font-extrabold text-on-surface font-mono block mt-0.5">${val.toFixed(1)}</span>
-          <span class="text-[9px] font-mono ${tiltColor}">${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} vs Mkt</span>
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[9px] uppercase font-bold text-on-surface-variant truncate">${p}</span>
+            <span class="info-tooltip" data-term="${p}" tabindex="0">i</span>
+          </div>
+          <span class="text-xs font-extrabold text-on-surface font-mono num-ltr block mt-0.5">${val.toFixed(1)}</span>
+          <span class="text-[9px] font-mono num-ltr ${tiltColor}">${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} vs Mkt</span>
         </div>
       `;
     }).join('');
@@ -2127,13 +2920,13 @@ function renderPortfolioQuantDNA(dna, ccy) {
       return `
         <div class="bg-surface-container/30 border border-outline-variant/20 rounded p-2 text-[10px]">
           <div class="flex justify-between items-center font-bold text-on-surface">
-            <span class="truncate">${col}</span>
-            <span class="font-mono ${colorClassForVal(diff)}">${v.toFixed(0)}</span>
+            <span class="truncate flex items-center gap-1">${col} <span class="info-tooltip" data-term="${col}" tabindex="0">i</span></span>
+            <span class="font-mono num-ltr ${colorClassForVal(diff)}">${v.toFixed(0)}</span>
           </div>
           <div class="w-full h-1.5 bg-[#262626] rounded-full overflow-hidden mt-1">
             <div class="h-full bg-primary rounded-full" style="width:${Math.min(100, Math.max(0, v))}%"></div>
           </div>
-          <span class="text-[9px] text-on-surface-variant font-mono block mt-0.5">Mkt Base: ${b.toFixed(0)}</span>
+          <span class="text-[9px] text-on-surface-variant font-mono num-ltr block mt-0.5">Mkt Base: ${b.toFixed(0)}</span>
         </div>
       `;
     }).join('');
@@ -2845,6 +3638,9 @@ async function seedDemoPortfolio() {
     console.error('Failed to seed sample portfolio:', err);
   }
 }
+
+// Initialize saved language preference (EN/HE) and RTL/LTR layout on load
+setAppLanguage(portfolioState.lang || 'en');
 </script>
 </body>
 </html>

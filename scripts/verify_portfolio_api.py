@@ -451,15 +451,30 @@ def run_api_verification():
         print(f" -> [PASS] Screener regression passed: scored {len(results)} stocks; Top ticker={top_stock['ticker']}, Score={top_stock['score']}.")
 
         # ───────────────────────────────────────────────────────────────────────
-        # 7. Phase 5 & Phase 6 Frontend Workspace HTML & Component Contract Check
+        # 7. Phase 5, Phase 6 & Bilingual Two-Tier UI Contract Check
         # ───────────────────────────────────────────────────────────────────────
-        print("\n[Step 7] Verifying Phase 5 & Phase 6 Frontend Portfolio Workspace (GET /)...")
+        print("\n[Step 7] Verifying Phase 5, Phase 6 & Bilingual Two-Tier Workspace (GET /)...")
         res_html = client.get("/")
         assert res_html.status_code == 200, f"Expected HTTP 200 from GET /, got {res_html.status_code}"
         html_body = res_html.data.decode("utf-8")
         for token in (
             "workspace-screener",
             "workspace-portfolio",
+            "pf-view-standard",
+            "pf-view-advanced",
+            "pf-tier-standard",
+            "pf-tier-advanced",
+            "lang-btn-en",
+            "lang-btn-he",
+            "global-info-popover",
+            "info-tooltip",
+            "const I18N =",
+            "const TOOLTIPS =",
+            "setAppLanguage",
+            "setPortfolioViewTier",
+            "setScreenerViewTier",
+            "מודיעין תיק השקעות",
+            "מעבדת קוואנט ומיסוי מתקדמת",
             "portfolio-main-chart",
             "portfolio-dna-radar-chart",
             "portfolio-sector-chart",
@@ -472,8 +487,8 @@ def run_api_verification():
             "portfolioRadarChartInstance.destroy()",
             "portfolioSectorChartInstance.destroy()",
         ):
-            assert token in html_body, f"Missing required Phase 5/6 UI token in index.html: {token}"
-        print(" -> [PASS] Phase 5 & Phase 6 Frontend Portfolio Workspace HTML & controller verified.")
+            assert token in html_body, f"Missing required Phase 5/6/I18N UI token in index.html: {token}"
+        print(" -> [PASS] Phase 5, Phase 6 & Bilingual Two-Tier Frontend Workspace HTML & controller verified.")
 
         # ───────────────────────────────────────────────────────────────────────
         # 8. Phase 6 Quant Factor DNA (C-FFI), Sector Attribution & TLH Simulator
