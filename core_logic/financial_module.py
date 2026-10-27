@@ -616,14 +616,12 @@ def sanitize_for_json(obj):
         df_clean = obj.fillna(0.0).replace([np.inf, -np.inf], 0.0)
         # Format DatetimeIndex if present
         if isinstance(df_clean.index, pd.DatetimeIndex):
-            df_clean = df_clean.copy()
-            df_clean.index = df_clean.index.strftime('%Y-%m-%d')
-            df_clean.reset_index(inplace=True)
-            if 'index' in df_clean.columns:
-                df_clean.rename(columns={'index': 'date'}, inplace=True)
-            elif 'Date' in df_clean.columns:
-                df_clean.rename(columns={'Date': 'date'}, inplace=True)
-        return [sanitize_for_json(row) for row in df_clean.to_dict(orient='records')]
+            dates = df_clean.index.strftime('%Y-%m-%d').tolist()
+            records = df_clean.to_dict(orient='records')
+            for i in range(len(records)):
+                records[i]['date'] = dates[i]
+            return records
+        return df_clean.to_dict(orient='records')
     if isinstance(obj, pd.Series):
         s_clean = obj.fillna(0.0).replace([np.inf, -np.inf], 0.0)
         if isinstance(s_clean.index, pd.DatetimeIndex):

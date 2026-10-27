@@ -394,19 +394,30 @@ def portfolio_summary():
     if fx_rate <= 0.0:
         fx_rate = 1.0
 
-    # Cash balances
+    # Cash & 3-Bucket Capital balances
     cash_raw = totals_raw.get("cash", {})
-    cash_usd = _scalar_float(cash_raw.get("USD", 0.0))
-    cash_ils = _scalar_float(cash_raw.get("ILS", 0.0))
-    if view_currency == "ILS":
-        total_cash_view = cash_ils + (cash_usd * fx_rate)
-    else:
-        total_cash_view = cash_usd + (cash_ils / fx_rate)
+    cash_usd = max(0.0, _scalar_float(cash_raw.get("USD", 0.0)))
+    cash_ils = max(0.0, _scalar_float(cash_raw.get("ILS", 0.0)))
+
+    avail_cash_usd = max(0.0, _scalar_float(totals_raw.get("available_cash_usd", cash_usd + (cash_ils / fx_rate))))
+    avail_cash_ils = max(0.0, _scalar_float(totals_raw.get("available_cash_ils", (cash_usd * fx_rate) + cash_ils)))
+    total_cash_view = avail_cash_ils if view_currency == "ILS" else avail_cash_usd
+
+    inv_cap_usd = max(0.0, _scalar_float(totals_raw.get("invested_capital_usd", 0.0)))
+    inv_cap_ils = max(0.0, _scalar_float(totals_raw.get("invested_capital_ils", 0.0)))
+    inv_cap_view = inv_cap_ils if view_currency == "ILS" else inv_cap_usd
+
+    wdr_cap_usd = max(0.0, _scalar_float(totals_raw.get("withdrawn_capital_usd", 0.0)))
+    wdr_cap_ils = max(0.0, _scalar_float(totals_raw.get("withdrawn_capital_ils", 0.0)))
+    wdr_cap_view = wdr_cap_ils if view_currency == "ILS" else wdr_cap_usd
 
     cash_dict = {
         "USD": cash_usd,
         "ILS": cash_ils,
         "total_view": total_cash_view,
+        "available_cash_view": total_cash_view,
+        "invested_capital_view": inv_cap_view,
+        "withdrawn_capital_view": wdr_cap_view,
     }
 
     # Positions breakdown
@@ -509,14 +520,22 @@ def portfolio_summary():
         net_realized_ils = tax_summary_dict["real_gains_ils"] - tax_summary_dict["real_losses_ils"]
         realized_pnl_ytd = net_realized_ils if view_currency == "ILS" else (net_realized_ils / fx_rate)
 
-    est_liq_tax_ils = _scalar_float(totals_raw.get("est_liquidation_tax_ils", 0.0))
+    est_liq_tax_ils = _scalar_float(totals_raw.get("est_liq_tax_ils", totals_raw.get("est_liquidation_tax_ils", 0.0)))
     est_liq_tax_view = est_liq_tax_ils if view_currency == "ILS" else (est_liq_tax_ils / fx_rate)
+
+    wealth_created_view = (total_nav_view + wdr_cap_view) - inv_cap_view
+    roi_invested_pct = (wealth_created_view / inv_cap_view * 100.0) if inv_cap_view > 1e-9 else 0.0
 
     totals_dict = {
         "nav": total_nav_view,
         "net_liquidation_nav": total_nav_view - est_liq_tax_view,
         "market_value": mv_view,
         "cost_basis": cost_basis_view,
+        "available_cash": max(0.0, total_cash_view),
+        "total_invested_capital": inv_cap_view,
+        "withdrawn_capital": wdr_cap_view,
+        "total_wealth_created": wealth_created_view,
+        "roi_invested_capital_pct": roi_invested_pct,
         "unrealized_pnl": unrealized_pnl_view,
         "unrealized_net_pnl": unrealized_pnl_view - est_liq_tax_view,
         "unrealized_pnl_pct": unrealized_pnl_pct,
@@ -777,7 +796,9 @@ def portfolio_analytics():
             cash_mode=cash_mode,
         )
 
-        series_clean = sanitize_for_json(res["series"])
+        series_clean = res.get("series_clean")
+        if series_clean is None:
+            series_clean = sanitize_for_json(res["series"])
         out_payload = {
             "window": res["window"],
             "start_date": res["start_date"],

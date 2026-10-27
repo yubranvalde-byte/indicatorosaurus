@@ -21,8 +21,8 @@ The platform bridges raw corporate fundamental filings and daily market price da
 - **Zero Look-Ahead Bias Backtesting**: Point-in-time fundamental screening combined with PyArrow Parquet pushdown lazy price ingestion.
 - **Two-Tier In-Memory TTL Cache & Pre-Flight State Management**: Sub-millisecond fundamental data access and explicit route pre-flight technical indicator cache hydration to prevent cold-start I/O tax during requests.
 - **Portfolio Intelligence Phase 1 — Hybrid Multi-Currency Price & Macro Resolver (`core_logic/price_resolver.py`)**: 3-Tier historical price resolution engine combining the local SimFin Parquet lake (`us-shareprices-daily.parquet`), a Snappy-compressed portfolio cache (`portfolio_price_cache.parquet`), and external fallback (Tiingo / `yfinance`) with automatic Tel Aviv Stock Exchange (`.TA`) Agorot-to-ILS scaling ($\text{Price}_{\text{ILS}} = \text{Price}_{\text{Agorot}} / 100.0$) and a continuous daily calendar macro engine (`fx_cpi_cache.parquet`) for `USD/ILS` FX and Israeli CPI series.
-- **Portfolio Intelligence Phase 2 — Dual-Currency FIFO Ledger & Israeli Tax Engine (`core_logic/portfolio_ledger.py`)**: Real-time transaction persistence (`data/portfolio_transactions.parquet`), fractional FIFO queue state machine, and exact Israeli capital gains tax decomposition (25% on real gains, inflationary exemptions, YTD tax shielding, and loss carry-forward).
-- **Portfolio Intelligence Phase 3 — Vectorized Time-Series & Attribution Engine (`core_logic/portfolio_analytics.py`)**: Continuous daily holdings matrix ($N_{\text{days}} \times M_{\text{tickers}}$), cash-flow invariant Time-Weighted Return (TWR), exact Money-Weighted Return (MWR / XIRR via Newton-Raphson), ILS FX & tax attribution, and counterfactual benchmark opportunity simulation.
+- **Portfolio Intelligence Phase 2 — Dual-Currency FIFO Ledger, 3-Bucket Capital Accounting & Israeli Tax Engine (`core_logic/portfolio_ledger.py`)**: Real-time transaction persistence (`data/portfolio_transactions.parquet`), fractional FIFO queue state machine, non-negative 3-Bucket Capital Accounting (`Available Cash`, `Total Invested Capital`, `Withdrawn Capital`, `Total Wealth Created`, `ROI %`), and exact Israeli capital gains tax decomposition (25% on real gains, inflationary exemptions, YTD tax shielding, and loss carry-forward).
+- **Portfolio Intelligence Phase 3 — Vectorized Time-Series & Attribution Engine (`core_logic/portfolio_analytics.py`)**: Continuous daily holdings matrix ($N_{\text{days}} \times M_{\text{tickers}}$), cash-flow invariant Time-Weighted Return (TWR), exact Money-Weighted Return (MWR / XIRR via Newton-Raphson), ILS FX & tax attribution, and invested-capital driven counterfactual benchmark opportunity simulation.
 - **Portfolio Intelligence Phase 4 — Low-Latency REST API Engine (`api/main.py`)**: Low-latency endpoints (`/api/portfolio/summary`, `/api/portfolio/transactions`, `/api/portfolio/analytics`) with in-memory memoization (< 100ms warm SLA) and strict RFC-8259 NaN-safety.
 
 ---
@@ -348,7 +348,17 @@ To support multi-currency US/TASE portfolio tracking and Israeli real (CPI/FX-ad
   - **Flexible Date & Same-Day Ordering**: Parses `YYYYMMDD` integers/floats (e.g., `20231205.0`), `YYYY-MM-DD`, `YYYY/MM/DD`, and `DD/MM/YYYY`, and sorts transactions chronologically by `(date, type_priority, source_line)` (`BUY` before `SELL` on identical dates).
   - **Fractional Rounding Tolerance & Row-by-Row Diagnostics**: Clamps small broker rounding discrepancies ($\le 0.01$ shares, such as selling `73.87` shares against `73.867` open shares) to the open lot balance, and skips incomplete watchlist rows, zero-price rows, or genuine oversells ($> 0.01$ shares) while returning a full diagnostic report (`imported_count`, `total_rows`, `skipped_count`, `skipped_rows` with exact 1-based line numbers and missing/invalid field details).
 
-### 2. Israeli Real Capital Gains Tax Decomposition (`compute_israeli_lot_tax`)
+### 2. 3-Bucket Capital Accounting Engine (`capital_buckets`)
+To guarantee accurate return calculations and prevent negative cash artifacts when users record `BUY` transactions without prior manual `CASH_DEPOSIT` entries, the ledger maintains three non-negative, chronologically tracked capital buckets:
+- **Available Cash (`available_cash`, יתרת מזומן פנויה להשקעה $\ge 0.0$)**: Tracks liquid funds inside the portfolio. Incremented by net `SELL` proceeds ($Q \cdot P_{\text{sell}} - \text{fee}$), net `DIVIDEND` distributions ($75\%$ after Israeli withholding), and explicit `CASH_DEPOSIT`. When a `BUY` order occurs (total cost $C = Q \cdot P_{\text{buy}} + \text{fee}$), the ledger draws from available cash only up to the available balance: $\text{used\_cash} = \min(\text{available\_cash}, C)$. The balance is clamped at zero and never turns negative.
+- **Total Invested Capital (`total_invested_capital`, סה"כ כסף מושקע מהכיס)**: Tracks cumulative external out-of-pocket capital introduced into the account. Incremented on explicit `CASH_DEPOSIT` and whenever a `BUY` order requires external funds exceeding available cash (the uncovered shortfall $C - \text{used\_cash}$).
+- **Withdrawn Capital (`withdrawn_capital`, כסף ממומש שנמשך לשימוש אישי)**: Tracks cash permanently extracted from the investment account via explicit `CASH_WITHDRAWAL` transactions, reducing `available_cash` (clamped at zero).
+- **Consolidated Valuation & Return on Invested Capital (ROI %)**:
+  $$\text{Total Portfolio NAV}_t = \text{Holdings Market Value}_t + \text{Available Cash}_t$$
+  $$\text{Total Wealth Created} = (\text{Total Portfolio NAV}_t + \text{Withdrawn Capital}_t) - \text{Total Invested Capital}_t$$
+  $$\text{ROI \%} = \frac{\text{Total Wealth Created}}{\text{Total Invested Capital}_t} \times 100$$
+
+### 3. Israeli Real Capital Gains Tax Decomposition (`compute_israeli_lot_tax`)
 On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `ILS`:
 - **Original Cost (`ILS`)**: $\text{OriginalCost}_{\text{ILS}} = (Q \cdot P_{\text{buy}} + \text{Fee}_{\text{buy}}) \cdot \text{FX}_{\text{buy}}$ (where $\text{FX} = 1.0$ for `ILS` securities).
 - **Net Proceeds (`ILS`)**: $\text{Proceeds}_{\text{ILS}} = (Q \cdot P_{\text{sell}} - \text{Fee}_{\text{sell}}) \cdot \text{FX}_{\text{sell}}$.
@@ -361,7 +371,7 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
   2. $\text{OriginalCost}_{\text{ILS}} \le \text{Proceeds}_{\text{ILS}} < \text{AdjustedCost}_{\text{ILS}}$: Real Taxable Gain $= 0.0$; Inflationary Exempt Gain $= \text{Proceeds}_{\text{ILS}} - \text{OriginalCost}_{\text{ILS}}$.
   3. $\text{Proceeds}_{\text{ILS}} < \text{OriginalCost}_{\text{ILS}}$: Real Capital Loss $= \text{Proceeds}_{\text{ILS}} - \text{OriginalCost}_{\text{ILS}}$ (creates offsettable tax shield).
 
-### 3. YTD Tax Shield, Loss Carry-Forward & Portfolio Snapshot
+### 4. YTD Tax Shield, Loss Carry-Forward & Portfolio Snapshot
 - **Annual Tax Summary (`tax_summary`)**: Aggregates realized real gains and losses per tax year, applying current-year realized losses first and carrying forward unused real capital losses across subsequent tax years (`carry_forward_losses=True`) before applying the 25% tax rate. Tracks `DIVIDEND` distributions at a flat 25% withholding rate (`offset_dividends=False`).
 - **Valuation & Tax-Loss Harvesting (`snapshot`)**: Computes open position valuations, FIFO lot breakdowns, average cost basis in `USD` and `ILS`, unrealized gross/net PnL after hypothetical liquidation tax, and unrealized Tax-Loss Harvesting (`tlh_candidates`) opportunities.
 - Verified via `python scripts/verify_portfolio_ledger.py`.
@@ -382,9 +392,11 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
 - **Money-Weighted Return (MWR / XIRR)**: Solves $\sum_{k} \frac{CF_k}{(1 + \text{XIRR})^{(d_k - d_0)/365.0}} = 0$ via Newton-Raphson root-finding with bracketed bisection fallback, alongside Modified Dietz return.
 - **ILS Attribution Breakdown**: Decomposes total `ILS` return into (a) Pure Asset Return at constant FX, (b) `USD/ILS` Exchange Rate Impact, and (c) Brokerage Fee + Realized & Unrealized Israeli Tax Drag.
 
-### 3. Time-Slicing, Rebasing & Cash-Flow Matched What-If Simulator (`analyze_slice`)
+### 3. Time-Slicing, Rebasing & Invested-Capital What-If Simulator (`analyze_slice`)
 - Supports window presets (`1M`, `3M`, `6M`, `YTD`, `1Y`, `3Y`, `5Y`, `ALL`) and custom `[start_date, end_date]` bounds, rebasing both the portfolio and up to 3 benchmark tickers (`SPY`, `QQQ`, `SMH`, `LUMI.TA`, etc.) to `0.0%` (and base `100.0`) at $t_0$ in the active `view_currency` (`USD` or `ILS`).
-- **What-If Opportunity Simulator**: Simulates redirecting every historical net external cash flow into each benchmark asset on the exact same transaction dates, reporting hypothetical terminal NAV and excess value created.
+- **Invested-Capital Driven What-If Opportunity Simulator**: Accurately tracks benchmark unit accumulation driven strictly by external out-of-pocket capital inflows (`external_inflow`) and explicit cash withdrawals (`withdrawal`):
+  $$\Delta Q_{\text{bench}, t} = +\frac{\text{external\_inflow}_t}{P_{\text{bench}, t}} - \min\left(Q_{\text{bench}, t-1}, \, \frac{\text{withdrawal}_t}{P_{\text{bench}, t}}\right)$$
+  Crucially, internal portfolio stock sales (`SELL`) do *not* trigger benchmark share liquidations; sales represent reallocations of existing invested equity, preserving counterfactual benchmark opportunity simulation across both deposits and withdrawals.
 - **Institutional Risk KPIs**: Annualized Return, Volatility, Sharpe Ratio ($R_f = 4\%$), Sortino Ratio, Portfolio Beta & Jensen's Alpha vs. primary benchmark, Underwater Drawdown series ($\text{DD}_t$), Maximum Drawdown (MDD), and realized Win-Rate / Payoff Ratio.
 - Verified via `python scripts/verify_portfolio_analytics.py`.
 
@@ -517,17 +529,20 @@ To make institutional-grade quantitative analytics and Israeli tax mechanics acc
   - **Israeli Tax & Dual-Currency Terms**: `FIFO Tax Lots`, `Original vs. Adjusted Cost Basis`, `Inflationary Exempt Gain`, `Real Taxable Gain`, `YTD Tax Shield`, `Tax-Loss Harvesting (TLH)`, `FX Attribution & Tax Drag`.
   - **Screener & Quant DNA Terms**: `C-FFI Quant Score`, `Factor Coverage %`, `Goldilocks Normalization`, `Sector-Neutral Sigmoid Z-Score`, the 5 Factor Pillars (`Valuation`, `Growth`, `Quality`, `Safety & Income`, `Momentum`), and all 16 quantitative indicators.
 
-### 3. Two-Screen Progressive Disclosure Layout (`setPortfolioViewTier`)
+### 3. Strict Two-Screen DOM Separation & Progressive Disclosure (`setPortfolioViewTier`)
+To provide both an accessible high-level overview and deep quant research capabilities without visual clutter, the workspace implements strict DOM separation between two mutually exclusive screens (`#pf-view-standard` and `#pf-view-advanced`):
 - **Screen 1 — Standard Overview (`#pf-view-standard`, Default)**:
-  - Executive KPI Ribbon (`NAV`, `Net Liquidation NAV`, `TWR` vs `XIRR`, `Unrealized Gross & Net PnL`, `Israeli Tax Summary`).
-  - Primary Performance Chart (`TWR` curve, Benchmark comparison chips, Time-Slice presets).
-  - Live Holdings Table with one-click expandable inline `FIFO` tax lot breakdowns.
-  - Record Transaction & Fault-Tolerant Brokerage CSV Import/Export panel.
+  - **Executive KPI Ribbon**: Card 1 (Total Portfolio NAV & Net Liquidation NAV), Card 2 (3-Bucket Capital Accounting: Total Invested Capital, Available Cash, Withdrawn Capital, Total Wealth Created, and ROI %), Card 3 (TWR vs XIRR / Modified Dietz), and Card 4 (Unrealized Gross/Net PnL & YTD Realized PnL).
+  - **Primary Performance Chart (`#portfolio-main-chart`)**: Rebased TWR (%) performance canvas with dynamic benchmark comparison chips and time-slice selectors (`1M`, `3M`, `6M`, `YTD`, `1Y`, `3Y`, `5Y`, `ALL`).
+  - **Live Holdings Table**: Open positions table with one-click expandable inline FIFO tax lot breakdowns.
+  - **Record Transaction & Brokerage CSV Importer**: Quick-action buttons (`Buy`, `Sell`, `Dividend`, `Deposit`, `Withdraw Capital`) and fault-tolerant schema-adaptive CSV import with row-by-row diagnostic inspection.
 - **Screen 2 — Advanced Quant & Tax Lab (`#pf-view-advanced`)**:
-  - Full 7-Metric Institutional Risk KPI Strip (`Annualized Return`, `Annualized Volatility`, `Sharpe Ratio`, `Sortino Ratio`, `Beta`, `Jensen's Alpha`, `Max Drawdown`) and `What-If Opportunity Simulator` cards.
-  - `ILS (₪)` Return Attribution Bar (`Pure Asset Return` + `FX Impact` - `Tax & Fee Drag` = `Net After-Tax TWR`).
-  - Portfolio Factor DNA Radar (`C-FFI` 5 Pillars + expandable 16-Indicator drawer) & GICS Sector Allocation/Attribution chart.
-  - Interactive Israeli Tax-Loss Harvesting (`TLH`) Simulator (`Part E Section 92`) and full chronological Transaction History Ledger.
+  - **Deep-Dive Multi-Mode Chart (`#portfolio-adv-chart`)**: Interactive canvas toggling between Rebased TWR (%), What-If Simulator NAV, and Underwater Drawdown (%), accompanied by the What-If Opportunity comparison banner (`#pf-whatif-banner`) and 7-metric institutional risk KPI strip (`#pf-slice-risk-strip`).
+  - **Statutory Israeli Tax Card & Return Attribution Bar**: Full Section 88 indexation, YTD tax shield, loss carry-forward, and visual ILS return attribution bar (`#pf-attr-bar`).
+  - **Portfolio Factor DNA Radar (`C-FFI` Engine)**: 5-Pillar radar canvas (`#portfolio-dna-radar-chart`), factor pillar chips, expandable 16-indicator drawer, and GICS Sector Allocation/Attribution chart (`#portfolio-sector-chart`).
+  - **Interactive Israeli TLH Simulator**: Section 92 loss lot selector calculating immediate tax shields and loss carry-forward.
+  - **Chronological Transaction Ledger**: Full historical ledger table with per-row deletion.
+- **Dual Chart.js Lifecycle Management**: Dedicated chart instances (`portfolioChartInstance` and `portfolioAdvChartInstance`) synchronized via `renderPortfolioChart` with automatic `requestAnimationFrame` resizing upon view toggling, completely eliminating canvas layout thrashing and ghost rendering.
 
 ---
 

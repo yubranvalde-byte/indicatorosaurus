@@ -266,6 +266,9 @@ class LedgerState:
     realized: list = field(default_factory=list)         # per consumed lot slice
     dividends: list = field(default_factory=list)
     cash: dict = field(default_factory=lambda: {c: 0.0 for c in CURRENCIES})
+    available_cash: dict = field(default_factory=lambda: {c: 0.0 for c in CURRENCIES})
+    total_invested_capital: dict = field(default_factory=lambda: {c: 0.0 for c in CURRENCIES})
+    withdrawn_capital: dict = field(default_factory=lambda: {c: 0.0 for c in CURRENCIES})
     warnings: list = field(default_factory=list)
 
 
@@ -691,38 +694,46 @@ class PortfolioLedger:
         """FIFO replay of `tx_frame` (already sorted by date, tx_id). Does not mutate cached state."""
         state = LedgerState()
         self._ensure_macro()
-        # Negative cash is only meaningful when the ledger tracks cash explicitly (deposits/withdrawals exist)
-        track_cash = bool(tx_frame["tx_type"].isin(CASH_TX_TYPES).any()) if not tx_frame.empty else False
 
         for r in tx_frame.itertuples(index=False):
             fx, cpi = self._macro_on(r.date)
             q, p, fee, cur = float(r.quantity), float(r.price), float(r.fee), r.currency
 
             if r.tx_type == "CASH_DEPOSIT":
-                state.cash[cur] += q - fee
+                net_dep = max(0.0, q - fee)
+                state.available_cash[cur] += net_dep
+                state.total_invested_capital[cur] += net_dep
             elif r.tx_type == "CASH_WITHDRAWAL":
-                state.cash[cur] -= q + fee
+                amt = q + fee
+                state.available_cash[cur] = max(0.0, state.available_cash[cur] - amt)
+                state.withdrawn_capital[cur] += amt
             elif r.tx_type == "BUY":
                 state.open_lots.setdefault(r.ticker, deque()).append(
                     TaxLot(int(r.tx_id), r.ticker, cur, r.date, q, q, p, fee, fx, cpi))
-                state.cash[cur] -= q * p + fee
+                cost = q * p + fee
+                used = min(state.available_cash[cur], cost)
+                state.available_cash[cur] = max(0.0, state.available_cash[cur] - used)
+                shortfall = max(0.0, cost - used)
+                state.total_invested_capital[cur] += shortfall
             elif r.tx_type == "SELL":
                 actual_sell_qty = self._consume_fifo(state, r, fx, cpi)
-                state.cash[cur] += actual_sell_qty * p - fee
+                net_proceeds = max(0.0, actual_sell_qty * p - fee)
+                state.available_cash[cur] += net_proceeds
             elif r.tx_type == "DIVIDEND":
                 gross_native = q * p
                 gross_ils = gross_native * (fx if cur == "USD" else 1.0)
                 withholding_native = DIVIDEND_WITHHOLDING_RATE * gross_native
+                net_native = gross_native - withholding_native - fee
                 state.dividends.append({
                     "tx_id": int(r.tx_id), "date": r.date, "tax_year": int(r.date[:4]), "ticker": r.ticker,
                     "currency": cur, "fx": fx, "gross_native": gross_native, "gross_ils": gross_ils,
                     "withholding_ils": DIVIDEND_WITHHOLDING_RATE * gross_ils,
-                    "fee_native": fee, "net_native": gross_native - withholding_native - fee,
+                    "fee_native": fee, "net_native": net_native,
                 })
-                state.cash[cur] += gross_native - withholding_native - fee
+                state.available_cash[cur] += max(0.0, net_native)
 
-            if track_cash and state.cash[cur] < -QTY_EPSILON:
-                state.warnings.append(f"{r.date} tx {r.tx_id}: {cur} cash balance negative ({state.cash[cur]:.2f}).")
+            # Ensure cash balance reflects non-negative available cash
+            state.cash[cur] = max(0.0, state.available_cash[cur])
 
         for w in state.warnings:
             warnings.warn(w)
@@ -775,7 +786,15 @@ class PortfolioLedger:
 
     def cash_balances(self, state: LedgerState = None) -> dict:
         state = state if state is not None else self._get_state()
-        return {c: _scalar_float(v) for c, v in state.cash.items()}
+        return {c: max(0.0, _scalar_float(v)) for c, v in state.available_cash.items()}
+
+    def capital_buckets(self, state: LedgerState = None) -> dict:
+        state = state if state is not None else self._get_state()
+        return {
+            "available_cash": {c: max(0.0, _scalar_float(v)) for c, v in state.available_cash.items()},
+            "total_invested_capital": {c: max(0.0, _scalar_float(v)) for c, v in state.total_invested_capital.items()},
+            "withdrawn_capital": {c: max(0.0, _scalar_float(v)) for c, v in state.withdrawn_capital.items()},
+        }
 
     def tax_summary(self, year: int = None, state: LedgerState = None) -> pd.DataFrame:
         """
@@ -885,10 +904,21 @@ class PortfolioLedger:
             prior = prior[prior["tax_year"] < as_of_ts.year] if not prior.empty else prior
             unused_shield = _scalar_float(prior["loss_carry_out_ils"].iloc[-1]) if not prior.empty else 0.0
 
+        avail_usd = state.available_cash["USD"] + (state.available_cash["ILS"] / fx_now)
+        avail_ils = (state.available_cash["USD"] * fx_now) + state.available_cash["ILS"]
+        inv_usd = state.total_invested_capital["USD"] + (state.total_invested_capital["ILS"] / fx_now)
+        inv_ils = (state.total_invested_capital["USD"] * fx_now) + state.total_invested_capital["ILS"]
+        wdr_usd = state.withdrawn_capital["USD"] + (state.withdrawn_capital["ILS"] / fx_now)
+        wdr_ils = (state.withdrawn_capital["USD"] * fx_now) + state.withdrawn_capital["ILS"]
+
         if lots_df.empty:
             return {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pd.DataFrame(), "lots": lots_df,
                     "tlh_candidates": pd.DataFrame(), "totals": {"cash": self.cash_balances(state),
-                    "unused_loss_shield_ils": unused_shield, "est_liquidation_tax_ils": 0.0}}
+                    "unused_loss_shield_ils": unused_shield, "est_liquidation_tax_ils": 0.0,
+                    "available_cash_usd": _scalar_float(avail_usd), "available_cash_ils": _scalar_float(avail_ils),
+                    "invested_capital_usd": _scalar_float(inv_usd), "invested_capital_ils": _scalar_float(inv_ils),
+                    "withdrawn_capital_usd": _scalar_float(wdr_usd), "withdrawn_capital_ils": _scalar_float(wdr_ils),
+                    "market_value_ils": 0.0, "market_value_usd": 0.0, "cost_ils": 0.0}}
 
         lots_df["market_value_ils"] = lots_df["proceeds_ils"]
         lots_df["market_value_usd"] = lots_df["market_value_ils"] / fx_now
@@ -930,6 +960,12 @@ class PortfolioLedger:
             "unrealized_net_after_tax_ils": nominal - liq_tax,
             "ytd_taxable_real_gain_ils": ytd_taxable,
             "cash": self.cash_balances(state),
+            "available_cash_usd": _scalar_float(avail_usd),
+            "available_cash_ils": _scalar_float(avail_ils),
+            "invested_capital_usd": _scalar_float(inv_usd),
+            "invested_capital_ils": _scalar_float(inv_ils),
+            "withdrawn_capital_usd": _scalar_float(wdr_usd),
+            "withdrawn_capital_ils": _scalar_float(wdr_ils),
         }
         res_snap = {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pos, "lots": lots_df,
                     "tlh_candidates": tlh, "totals": totals}
