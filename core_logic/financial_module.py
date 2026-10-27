@@ -635,13 +635,13 @@ def sanitize_for_json(obj):
         return [sanitize_for_json(item) for item in obj]
     if isinstance(obj, dict):
         return {str(k): sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
     if isinstance(obj, (np.floating, float)):
         f = float(obj)
         return 0.0 if (math.isnan(f) or math.isinf(f)) else f
     if isinstance(obj, (np.integer, int)):
         return int(obj)
-    if isinstance(obj, (np.bool_, bool)):
-        return bool(obj)
     if isinstance(obj, (pd.Timestamp, np.datetime64)):
         return str(obj)[:10]
     return str(obj)

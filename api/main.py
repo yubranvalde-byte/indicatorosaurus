@@ -338,9 +338,10 @@ def reset_portfolio_runtime():
 def portfolio_summary():
     """
     Endpoint C: Returns current open positions, FIFO tax-lot breakdown, cash balances,
-    realized PnL, YTD Israeli tax summary, and Tax-Loss Harvesting (TLH) candidates.
+    realized PnL, YTD Israeli tax summary, Tax-Loss Harvesting (TLH) candidates,
+    and Phase 6 Quant Factor DNA / GICS Sector Attribution.
     """
-    ledger, _ = get_portfolio_runtime()
+    ledger, analytics = get_portfolio_runtime()
     as_of = request.args.get('as_of', None)
     view_currency = request.args.get('view_currency', 'USD').upper().strip()
     if view_currency not in ('USD', 'ILS'):
@@ -348,6 +349,7 @@ def portfolio_summary():
 
     tx_df = ledger.transactions()
     if tx_df.empty:
+        empty_dna = analytics.compute_quant_dna(as_of=as_of, view_currency=view_currency)
         empty_payload = {
             "as_of": as_of or pd.Timestamp.now().strftime('%Y-%m-%d'),
             "view_currency": view_currency,
@@ -370,13 +372,20 @@ def portfolio_summary():
             },
             "tax_summary": {},
             "tlh_candidates": [],
+            "quant_dna": empty_dna,
         }
         return jsonify(sanitize_for_json(empty_payload))
 
     try:
         snap = ledger.snapshot(as_of=as_of)
+        quant_dna = analytics.compute_quant_dna(as_of=as_of, view_currency=view_currency)
     except Exception as e:
         return jsonify({"error": f"Failed to compute portfolio snapshot: {str(e)}"}), 500
+
+    dna_by_ticker = {
+        str(h["ticker"]).upper(): h
+        for h in quant_dna.get("holdings_dna", [])
+    }
 
     snap_as_of = snap["as_of"]
     as_of_dt = pd.Timestamp(snap_as_of)
@@ -434,10 +443,16 @@ def portfolio_summary():
 
             lots_for_ticker = snap["lots"][snap["lots"]["ticker"] == ticker] if not snap["lots"].empty else pd.DataFrame()
             lots_count = len(lots_for_ticker)
+            dna_info = dna_by_ticker.get(ticker.upper(), {})
 
             positions_list.append({
                 "ticker": ticker,
                 "currency": currency,
+                "sector": dna_info.get("sector", "Unclassified / ETF / TASE"),
+                "is_covered": bool(dna_info.get("is_covered", False)),
+                "quant_score": dna_info.get("quant_score", None),
+                "quant_status": dna_info.get("quant_status", "ETF_TASE"),
+                "pillars": dna_info.get("pillars", {}),
                 "quantity": qty,
                 "avg_cost_native": avg_cost_native,
                 "current_price_native": cur_price_native,
@@ -512,6 +527,32 @@ def portfolio_summary():
         "usd_ils": fx_rate,
     }
 
+    # Enrich TLH candidates with immediate 25% Israeli tax shield and YTD tax offset metrics
+    raw_tlh = sanitize_for_json(snap["tlh_candidates"])
+    ytd_tax_due_ils = _scalar_float(tax_summary_dict.get("capital_gains_tax_ils", 0.0))
+    lot_lookup = {
+        int(l["lot_id"]): l
+        for l in sanitize_for_json(snap["lots"])
+    } if not snap["lots"].empty else {}
+
+    enriched_tlh = []
+    for item in raw_tlh:
+        real_loss_abs = abs(_scalar_float(item.get("real_loss_ils", 0.0)))
+        immediate_shield = round(0.25 * real_loss_abs, 2)
+        ytd_offset = round(min(immediate_shield, ytd_tax_due_ils), 2)
+        carry_forward_shield = round(max(0.0, immediate_shield - ytd_offset), 2)
+        lot_meta = lot_lookup.get(int(item.get("lot_id", -1)), {})
+        enriched_tlh.append({
+            **item,
+            "currency": lot_meta.get("currency", "USD"),
+            "buy_price": _scalar_float(lot_meta.get("buy_price", 0.0)),
+            "current_price": _scalar_float(lot_meta.get("current_price", 0.0)),
+            "immediate_tax_shield_ils": immediate_shield,
+            "potential_tax_shield_ils": immediate_shield,
+            "ytd_tax_offset_ils": ytd_offset,
+            "carry_forward_shield_ils": carry_forward_shield,
+        })
+
     response_payload = {
         "as_of": snap_as_of,
         "view_currency": view_currency,
@@ -520,9 +561,45 @@ def portfolio_summary():
         "cash": cash_dict,
         "totals": totals_dict,
         "tax_summary": tax_summary_dict,
-        "tlh_candidates": sanitize_for_json(snap["tlh_candidates"]),
+        "tlh_candidates": enriched_tlh,
+        "quant_dna": quant_dna,
     }
     return jsonify(sanitize_for_json(response_payload))
+
+
+@app.route('/api/portfolio/quant-dna', methods=['GET'])
+def portfolio_quant_dna():
+    """
+    Endpoint F (Phase 6): Computes C-FFI 16-indicator Portfolio Factor DNA,
+    5-Pillar Radar scores vs. Market Baseline, Per-Holding Quant Health Scores,
+    and GICS Sector Allocation & Attribution.
+    """
+    _, analytics = get_portfolio_runtime()
+    as_of = request.args.get('as_of', None)
+    view_currency = request.args.get('view_currency', 'ILS').upper().strip()
+    if view_currency not in ('USD', 'ILS'):
+        return jsonify({"error": "view_currency must be either 'USD' or 'ILS'"}), 400
+
+    weights_param = request.args.get('weights', None)
+    weights_16 = None
+    if weights_param:
+        try:
+            parts = [float(x.strip()) for x in weights_param.split(',') if x.strip()]
+            if len(parts) != 16:
+                return jsonify({"error": f"weights must contain 16 comma-separated floats, got {len(parts)}"}), 400
+            weights_16 = parts
+        except ValueError:
+            return jsonify({"error": "weights parameter must contain valid numeric values"}), 400
+
+    try:
+        dna_payload = analytics.compute_quant_dna(
+            as_of=as_of,
+            weights_16=weights_16,
+            view_currency=view_currency,
+        )
+        return jsonify(sanitize_for_json(dna_payload))
+    except Exception as e:
+        return jsonify({"error": f"Quant DNA calculation failed: {str(e)}"}), 500
 
 
 @app.route('/api/portfolio/transactions', methods=['GET', 'POST'])

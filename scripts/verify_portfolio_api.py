@@ -451,9 +451,9 @@ def run_api_verification():
         print(f" -> [PASS] Screener regression passed: scored {len(results)} stocks; Top ticker={top_stock['ticker']}, Score={top_stock['score']}.")
 
         # ───────────────────────────────────────────────────────────────────────
-        # 7. Phase 5 Frontend Workspace HTML & Component Contract Check
+        # 7. Phase 5 & Phase 6 Frontend Workspace HTML & Component Contract Check
         # ───────────────────────────────────────────────────────────────────────
-        print("\n[Step 7] Verifying Phase 5 Frontend Portfolio Workspace (GET /)...")
+        print("\n[Step 7] Verifying Phase 5 & Phase 6 Frontend Portfolio Workspace (GET /)...")
         res_html = client.get("/")
         assert res_html.status_code == 200, f"Expected HTTP 200 from GET /, got {res_html.status_code}"
         html_body = res_html.data.decode("utf-8")
@@ -461,17 +461,115 @@ def run_api_verification():
             "workspace-screener",
             "workspace-portfolio",
             "portfolio-main-chart",
+            "portfolio-dna-radar-chart",
+            "portfolio-sector-chart",
+            "portfolio-tlh-body",
             "portfolio-holdings-body",
             "portfolio-tx-body",
             "switchWorkspace",
             "setPortfolioCurrency",
             "portfolioChartInstance.destroy()",
+            "portfolioRadarChartInstance.destroy()",
+            "portfolioSectorChartInstance.destroy()",
         ):
-            assert token in html_body, f"Missing required Phase 5 UI token in index.html: {token}"
-        print(" -> [PASS] Phase 5 Frontend Portfolio Workspace HTML & controller verified.")
+            assert token in html_body, f"Missing required Phase 5/6 UI token in index.html: {token}"
+        print(" -> [PASS] Phase 5 & Phase 6 Frontend Portfolio Workspace HTML & controller verified.")
+
+        # ───────────────────────────────────────────────────────────────────────
+        # 8. Phase 6 Quant Factor DNA (C-FFI), Sector Attribution & TLH Simulator
+        # ───────────────────────────────────────────────────────────────────────
+        print("\n[Step 8] Testing Phase 6 Quant Factor DNA, Sector Attribution & TLH Simulator...")
+        # Add MSFT (high cost lot to trigger a real capital loss for TLH) and SPY (ETF, non-SimFin)
+        r_msft = client.post("/api/portfolio/transactions", json={
+            "action": "add",
+            "transaction": {
+                "date": "2024-03-01",
+                "ticker": "MSFT",
+                "tx_type": "BUY",
+                "quantity": 10.0,
+                "price": 600.0,
+                "fee": 5.0,
+                "currency": "USD",
+                "notes": "High entry lot for TLH verification"
+            }
+        })
+        _strict_json_parse(r_msft, expected_status=201)
+
+        r_spy = client.post("/api/portfolio/transactions", json={
+            "action": "add",
+            "transaction": {
+                "date": "2024-03-05",
+                "ticker": "SPY",
+                "tx_type": "BUY",
+                "quantity": 10.0,
+                "price": 500.0,
+                "fee": 2.0,
+                "currency": "USD",
+                "notes": "Benchmark ETF holding"
+            }
+        })
+        _strict_json_parse(r_spy, expected_status=201)
+
+        res_dna = client.get("/api/portfolio/quant-dna?view_currency=ILS&as_of=2024-06-15")
+        dna = _strict_json_parse(res_dna, expected_status=200)
+
+        assert 0.0 < dna["portfolio_quant_score"] <= 100.0, f"Invalid portfolio_quant_score: {dna['portfolio_quant_score']}"
+        assert 0.0 < dna["benchmark_quant_score"] <= 100.0
+        assert dna["covered_holdings_count"] == 2, f"Expected 2 covered holdings (AAPL, MSFT), got {dna['covered_holdings_count']}"
+        assert dna["total_holdings_count"] == 4, f"Expected 4 total holdings (AAPL, MSFT, SPY, LUMI.TA), got {dna['total_holdings_count']}"
+
+        # Verify factor_coverage_pct equals exact share of covered MV over total MV
+        holdings_by_sym = {h["ticker"]: h for h in dna["holdings_dna"]}
+        assert holdings_by_sym["AAPL"]["is_covered"] is True and 0.0 < holdings_by_sym["AAPL"]["quant_score"] <= 100.0
+        assert holdings_by_sym["MSFT"]["is_covered"] is True and 0.0 < holdings_by_sym["MSFT"]["quant_score"] <= 100.0
+        assert holdings_by_sym["SPY"]["is_covered"] is False and holdings_by_sym["SPY"]["quant_status"] == "ETF_TASE"
+        assert holdings_by_sym["LUMI.TA"]["is_covered"] is False and holdings_by_sym["LUMI.TA"]["quant_status"] == "ETF_TASE"
+
+        cov_mv = holdings_by_sym["AAPL"]["market_value_view"] + holdings_by_sym["MSFT"]["market_value_view"]
+        tot_mv = sum(h["market_value_view"] for h in dna["holdings_dna"])
+        expected_cov_pct = (cov_mv / tot_mv) * 100.0
+        assert math.isclose(dna["factor_coverage_pct"], expected_cov_pct, abs_tol=0.05), (
+            f"factor_coverage_pct mismatch: expected {expected_cov_pct:.2f}%, got {dna['factor_coverage_pct']:.2f}%"
+        )
+
+        # Verify 5-Pillar Radar scores in [0, 100]
+        for pillar in ("Valuation", "Growth", "Quality", "Safety & Income", "Momentum"):
+            assert pillar in dna["pillars"], f"Missing pillar {pillar}"
+            assert 0.0 <= dna["pillars"][pillar] <= 100.0
+            assert 0.0 <= dna["benchmark_pillars"][pillar] <= 100.0
+
+        # Verify GICS sector weights sum to 100.0%
+        sectors = dna["sector_attribution"]
+        assert len(sectors) >= 2
+        sector_weight_sum = sum(s["weight_pct"] for s in sectors)
+        assert math.isclose(sector_weight_sum, 100.0, abs_tol=1e-2), f"Sector weights must sum to 100%, got {sector_weight_sum}"
+        sec_by_name = {s["sector"]: s for s in sectors}
+        assert "Unclassified / ETF / TASE" in sec_by_name
+        assert set(sec_by_name["Unclassified / ETF / TASE"]["tickers"]) == {"SPY", "LUMI.TA"}
+
+        # Verify TLH Simulator candidates on summary endpoint
+        res_sum_p6 = client.get("/api/portfolio/summary?view_currency=ILS&as_of=2024-06-15")
+        sum_p6 = _strict_json_parse(res_sum_p6, expected_status=200)
+        tlh_cands = sum_p6["tlh_candidates"]
+        assert len(tlh_cands) >= 1, "Expected at least 1 TLH candidate from high-cost MSFT lot"
+        msft_tlh = next((c for c in tlh_cands if c["ticker"] == "MSFT"), None)
+        assert msft_tlh is not None and msft_tlh["real_loss_ils"] < 0.0
+        assert math.isclose(msft_tlh["immediate_tax_shield_ils"], round(0.25 * abs(msft_tlh["real_loss_ils"]), 2), abs_tol=0.02)
+
+        # Verify warm-cache latency on GET /api/portfolio/quant-dna (< 50ms)
+        dna_latencies = []
+        for _ in range(10):
+            t0_dna = time.perf_counter()
+            r_dna = client.get("/api/portfolio/quant-dna?view_currency=ILS&as_of=2024-06-15")
+            assert r_dna.status_code == 200
+            dna_latencies.append((time.perf_counter() - t0_dna) * 1000.0)
+        avg_dna_ms = float(np.mean(dna_latencies))
+        print(f" -> GET /api/portfolio/quant-dna warm latency: avg={avg_dna_ms:.2f}ms")
+        assert avg_dna_ms < 50.0, f"[SLA BREACH] Warm Quant DNA latency {avg_dna_ms:.2f}ms >= 50ms"
+        print(" -> [PASS] Phase 6 Quant Factor DNA, Sector Attribution & TLH Simulator verified.")
 
         print("\n---------------------------------------------------------------------------------")
-        print("[SUCCESS] All Phase 4, Phase 5 & Checkpoint 2 Portfolio API/UI assertions passed!")
+        print("[SUCCESS] All Phase 4, Phase 5, Phase 6 & Checkpoint 2 assertions passed!")
         print("---------------------------------------------------------------------------------")
 
     finally:

@@ -26,11 +26,26 @@ Key Capabilities:
 """
 
 import math
+import os
+import time
 import numpy as np
 import pandas as pd
 
-from financial_module import _scalar_float, _clean_frame, _to_naive_ts
+from financial_module import (
+    INDICATOR_COLUMNS,
+    NUM_INDICATORS,
+    _scalar_float,
+    _clean_frame,
+    _to_naive_ts,
+    compute_live_technical_indicators,
+    ensure_tech_cache,
+    get_cached_fundamental_snapshot,
+    normalize_stocks,
+    run_financial_engine,
+    sanitize_for_json,
+)
 from portfolio_ledger import (
+    CAPITAL_GAINS_TAX_RATE,
     CASH_TX_TYPES,
     DIVIDEND_WITHHOLDING_RATE,
     PortfolioLedger,
@@ -40,6 +55,32 @@ RISK_FREE_ANNUAL = 0.04
 TRADING_DAYS_PER_YEAR = 252.0
 CALENDAR_DAYS_PER_YEAR = 365.0
 WINDOW_PRESETS = ("1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "ALL")
+
+# 5 Composite Factor Pillars mapping the 16 C-FFI indicators
+FACTOR_PILLARS = {
+    "Valuation": ["TrailingPE", "EV_EBITDA", "FCFYield"],
+    "Growth": ["RevenueGrowth", "EPSGrowth"],
+    "Quality": ["GrossMargin", "OperatingMargin", "ROIC"],
+    "Safety & Income": ["NetDebt_EBITDA", "ShareholderYield", "FiveYDivGrowth", "PayoutRatio", "Beta"],
+    "Momentum": ["RSI", "PriceVs200SMA", "RelativeStrength"],
+}
+
+KNOWN_ETF_TICKERS = frozenset({
+    "SPY", "QQQ", "SMH", "IWM", "DIA", "VOO", "VTI", "SOXX", "ARKK",
+    "XLK", "XLF", "XLV", "XLE", "XLI", "XLY", "XLP", "XLU", "XLB", "XLRE", "XLC",
+    "GLD", "SLV", "TLT", "IEF", "SHY", "HYG", "LQD", "EEM", "EFA", "VEA", "VWO",
+})
+
+_UNIVERSE_DNA_CACHE = {
+    "timestamp": 0.0,
+    "norm_by_ticker": {},
+    "raw_by_ticker": {},
+    "meta_by_ticker": {},
+    "baseline_indicators": {},
+    "baseline_pillars": {},
+    "scores_by_weights": {},
+}
+_DNA_CACHE_TTL = 1800.0
 
 
 # ─── Date & Window Helpers ────────────────────────────────────────────────────
@@ -226,11 +267,13 @@ class PortfolioAnalytics:
         self.macro_provider = macro_provider or ledger.macro_provider
         self._cached_daily_series: dict = {}
         self._cached_slices: dict = {}
+        self._cached_quant_dna: dict = {}
 
     def invalidate_cache(self):
         """Invalidate memoized daily time series when the underlying ledger mutates."""
         self._cached_daily_series.clear()
         self._cached_slices.clear()
+        self._cached_quant_dna.clear()
 
     def build_daily_series(self, end_date=None, cash_mode: str = "auto") -> pd.DataFrame:
         """
@@ -841,3 +884,441 @@ class PortfolioAnalytics:
             "tax_and_fee_drag_pct": _scalar_float(tax_and_fee_drag_pct),
             "net_after_tax_twr_pct": _scalar_float(net_after_tax_twr_pct),
         }
+
+    def compute_quant_dna(
+        self,
+        as_of=None,
+        weights_16: list[float] | None = None,
+        view_currency: str = "ILS",
+    ) -> dict:
+        """Memoized wrapper around `compute_portfolio_quant_dna` tied to ledger state."""
+        view_cur = str(view_currency or "ILS").upper().strip()
+        w_tuple = (
+            tuple(round(float(w), 6) for w in weights_16)
+            if weights_16 is not None and len(weights_16) == NUM_INDICATORS
+            else tuple([round(1.0 / NUM_INDICATORS, 6)] * NUM_INDICATORS)
+        )
+        tx_count = len(self.ledger._tx) if hasattr(self.ledger, "_tx") else -1
+        cache_key = (tx_count, str(as_of), view_cur, w_tuple)
+        if cache_key in self._cached_quant_dna:
+            return self._cached_quant_dna[cache_key]
+
+        res = compute_portfolio_quant_dna(
+            ledger=self.ledger,
+            as_of=as_of,
+            weights_16=list(w_tuple),
+            view_currency=view_cur,
+            price_provider=self.price_provider,
+        )
+        self._cached_quant_dna[cache_key] = res
+        return res
+
+
+# ─── Phase 6: Portfolio Factor DNA (C-FFI) & GICS Sector Attribution ──────────
+
+def _get_universe_quant_baseline(weights_16: list[float]) -> dict:
+    """
+    Hydrate and cache the normalized 16-indicator fundamental universe and execute
+    the 80-byte C-FFI `Stock` scoring kernel (`run_financial_engine`) across all
+    universe equities. Returns O(1) lookup tables and universe baseline factor profiles.
+    """
+    global _UNIVERSE_DNA_CACHE
+    now = time.time()
+
+    # Normalize weights vector to sum to 1.0 for standardized [0, 100] C-FFI composite scores
+    w_arr = np.asarray(weights_16, dtype=np.float64)
+    w_sum = float(np.sum(w_arr))
+    if w_sum > 1e-9:
+        w_norm = (w_arr / w_sum).tolist()
+    else:
+        w_norm = [1.0 / NUM_INDICATORS] * NUM_INDICATORS
+    w_key = tuple(round(float(x), 6) for x in w_norm)
+
+    if (
+        _UNIVERSE_DNA_CACHE["norm_by_ticker"]
+        and (now - _UNIVERSE_DNA_CACHE["timestamp"]) < _DNA_CACHE_TTL
+    ):
+        if w_key not in _UNIVERSE_DNA_CACHE["scores_by_weights"]:
+            norm_list = list(_UNIVERSE_DNA_CACHE["norm_by_ticker"].values())
+            scored = run_financial_engine(norm_list, w_norm)
+            _UNIVERSE_DNA_CACHE["scores_by_weights"][w_key] = {
+                s["Ticker"]: _scalar_float(s["FinalScore"]) for s in scored
+            }
+        return {
+            "norm_by_ticker": _UNIVERSE_DNA_CACHE["norm_by_ticker"],
+            "raw_by_ticker": _UNIVERSE_DNA_CACHE["raw_by_ticker"],
+            "meta_by_ticker": _UNIVERSE_DNA_CACHE["meta_by_ticker"],
+            "baseline_indicators": _UNIVERSE_DNA_CACHE["baseline_indicators"],
+            "baseline_pillars": _UNIVERSE_DNA_CACHE["baseline_pillars"],
+            "scores_map": _UNIVERSE_DNA_CACHE["scores_by_weights"][w_key],
+            "weights_normalized": w_norm,
+        }
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    primary_csv = os.path.abspath(os.path.join(base_dir, "..", "data", "historical_fundamental_data.csv"))
+    fallback_csv = os.path.abspath(os.path.join(base_dir, "..", "data", "market_data.csv"))
+    csv_path = primary_csv if os.path.exists(primary_csv) else fallback_csv
+
+    stocks_df, err = get_cached_fundamental_snapshot(csv_path)
+    if err or stocks_df is None or stocks_df.empty:
+        return {
+            "norm_by_ticker": {},
+            "raw_by_ticker": {},
+            "meta_by_ticker": {},
+            "baseline_indicators": {c: 50.0 for c in INDICATOR_COLUMNS},
+            "baseline_pillars": {p: 50.0 for p in FACTOR_PILLARS},
+            "scores_map": {},
+            "weights_normalized": w_norm,
+        }
+
+    # Enrich GICS Sector & LongName metadata and backfill missing S&P 500 equities from market_data.csv
+    if os.path.exists(fallback_csv) and csv_path != fallback_csv:
+        try:
+            mkt_df = pd.read_csv(fallback_csv)
+            if not mkt_df.empty and "Ticker" in mkt_df.columns:
+                mkt_df["Ticker"] = mkt_df["Ticker"].astype(str).str.upper().str.strip()
+                if "ForwardPE" in mkt_df.columns and "TrailingPE" not in mkt_df.columns:
+                    mkt_df["TrailingPE"] = mkt_df["ForwardPE"]
+                if "DebtToEquity" in mkt_df.columns and "NetDebt_EBITDA" not in mkt_df.columns:
+                    mkt_df["NetDebt_EBITDA"] = pd.to_numeric(mkt_df["DebtToEquity"], errors="coerce").fillna(0.0) / 25.0
+
+                sec_map = dict(zip(mkt_df["Ticker"], mkt_df.get("Sector", pd.Series(dtype=str)).fillna("")))
+                name_map = dict(zip(mkt_df["Ticker"], mkt_df.get("LongName", mkt_df["Ticker"]).fillna("")))
+
+                stocks_df["Ticker"] = stocks_df["Ticker"].astype(str).str.upper().str.strip()
+                mapped_sec = stocks_df["Ticker"].map(sec_map)
+                stocks_df["Sector"] = np.where(
+                    mapped_sec.notna() & (mapped_sec != ""),
+                    mapped_sec,
+                    stocks_df.get("Sector", "Other"),
+                )
+                mapped_name = stocks_df["Ticker"].map(name_map)
+                stocks_df["LongName"] = np.where(
+                    mapped_name.notna() & (mapped_name != ""),
+                    mapped_name,
+                    stocks_df.get("LongName", stocks_df["Ticker"]),
+                )
+
+                existing_set = set(stocks_df["Ticker"])
+                missing_mkt = mkt_df[~mkt_df["Ticker"].isin(existing_set)].copy()
+                if not missing_mkt.empty:
+                    stocks_df = pd.concat([stocks_df, missing_mkt], ignore_index=True)
+        except Exception:
+            pass
+
+    ensure_tech_cache()
+    surviving_tickers = stocks_df["Ticker"].astype(str).tolist()
+    tech_map = compute_live_technical_indicators(surviving_tickers)
+    if tech_map:
+        tech_df = pd.DataFrame.from_dict(tech_map, orient="index")
+        tech_df.index.name = "Ticker"
+        stocks_df = stocks_df.set_index("Ticker")
+        for col in ("RelativeStrength", "PriceVs200SMA", "RSI", "Beta"):
+            if col in tech_df.columns:
+                stocks_df[col] = tech_df[col]
+        stocks_df = stocks_df.reset_index()
+
+    stocks_df = _clean_frame(stocks_df)
+    stocks_data = stocks_df.to_dict(orient="records")
+
+    normalized_stocks = normalize_stocks(
+        stocks_data,
+        strategy=None,
+        allowed_sectors=None,
+        min_market_cap=None,
+        max_market_cap=None,
+        global_stocks_list=stocks_data,
+    )
+
+    norm_by_ticker = {str(s["Ticker"]).upper(): s for s in normalized_stocks}
+    raw_by_ticker = {str(s["Ticker"]).upper(): s for s in stocks_data}
+    meta_by_ticker = {
+        str(s["Ticker"]).upper(): {
+            "longName": str(s.get("LongName", "") or ""),
+            "sector": str(s.get("Sector", "") or "Unclassified").strip() or "Unclassified",
+            "marketCap": _scalar_float(s.get("MarketCap", 0.0)),
+        }
+        for s in stocks_data
+    }
+
+    # Vectorized baseline calculation across the normalized universe matrix (N x 16)
+    norm_df = pd.DataFrame(normalized_stocks)
+    if not norm_df.empty:
+        mat_16 = norm_df[INDICATOR_COLUMNS].to_numpy(dtype=np.float64)
+        col_means = np.nanmean(mat_16, axis=0)
+        baseline_indicators = {
+            col: _scalar_float(round(float(col_means[idx]), 2), 50.0)
+            for idx, col in enumerate(INDICATOR_COLUMNS)
+        }
+    else:
+        baseline_indicators = {c: 50.0 for c in INDICATOR_COLUMNS}
+
+    baseline_pillars = {}
+    for pillar_name, cols in FACTOR_PILLARS.items():
+        vals = np.array([baseline_indicators.get(c, 50.0) for c in cols], dtype=np.float64)
+        baseline_pillars[pillar_name] = _scalar_float(round(float(np.mean(vals)), 2), 50.0)
+
+    scored = run_financial_engine(normalized_stocks, w_norm)
+    scores_map = {str(s["Ticker"]).upper(): _scalar_float(s["FinalScore"]) for s in scored}
+
+    _UNIVERSE_DNA_CACHE["timestamp"] = now
+    _UNIVERSE_DNA_CACHE["norm_by_ticker"] = norm_by_ticker
+    _UNIVERSE_DNA_CACHE["raw_by_ticker"] = raw_by_ticker
+    _UNIVERSE_DNA_CACHE["meta_by_ticker"] = meta_by_ticker
+    _UNIVERSE_DNA_CACHE["baseline_indicators"] = baseline_indicators
+    _UNIVERSE_DNA_CACHE["baseline_pillars"] = baseline_pillars
+    _UNIVERSE_DNA_CACHE["scores_by_weights"] = {w_key: scores_map}
+
+    return {
+        "norm_by_ticker": norm_by_ticker,
+        "raw_by_ticker": raw_by_ticker,
+        "meta_by_ticker": meta_by_ticker,
+        "baseline_indicators": baseline_indicators,
+        "baseline_pillars": baseline_pillars,
+        "scores_map": scores_map,
+        "weights_normalized": w_norm,
+    }
+
+
+def compute_portfolio_quant_dna(
+    ledger: PortfolioLedger,
+    as_of=None,
+    weights_16: list[float] | None = None,
+    view_currency: str = "ILS",
+    price_provider=None,
+) -> dict:
+    """
+    Compute Phase 6 Portfolio Factor DNA, Per-Holding C-FFI Quant Scores,
+    5-Pillar Radar Profile, and GICS Sector Attribution.
+
+    Strictly normalizes factor weights across covered fundamental equities so ETFs
+    (e.g., SPY, QQQ) or TASE (.TA) securities do not bias factor scores toward zero,
+    and reports `factor_coverage_pct` (percentage of invested equity covered by the
+    16-indicator SimFin fundamental dataset).
+    """
+    view_cur = str(view_currency or "ILS").upper().strip()
+    if view_cur not in ("USD", "ILS"):
+        raise ValueError(f"view_currency must be 'USD' or 'ILS' (got {view_currency}).")
+
+    if weights_16 is None or len(weights_16) != NUM_INDICATORS:
+        weights_16 = [1.0 / NUM_INDICATORS] * NUM_INDICATORS
+
+    uni = _get_universe_quant_baseline(weights_16)
+    norm_by_ticker = uni["norm_by_ticker"]
+    meta_by_ticker = uni["meta_by_ticker"]
+    baseline_indicators = uni["baseline_indicators"]
+    baseline_pillars = uni["baseline_pillars"]
+    scores_map = uni["scores_map"]
+    w_norm = np.asarray(uni["weights_normalized"], dtype=np.float64)
+
+    tx_df = ledger.transactions()
+    if tx_df.empty:
+        return sanitize_for_json({
+            "as_of": as_of or pd.Timestamp.now().strftime("%Y-%m-%d"),
+            "view_currency": view_cur,
+            "portfolio_quant_score": 0.0,
+            "benchmark_quant_score": _scalar_float(float(np.dot(
+                np.array([baseline_indicators[c] for c in INDICATOR_COLUMNS], dtype=np.float64),
+                w_norm
+            ))),
+            "factor_coverage_pct": 0.0,
+            "covered_holdings_count": 0,
+            "total_holdings_count": 0,
+            "pillars": {p: 0.0 for p in FACTOR_PILLARS},
+            "benchmark_pillars": baseline_pillars,
+            "pillar_tilts": {p: 0.0 for p in FACTOR_PILLARS},
+            "indicators": {c: 0.0 for c in INDICATOR_COLUMNS},
+            "benchmark_indicators": baseline_indicators,
+            "holdings_dna": [],
+            "sector_attribution": [],
+        })
+
+    snap = ledger.snapshot(as_of=as_of, price_provider=price_provider)
+    pos_df = snap["positions"]
+    snap_as_of = snap["as_of"]
+
+    bench_score = _scalar_float(round(float(np.dot(
+        np.array([baseline_indicators[c] for c in INDICATOR_COLUMNS], dtype=np.float64),
+        w_norm,
+    )), 2))
+
+    if pos_df.empty:
+        return sanitize_for_json({
+            "as_of": snap_as_of,
+            "view_currency": view_cur,
+            "portfolio_quant_score": 0.0,
+            "benchmark_quant_score": bench_score,
+            "factor_coverage_pct": 0.0,
+            "covered_holdings_count": 0,
+            "total_holdings_count": 0,
+            "pillars": {p: 0.0 for p in FACTOR_PILLARS},
+            "benchmark_pillars": baseline_pillars,
+            "pillar_tilts": {p: 0.0 for p in FACTOR_PILLARS},
+            "indicators": {c: 0.0 for c in INDICATOR_COLUMNS},
+            "benchmark_indicators": baseline_indicators,
+            "holdings_dna": [],
+            "sector_attribution": [],
+        })
+
+    mv_col = "market_value_ils" if view_cur == "ILS" else "market_value_usd"
+    cost_col = "cost_ils" if view_cur == "ILS" else "cost_usd"
+
+    total_mv = _scalar_float(pos_df[mv_col].sum())
+    total_cost = _scalar_float(pos_df[cost_col].sum())
+
+    holdings_dna = []
+    covered_mvs = []
+    covered_scores = []
+    covered_ind_rows = []
+    sector_buckets: dict[str, dict] = {}
+
+    for _, row in pos_df.iterrows():
+        ticker = str(row["ticker"]).upper().strip()
+        mv_view = _scalar_float(row[mv_col])
+        cost_view = _scalar_float(row[cost_col])
+        unr_pnl_view = mv_view - cost_view
+        weight_pct = (mv_view / total_mv * 100.0) if total_mv > 1e-9 else 0.0
+
+        is_etf_or_tase = (ticker in KNOWN_ETF_TICKERS) or ticker.endswith(".TA")
+        is_covered = (ticker in norm_by_ticker) and (not is_etf_or_tase)
+        if is_covered:
+            norm_entry = norm_by_ticker[ticker]
+            meta_entry = meta_by_ticker.get(ticker, {})
+            sector = str(meta_entry.get("sector") or "Unclassified").strip() or "Unclassified"
+            long_name = str(meta_entry.get("longName") or ticker)
+            q_score = _scalar_float(round(scores_map.get(ticker, 0.0), 2))
+            if q_score >= 70.0:
+                q_status = "STRONG"
+            elif q_score >= 45.0:
+                q_status = "NEUTRAL"
+            else:
+                q_status = "WARNING"
+
+            ind_vec = np.array([_scalar_float(norm_entry.get(c, 0.0)) for c in INDICATOR_COLUMNS], dtype=np.float64)
+            ind_dict = {c: _scalar_float(round(float(ind_vec[idx]), 1)) for idx, c in enumerate(INDICATOR_COLUMNS)}
+            h_pillars = {}
+            for p_name, p_cols in FACTOR_PILLARS.items():
+                p_vals = np.array([ind_dict[c] for c in p_cols], dtype=np.float64)
+                h_pillars[p_name] = _scalar_float(round(float(np.mean(p_vals)), 1))
+
+            covered_mvs.append(mv_view)
+            covered_scores.append(q_score)
+            covered_ind_rows.append(ind_vec)
+        else:
+            sector = "Unclassified / ETF / TASE"
+            long_name = ticker
+            q_score = None
+            q_status = "ETF_TASE"
+            ind_dict = {}
+            h_pillars = {}
+
+        holdings_dna.append({
+            "ticker": ticker,
+            "long_name": long_name,
+            "sector": sector,
+            "is_covered": bool(is_covered),
+            "quant_score": q_score,
+            "quant_status": q_status,
+            "weight_pct": _scalar_float(round(weight_pct, 2)),
+            "market_value_view": _scalar_float(round(mv_view, 2)),
+            "unrealized_pnl_view": _scalar_float(round(unr_pnl_view, 2)),
+            "pillars": h_pillars,
+            "indicators": ind_dict,
+        })
+
+        # Accumulate GICS Sector bucket
+        if sector not in sector_buckets:
+            sector_buckets[sector] = {
+                "sector": sector,
+                "market_value_view": 0.0,
+                "cost_basis_view": 0.0,
+                "unrealized_pnl_view": 0.0,
+                "covered_mv": 0.0,
+                "weighted_score_sum": 0.0,
+                "holdings_count": 0,
+                "tickers": [],
+            }
+        b = sector_buckets[sector]
+        b["market_value_view"] += mv_view
+        b["cost_basis_view"] += cost_view
+        b["unrealized_pnl_view"] += unr_pnl_view
+        b["holdings_count"] += 1
+        b["tickers"].append(ticker)
+        if is_covered and q_score is not None:
+            b["covered_mv"] += mv_view
+            b["weighted_score_sum"] += mv_view * q_score
+
+    # Vectorized Portfolio Factor DNA across covered equities
+    covered_mv_total = float(np.sum(covered_mvs)) if covered_mvs else 0.0
+    factor_coverage_pct = (covered_mv_total / total_mv * 100.0) if total_mv > 1e-9 else 0.0
+
+    if covered_mvs and covered_mv_total > 1e-9:
+        w_cov = np.asarray(covered_mvs, dtype=np.float64) / covered_mv_total
+        scores_vec = np.asarray(covered_scores, dtype=np.float64)
+        ind_mat = np.vstack(covered_ind_rows)  # shape: (K_cov, 16)
+
+        port_quant_score = _scalar_float(round(float(np.dot(w_cov, scores_vec)), 2))
+        port_ind_vec = np.dot(w_cov, ind_mat)  # shape: (16,)
+        port_indicators = {
+            c: _scalar_float(round(float(port_ind_vec[idx]), 2))
+            for idx, c in enumerate(INDICATOR_COLUMNS)
+        }
+        port_pillars = {}
+        pillar_tilts = {}
+        for p_name, p_cols in FACTOR_PILLARS.items():
+            p_vals = np.array([port_indicators[c] for c in p_cols], dtype=np.float64)
+            p_score = _scalar_float(round(float(np.mean(p_vals)), 2))
+            port_pillars[p_name] = p_score
+            pillar_tilts[p_name] = _scalar_float(round(p_score - baseline_pillars.get(p_name, 50.0), 2))
+    else:
+        port_quant_score = 0.0
+        port_indicators = {c: 0.0 for c in INDICATOR_COLUMNS}
+        port_pillars = {p: 0.0 for p in FACTOR_PILLARS}
+        pillar_tilts = {p: 0.0 for p in FACTOR_PILLARS}
+
+    # Finalize GICS Sector Attribution array (sorted by weight descending, exact 100% sum)
+    sector_list = []
+    for sec_name, b in sector_buckets.items():
+        s_mv = b["market_value_view"]
+        s_cost = b["cost_basis_view"]
+        s_pnl = b["unrealized_pnl_view"]
+        s_weight = (s_mv / total_mv * 100.0) if total_mv > 1e-9 else 0.0
+        s_ret_pct = (s_pnl / s_cost * 100.0) if s_cost > 1e-9 else 0.0
+        s_contrib_pct = (s_pnl / total_cost * 100.0) if total_cost > 1e-9 else 0.0
+        s_avg_score = (b["weighted_score_sum"] / b["covered_mv"]) if b["covered_mv"] > 1e-9 else None
+
+        sector_list.append({
+            "sector": sec_name,
+            "weight_pct": _scalar_float(round(s_weight, 4)),
+            "market_value_view": _scalar_float(round(s_mv, 2)),
+            "cost_basis_view": _scalar_float(round(s_cost, 2)),
+            "unrealized_pnl_view": _scalar_float(round(s_pnl, 2)),
+            "sector_return_pct": _scalar_float(round(s_ret_pct, 2)),
+            "pnl_contribution_pct": _scalar_float(round(s_contrib_pct, 2)),
+            "avg_quant_score": _scalar_float(round(s_avg_score, 2)) if s_avg_score is not None else None,
+            "holdings_count": int(b["holdings_count"]),
+            "tickers": b["tickers"],
+        })
+
+    sector_list.sort(key=lambda x: x["weight_pct"], reverse=True)
+    if sector_list and total_mv > 1e-9:
+        # Ensure exact 100.0% sum after rounding on the largest sector
+        sum_other = sum(s["weight_pct"] for s in sector_list[1:])
+        sector_list[0]["weight_pct"] = _scalar_float(round(max(0.0, 100.0 - sum_other), 4))
+
+    return sanitize_for_json({
+        "as_of": snap_as_of,
+        "view_currency": view_cur,
+        "portfolio_quant_score": port_quant_score,
+        "benchmark_quant_score": bench_score,
+        "factor_coverage_pct": _scalar_float(round(factor_coverage_pct, 2)),
+        "covered_holdings_count": len(covered_mvs),
+        "total_holdings_count": len(holdings_dna),
+        "pillars": port_pillars,
+        "benchmark_pillars": baseline_pillars,
+        "pillar_tilts": pillar_tilts,
+        "indicators": port_indicators,
+        "benchmark_indicators": baseline_indicators,
+        "holdings_dna": holdings_dna,
+        "sector_attribution": sector_list,
+    })

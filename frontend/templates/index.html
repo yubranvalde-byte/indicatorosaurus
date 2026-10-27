@@ -564,6 +564,135 @@ tailwind.config = {
       </div>
     </div>
 
+    <!-- 2B. PHASE 6: PORTFOLIO FACTOR DNA RADAR & GICS SECTOR ATTRIBUTION -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Left Card: Portfolio Factor DNA Radar (C-FFI 16-Indicator Engine) -->
+      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-[#2a2a2a] pb-3">
+          <div>
+            <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[18px]">radar</span>
+              Portfolio Factor DNA (C-FFI Engine)
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">Value-weighted 5-pillar &amp; 16-indicator profile vs. Market Universe Baseline.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant">Factor Coverage: --%</span>
+            <span id="pf-dna-score-badge" class="px-2.5 py-1 rounded-md bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary">Score: --</span>
+          </div>
+        </div>
+
+        <!-- Radar Canvas -->
+        <div class="relative w-full flex items-center justify-center" style="height: 270px;">
+          <canvas id="portfolio-dna-radar-chart"></canvas>
+        </div>
+
+        <!-- 5 Pillar Summary Chips -->
+        <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2 text-center pt-1"></div>
+
+        <!-- Expandable 16-Indicator Breakdown Drawer -->
+        <div class="border-t border-[#2a2a2a] pt-2.5">
+          <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs font-bold text-primary hover:text-on-surface transition-colors py-1">
+            <span>Inspect All 16 Normalized C-FFI Factor Exposures</span>
+            <span id="pf-dna-16-icon" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
+          </button>
+          <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- Right Card: GICS Sector Allocation & Return Attribution -->
+      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+        <div class="flex justify-between items-center border-b border-[#2a2a2a] pb-3">
+          <div>
+            <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary text-[18px]">donut_large</span>
+              GICS Sector Allocation &amp; Attribution
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">Portfolio weight concentration, unrealized PnL contribution, and sector quant health.</p>
+          </div>
+          <span id="pf-sector-count-badge" class="text-label-caps text-on-surface-variant">0 Sectors</span>
+        </div>
+
+        <!-- Horizontal Bar / Doughnut Chart Canvas -->
+        <div class="relative w-full" style="height: 190px;">
+          <canvas id="portfolio-sector-chart"></canvas>
+        </div>
+
+        <!-- Sector Breakdown Table -->
+        <div class="overflow-x-auto max-h-48 overflow-y-auto border border-[#262626] rounded-lg">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
+              <tr>
+                <th class="py-2 px-3">GICS Sector</th>
+                <th class="py-2 px-2 text-right">Weight</th>
+                <th class="py-2 px-3 text-right">Market Value</th>
+                <th class="py-2 px-3 text-right">Unrealized PnL</th>
+                <th class="py-2 px-2 text-center">Quant Health</th>
+              </tr>
+            </thead>
+            <tbody id="pf-sector-table-body">
+              <tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs">No sector data available.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2C. PHASE 6: INTERACTIVE ISRAELI TAX-LOSS HARVESTING (TLH) SIMULATOR -->
+    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+      <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-[#2a2a2a] pb-3">
+        <div>
+          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-secondary text-[18px]">savings</span>
+            Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Section 92)
+          </h3>
+          <p class="text-xs text-on-surface-variant mt-0.5">Select open FIFO tax lots carrying a real ILS capital loss (<code class="text-tertiary">real_loss_ils &lt; 0</code>) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.</p>
+        </div>
+        <span id="pf-tlh-count-badge" class="px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-secondary text-label-caps">0 Harvestable Lots</span>
+      </div>
+
+      <!-- Simulated Tax Impact Ribbon -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+          <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Selected Real Capital Loss</span>
+          <span id="tlh-sim-loss" class="text-lg font-extrabold text-tertiary font-mono mt-0.5 block">₪0.00</span>
+        </div>
+        <div class="bg-surface-container/40 border border-secondary/30 rounded-lg p-3">
+          <span class="text-[10px] uppercase font-bold text-secondary block">Immediate 25% Tax Shield Generated</span>
+          <span id="tlh-sim-shield" class="text-lg font-extrabold text-secondary font-mono mt-0.5 block">₪0.00</span>
+        </div>
+        <div class="bg-surface-container/40 border border-primary/30 rounded-lg p-3">
+          <span class="text-[10px] uppercase font-bold text-primary block">YTD Capital Gains Tax Wiped Out</span>
+          <span id="tlh-sim-ytd-wiped" class="text-lg font-extrabold text-primary font-mono mt-0.5 block">₪0.00</span>
+        </div>
+        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+          <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Carry-Forward Shield (Future Years)</span>
+          <span id="tlh-sim-carry" class="text-lg font-extrabold text-on-surface font-mono mt-0.5 block">₪0.00</span>
+        </div>
+      </div>
+
+      <!-- Harvestable FIFO Lots Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
+              <th class="py-2.5 px-3 w-10 text-center">Sim</th>
+              <th class="py-2.5 px-3">Ticker &amp; Lot</th>
+              <th class="py-2.5 px-3">Acquisition Date</th>
+              <th class="py-2.5 px-3 text-right">Quantity</th>
+              <th class="py-2.5 px-3 text-right">Indexed Cost (₪)</th>
+              <th class="py-2.5 px-3 text-right">Current Proceeds (₪)</th>
+              <th class="py-2.5 px-3 text-right">Unrealized Real Loss (₪)</th>
+              <th class="py-2.5 px-3 text-right">25% Tax Shield (₪)</th>
+            </tr>
+          </thead>
+          <tbody id="portfolio-tlh-body">
+            <tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs">No open FIFO lots with an unrealized real ILS loss detected.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- 3. LIVE HOLDINGS TABLE & EXPANDABLE FIFO TAX LOTS -->
     <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
       <div class="px-5 py-4 border-b border-[#2a2a2a] flex flex-col sm:flex-row justify-between sm:items-center gap-2">
@@ -580,7 +709,8 @@ tailwind.config = {
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-              <th class="px-4 py-3">Ticker</th>
+              <th class="px-4 py-3">Ticker &amp; Sector</th>
+              <th class="px-3 py-3 text-center">Quant Score</th>
               <th class="px-3 py-3 text-center">Native CCY</th>
               <th class="px-3 py-3 text-right">Quantity</th>
               <th class="px-3 py-3 text-right">Avg Cost</th>
@@ -593,7 +723,7 @@ tailwind.config = {
             </tr>
           </thead>
           <tbody id="portfolio-holdings-body">
-            <tr><td colspan="10" class="px-4 py-8 text-center text-on-surface-variant text-xs">Loading portfolio positions...</td></tr>
+            <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs">Loading portfolio positions...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1446,12 +1576,16 @@ const portfolioState = {
   chartMode: 'TWR', // 'TWR' | 'WHAT_IF' | 'DRAWDOWN'
   benchmarks: ['SPY', 'QQQ'],
   expandedTickers: new Set(),
+  selectedTlhLots: new Set(),
+  dna16Open: false,
   lastSummary: null,
   lastAnalytics: null,
   initialized: false
 };
 
 let portfolioChartInstance = null;
+let portfolioRadarChartInstance = null;
+let portfolioSectorChartInstance = null;
 
 const BENCH_COLORS = ['#4d8eff', '#ffb3ad', '#f59e0b', '#a855f7'];
 const PRESET_BENCHMARKS = ['SPY', 'QQQ', 'SMH', 'LUMI.TA'];
@@ -1744,6 +1878,24 @@ function renderPortfolioSummary(data) {
 
   // Render Live Holdings Table + FIFO Lots
   renderHoldingsTable(positions, lots, ccy);
+
+  // Phase 6: Render Portfolio Factor DNA Radar, GICS Sector Attribution & Interactive TLH Simulator
+  renderPortfolioQuantDNA(data.quant_dna || null, ccy);
+  renderTlhSimulator(tlh, tax);
+}
+
+function renderQuantScoreBadge(score, status) {
+  if (status === 'ETF_TASE' || score === null || score === undefined) {
+    return `<span class="px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant text-[10px] font-mono text-on-surface-variant">ETF / TASE</span>`;
+  }
+  const s = Number(score);
+  if (s >= 70.0) {
+    return `<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/40 text-secondary font-mono font-bold text-xs">${s.toFixed(1)} · Strong</span>`;
+  }
+  if (s >= 45.0) {
+    return `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-mono font-bold text-xs">${s.toFixed(1)} · Neutral</span>`;
+  }
+  return `<span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/40 text-tertiary font-mono font-bold text-xs">${s.toFixed(1)} · Warn</span>`;
 }
 
 function renderHoldingsTable(positions, allLots, ccy) {
@@ -1753,7 +1905,7 @@ function renderHoldingsTable(positions, allLots, ccy) {
   if (!tbody) return;
 
   if (!positions.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-10 text-center text-on-surface-variant text-xs">
+    tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-10 text-center text-on-surface-variant text-xs">
       No open equity positions in ledger. Click <strong class="text-secondary">Seed Sample Ledger</strong> or record a transaction below.
     </td></tr>`;
     return;
@@ -1774,13 +1926,20 @@ function renderHoldingsTable(positions, allLots, ccy) {
     const netVal = p.unrealized_net_pnl_view ?? (p.unrealized_pnl_view - (p.est_tax_view || 0));
     const netColor = colorClassForVal(netVal);
     const tickerLots = lotsByTicker[p.ticker] || [];
+    const sectorLabel = p.sector || 'Unclassified';
 
     html += `
       <tr onclick="togglePositionLots('${p.ticker}')" class="border-b border-[#2a2a2a] hover:bg-surface-container/60 cursor-pointer transition-colors text-xs">
-        <td class="px-4 py-3 font-bold text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[15px] text-primary transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
-          <span>${p.ticker}</span>
-          <span class="text-[10px] text-on-surface-variant font-normal">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
+        <td class="px-4 py-3 font-bold text-on-surface">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[15px] text-primary transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
+            <span>${p.ticker}</span>
+            <span class="text-[10px] text-on-surface-variant font-normal">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
+          </div>
+          <span class="text-[10px] text-on-surface-variant font-normal pl-5 block truncate max-w-[160px]">${sectorLabel}</span>
+        </td>
+        <td class="px-3 py-3 text-center">
+          ${renderQuantScoreBadge(p.quant_score, p.quant_status)}
         </td>
         <td class="px-3 py-3 text-center">
           <span class="px-2 py-0.5 rounded bg-surface-container border border-outline-variant text-[10px] font-mono">${nativeCcy}</span>
@@ -1822,7 +1981,7 @@ function renderHoldingsTable(positions, allLots, ccy) {
 
       html += `
         <tr class="bg-[#141414] border-b border-[#2a2a2a]">
-          <td colspan="10" class="p-3">
+          <td colspan="11" class="p-3">
             <div class="bg-[#1c1b1b] border border-outline-variant/30 rounded-lg overflow-hidden">
               <div class="px-3 py-1.5 bg-surface-container text-[10px] font-bold uppercase tracking-wider text-primary flex justify-between items-center">
                 <span>FIFO Tax Lot Breakdown — ${p.ticker} (Section 88 Inflationary vs. Real Split)</span>
@@ -1851,6 +2010,305 @@ function renderHoldingsTable(positions, allLots, ccy) {
   });
 
   tbody.innerHTML = html;
+}
+
+function toggleDna16Drawer() {
+  portfolioState.dna16Open = !portfolioState.dna16Open;
+  const drawer = document.getElementById('pf-dna-16-drawer');
+  const icon = document.getElementById('pf-dna-16-icon');
+  if (drawer) drawer.classList.toggle('hidden', !portfolioState.dna16Open);
+  if (icon) icon.classList.toggle('rotate-180', portfolioState.dna16Open);
+}
+
+function renderPortfolioQuantDNA(dna, ccy) {
+  if (!dna) return;
+
+  const covBadge = document.getElementById('pf-dna-coverage-badge');
+  if (covBadge) {
+    covBadge.textContent = `Factor Coverage: ${Number(dna.factor_coverage_pct || 0).toFixed(1)}% (${dna.covered_holdings_count || 0}/${dna.total_holdings_count || 0})`;
+  }
+  const scoreBadge = document.getElementById('pf-dna-score-badge');
+  if (scoreBadge) {
+    const sc = Number(dna.portfolio_quant_score || 0);
+    const bSc = Number(dna.benchmark_quant_score || 50);
+    scoreBadge.textContent = `C-FFI Score: ${sc.toFixed(1)} vs ${bSc.toFixed(1)}`;
+  }
+
+  // 1. Render 5-Pillar Radar Chart
+  const pillarNames = ['Valuation', 'Growth', 'Quality', 'Safety & Income', 'Momentum'];
+  const portPillarVals = pillarNames.map(p => Number(dna.pillars?.[p] || 0));
+  const benchPillarVals = pillarNames.map(p => Number(dna.benchmark_pillars?.[p] || 50));
+
+  const radarCanvas = document.getElementById('portfolio-dna-radar-chart');
+  if (radarCanvas) {
+    const rCtx = radarCanvas.getContext('2d');
+    if (portfolioRadarChartInstance) {
+      portfolioRadarChartInstance.destroy();
+      portfolioRadarChartInstance = null;
+    }
+    portfolioRadarChartInstance = new Chart(rCtx, {
+      type: 'radar',
+      data: {
+        labels: pillarNames,
+        datasets: [
+          {
+            label: 'Portfolio DNA',
+            data: portPillarVals,
+            borderColor: '#4edea3',
+            backgroundColor: 'rgba(78, 222, 163, 0.20)',
+            borderWidth: 2,
+            pointBackgroundColor: '#4edea3',
+            pointRadius: 3
+          },
+          {
+            label: 'Market Baseline',
+            data: benchPillarVals,
+            borderColor: '#4d8eff',
+            backgroundColor: 'rgba(77, 142, 255, 0.10)',
+            borderWidth: 1.5,
+            borderDash: [4, 3],
+            pointBackgroundColor: '#4d8eff',
+            pointRadius: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { color: '#c2c6d6', font: { size: 10 }, boxWidth: 10 }
+          }
+        },
+        scales: {
+          r: {
+            min: 0,
+            max: 100,
+            angleLines: { color: 'rgba(255,255,255,0.08)' },
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            pointLabels: { color: '#e5e2e1', font: { size: 11, weight: 'bold' } },
+            ticks: { display: false, stepSize: 25 }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Render 5-Pillar Chips
+  const pillarStrip = document.getElementById('pf-dna-pillar-strip');
+  if (pillarStrip) {
+    pillarStrip.innerHTML = pillarNames.map(p => {
+      const val = Number(dna.pillars?.[p] || 0);
+      const tilt = Number(dna.pillar_tilts?.[p] || 0);
+      const tiltColor = colorClassForVal(tilt);
+      return `
+        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2">
+          <span class="text-[9px] uppercase font-bold text-on-surface-variant block truncate">${p}</span>
+          <span class="text-xs font-extrabold text-on-surface font-mono block mt-0.5">${val.toFixed(1)}</span>
+          <span class="text-[9px] font-mono ${tiltColor}">${tilt >= 0 ? '+' : ''}${tilt.toFixed(1)} vs Mkt</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 3. Render 16-Indicator Drawer
+  const drawer16 = document.getElementById('pf-dna-16-drawer');
+  if (drawer16) {
+    const indObj = dna.indicators || {};
+    const baseObj = dna.benchmark_indicators || {};
+    drawer16.innerHTML = Object.keys(indObj).map(col => {
+      const v = Number(indObj[col] || 0);
+      const b = Number(baseObj[col] || 50);
+      const diff = v - b;
+      return `
+        <div class="bg-surface-container/30 border border-outline-variant/20 rounded p-2 text-[10px]">
+          <div class="flex justify-between items-center font-bold text-on-surface">
+            <span class="truncate">${col}</span>
+            <span class="font-mono ${colorClassForVal(diff)}">${v.toFixed(0)}</span>
+          </div>
+          <div class="w-full h-1.5 bg-[#262626] rounded-full overflow-hidden mt-1">
+            <div class="h-full bg-primary rounded-full" style="width:${Math.min(100, Math.max(0, v))}%"></div>
+          </div>
+          <span class="text-[9px] text-on-surface-variant font-mono block mt-0.5">Mkt Base: ${b.toFixed(0)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 4. Render GICS Sector Allocation Chart & Table
+  const sectors = dna.sector_attribution || [];
+  const secCountBadge = document.getElementById('pf-sector-count-badge');
+  if (secCountBadge) {
+    secCountBadge.textContent = `${sectors.length} Sector${sectors.length === 1 ? '' : 's'}`;
+  }
+
+  const sectorCanvas = document.getElementById('portfolio-sector-chart');
+  if (sectorCanvas) {
+    const sCtx = sectorCanvas.getContext('2d');
+    if (portfolioSectorChartInstance) {
+      portfolioSectorChartInstance.destroy();
+      portfolioSectorChartInstance = null;
+    }
+    const secColors = ['#4d8eff', '#4edea3', '#f59e0b', '#a855f7', '#ec4899', '#06b6d4', '#8c909f'];
+    portfolioSectorChartInstance = new Chart(sCtx, {
+      type: 'bar',
+      data: {
+        labels: sectors.map(s => s.sector),
+        datasets: [
+          {
+            label: 'Sector Weight (%)',
+            data: sectors.map(s => Number(s.weight_pct || 0)),
+            backgroundColor: sectors.map((_, i) => secColors[i % secColors.length]),
+            borderRadius: 4,
+            barThickness: 16
+          }
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1c1b1b',
+            titleColor: '#e5e2e1',
+            bodyColor: '#c2c6d6',
+            callbacks: {
+              label: ctx => `Weight: ${Number(ctx.parsed.x || 0).toFixed(2)}%`
+            }
+          }
+        },
+        scales: {
+          x: {
+            min: 0,
+            max: 100,
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#8c909f', font: { size: 9 }, callback: v => `${v}%` }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: '#e5e2e1', font: { size: 10, weight: 'bold' } }
+          }
+        }
+      }
+    });
+  }
+
+  const secTbody = document.getElementById('pf-sector-table-body');
+  if (secTbody) {
+    if (!sectors.length) {
+      secTbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs">No open positions to attribute.</td></tr>`;
+    } else {
+      secTbody.innerHTML = sectors.map(s => {
+        const pnlColor = colorClassForVal(s.unrealized_pnl_view);
+        const qBadge = s.avg_quant_score !== null && s.avg_quant_score !== undefined
+          ? renderQuantScoreBadge(s.avg_quant_score, s.avg_quant_score >= 70 ? 'STRONG' : (s.avg_quant_score >= 45 ? 'NEUTRAL' : 'WARNING'))
+          : `<span class="text-[10px] font-mono text-on-surface-variant">ETF / TASE</span>`;
+        return `
+          <tr class="border-b border-[#242424] hover:bg-surface-container/40 font-mono text-[11px]">
+            <td class="py-2 px-3 font-sans font-bold text-on-surface">
+              ${s.sector}
+              <span class="text-[10px] text-on-surface-variant font-normal block">${(s.tickers || []).join(', ')}</span>
+            </td>
+            <td class="py-2 px-2 text-right font-bold text-on-surface">${Number(s.weight_pct).toFixed(1)}%</td>
+            <td class="py-2 px-3 text-right text-on-surface">${fmtMoney(s.market_value_view, ccy)}</td>
+            <td class="py-2 px-3 text-right font-bold ${pnlColor}">
+              ${fmtSignedMoney(s.unrealized_pnl_view, ccy)}
+              <span class="text-[9px] block opacity-80">(${fmtPct(s.sector_return_pct, 1)})</span>
+            </td>
+            <td class="py-2 px-2 text-center">${qBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function renderTlhSimulator(tlhCandidates, taxSummary) {
+  const countBadge = document.getElementById('pf-tlh-count-badge');
+  const tbody = document.getElementById('portfolio-tlh-body');
+  const list = tlhCandidates || [];
+  if (countBadge) {
+    countBadge.textContent = `${list.length} Harvestable Lot${list.length === 1 ? '' : 's'}`;
+  }
+
+  // Default: select all harvestable lots on initial load if none selected
+  if (list.length > 0 && portfolioState.selectedTlhLots.size === 0) {
+    list.forEach(c => portfolioState.selectedTlhLots.add(Number(c.lot_id)));
+  }
+
+  if (tbody) {
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs">
+        No open FIFO tax lots currently carry an unrealized real ILS loss (<code class="text-secondary">real_loss_ils &lt; 0</code>).
+      </td></tr>`;
+    } else {
+      tbody.innerHTML = list.map(c => {
+        const lotId = Number(c.lot_id);
+        const checked = portfolioState.selectedTlhLots.has(lotId) ? 'checked' : '';
+        const shield = Number(c.immediate_tax_shield_ils ?? c.potential_tax_shield_ils ?? (Math.abs(Number(c.real_loss_ils || 0)) * 0.25));
+        return `
+          <tr class="border-b border-[#242424] hover:bg-surface-container/50 font-mono text-xs">
+            <td class="py-2.5 px-3 text-center">
+              <input type="checkbox" ${checked} onchange="toggleTlhLotSelection(${lotId})" class="accent-[#4edea3] cursor-pointer" />
+            </td>
+            <td class="py-2.5 px-3 font-bold text-on-surface">${c.ticker} <span class="text-[10px] text-primary">#${lotId}</span></td>
+            <td class="py-2.5 px-3 text-on-surface-variant">${c.buy_date}</td>
+            <td class="py-2.5 px-3 text-right text-on-surface">${Number(c.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+            <td class="py-2.5 px-3 text-right text-on-surface-variant">${fmtMoney(c.original_cost_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-right text-on-surface">${fmtMoney(c.proceeds_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-right font-bold text-tertiary">${fmtSignedMoney(c.real_loss_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-right font-bold text-secondary">+${fmtMoney(shield, 'ILS')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  updateTlhSimulationRibbon(list, taxSummary || {});
+}
+
+function toggleTlhLotSelection(lotId) {
+  const id = Number(lotId);
+  if (portfolioState.selectedTlhLots.has(id)) {
+    portfolioState.selectedTlhLots.delete(id);
+  } else {
+    portfolioState.selectedTlhLots.add(id);
+  }
+  const summary = portfolioState.lastSummary || {};
+  updateTlhSimulationRibbon(summary.tlh_candidates || [], summary.tax_summary || {});
+}
+
+function updateTlhSimulationRibbon(tlhCandidates, taxSummary) {
+  let selectedRealLoss = 0.0;
+  let selectedShield = 0.0;
+  (tlhCandidates || []).forEach(c => {
+    if (portfolioState.selectedTlhLots.has(Number(c.lot_id))) {
+      const lossAbs = Math.abs(Number(c.real_loss_ils || 0));
+      selectedRealLoss += lossAbs;
+      selectedShield += Number(c.immediate_tax_shield_ils ?? c.potential_tax_shield_ils ?? (lossAbs * 0.25));
+    }
+  });
+
+  const ytdTaxDue = Number(taxSummary.capital_gains_tax_ils || 0);
+  const wipedOut = Math.min(selectedShield, ytdTaxDue);
+  const carryForward = Math.max(0.0, selectedShield - wipedOut);
+
+  const elLoss = document.getElementById('tlh-sim-loss');
+  const elShield = document.getElementById('tlh-sim-shield');
+  const elWiped = document.getElementById('tlh-sim-ytd-wiped');
+  const elCarry = document.getElementById('tlh-sim-carry');
+
+  if (elLoss) elLoss.textContent = selectedRealLoss > 0 ? `-${fmtMoney(selectedRealLoss, 'ILS')}` : '₪0.00';
+  if (elShield) elShield.textContent = `+${fmtMoney(selectedShield, 'ILS')}`;
+  if (elWiped) {
+    const pctWiped = ytdTaxDue > 1e-6 ? ` (${Math.min(100, (wipedOut / ytdTaxDue) * 100).toFixed(0)}%)` : '';
+    elWiped.textContent = `${fmtMoney(wipedOut, 'ILS')}${pctWiped}`;
+  }
+  if (elCarry) elCarry.textContent = fmtMoney(carryForward, 'ILS');
 }
 
 function togglePositionLots(ticker) {

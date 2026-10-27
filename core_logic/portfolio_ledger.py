@@ -535,7 +535,7 @@ class PortfolioLedger:
         """
         as_of_ts = pd.Timestamp(as_of).normalize() if as_of is not None else pd.Timestamp.now().normalize()
         cache_key = (len(self._tx), as_of_ts.strftime("%Y-%m-%d"))
-        if market_prices is None and price_provider is None and cache_key in self._snapshot_cache:
+        if market_prices is None and cache_key in self._snapshot_cache:
             return self._snapshot_cache[cache_key]
         state = self._state_as_of(as_of_ts)
         self._ensure_macro(extra_date=as_of_ts.strftime("%Y-%m-%d"))
@@ -627,6 +627,6 @@ class PortfolioLedger:
         }
         res_snap = {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pos, "lots": lots_df,
                     "tlh_candidates": tlh, "totals": totals}
-        if market_prices is None and price_provider is None:
+        if market_prices is None:
             self._snapshot_cache[cache_key] = res_snap
         return res_snap

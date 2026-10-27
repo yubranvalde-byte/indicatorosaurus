@@ -469,6 +469,35 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
 
 ---
 
+## 6F. Portfolio Intelligence Phase 6: Portfolio Factor DNA (C-FFI), GICS Sector Attribution & Interactive TLH Simulator
+
+Phase 6 bridges the personal multi-currency portfolio ledger with the 80-byte `Stock` C-FFI quantitative scoring kernel (`libsortbuslines.so` / `run_financial_engine`):
+
+### 1. Portfolio Factor DNA & 5-Pillar Radar (`compute_portfolio_quant_dna` & `GET /api/portfolio/quant-dna`)
+- **C-FFI Per-Holding Scoring**: Evaluates every open position against the 16-indicator normalized fundamental universe (`normalize_stocks` + `run_financial_engine`), assigning each stock a composite C-FFI `quant_score` $\in [0, 100]$ and health status badge (`STRONG` $\ge 70$, `NEUTRAL` $45\text{–}69$, `WARNING` $< 45$, or `ETF_TASE` for index ETFs such as `SPY`/`QQQ` and `.TA` TASE equities).
+- **Strict Covered-Equity Weight Re-Normalization**: Computes `factor_coverage_pct` (share of total invested market value covered by the 16-factor dataset) and re-normalizes factor weights strictly across covered equities ($\sum_{i \in \text{cov}} w_i^{\text{cov}} = 1.0$) so ETFs and `.TA` holdings never dilute factor exposures toward zero.
+- **5 Composite Factor Pillars vs. Market Baseline**:
+  - **Valuation**: `TrailingPE`, `EV_EBITDA`, `FCFYield`
+  - **Growth**: `RevenueGrowth`, `EPSGrowth`
+  - **Quality**: `GrossMargin`, `OperatingMargin`, `ROIC`
+  - **Safety & Income**: `NetDebt_EBITDA`, `ShareholderYield`, `FiveYDivGrowth`, `PayoutRatio`, `Beta`
+  - **Momentum**: `RSI`, `PriceVs200SMA`, `RelativeStrength`
+- **Frontend Radar & 16-Indicator Drawer**: Renders a Chart.js `radar` chart (`#portfolio-dna-radar-chart`) comparing the Portfolio's 5 Factor Pillars against the Market Baseline alongside an expandable 16-indicator comparison drawer.
+
+### 2. GICS Sector Allocation & Return Attribution
+- Aggregates portfolio weights (`weight_pct` summing to $100.0\%$), market values, unrealized PnL, sector return percentages, and value-weighted sector C-FFI quant scores across GICS sectors (grouping non-SimFin ETFs and TASE securities into `Unclassified / ETF / TASE`).
+- Rendered via an interactive Chart.js horizontal bar chart (`#portfolio-sector-chart`) and breakdown table.
+
+### 3. Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Part E Section 92)
+- Identifies all open FIFO tax lots carrying an unrealized real ILS capital loss (`real_loss_ils < 0`).
+- Provides per-lot interactive checkboxes allowing the user to simulate harvesting specific loss lots and dynamically computes:
+  - **Selected Real Capital Loss (`₪ ILS`)**
+  - **Immediate 25% Israeli Tax Shield Generated (`₪ ILS`)**: $0.25 \times |\text{real\_loss\_ils}|$
+  - **YTD Capital Gains Tax Liability Wiped Out (`₪ ILS` & `%`)**: $\min(\text{Immediate Shield}, \text{YTD Realized Tax Due})$
+  - **Carry-Forward Shield to Future Years (`₪ ILS`)**: $\max(0.0, \text{Immediate Shield} - \text{YTD Tax Wiped Out})$
+
+---
+
 ## 7. Developer Onboarding & Extensibility Guide
 
 ### System Prerequisites
