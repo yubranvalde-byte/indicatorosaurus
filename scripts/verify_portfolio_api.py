@@ -275,6 +275,13 @@ def run_api_verification():
         assert aapl_pos["lots_count"] == 1
         assert aapl_pos["current_price_native"] > 0.0
         assert aapl_pos["market_value_native"] > 0.0
+        assert "est_tax_view" in aapl_pos and "unrealized_net_pnl_view" in aapl_pos
+        assert math.isclose(
+            aapl_pos["unrealized_net_pnl_view"],
+            aapl_pos["unrealized_pnl_view"] - aapl_pos["est_tax_view"],
+            rel_tol=1e-5,
+            abs_tol=1e-5,
+        )
 
         # Check LUMI.TA: 200 shares, native currency ILS
         lumi_pos = pos_by_ticker["LUMI.TA"]
@@ -291,6 +298,13 @@ def run_api_verification():
         # Check Totals & Tax Summary
         totals_usd = sum_usd["totals"]
         assert totals_usd["nav"] > 0.0
+        assert "net_liquidation_nav" in totals_usd and "unrealized_net_pnl" in totals_usd
+        assert math.isclose(
+            totals_usd["net_liquidation_nav"],
+            totals_usd["nav"] - totals_usd["est_liquidation_tax_view"],
+            rel_tol=1e-5,
+            abs_tol=1e-5,
+        )
         assert totals_usd["market_value"] > 0.0
         assert totals_usd["usd_ils"] > 0.0
 
@@ -436,8 +450,28 @@ def run_api_verification():
         assert len(top_stock["indicators"]) == 16, f"Expected 16 indicator scores, got {len(top_stock['indicators'])}"
         print(f" -> [PASS] Screener regression passed: scored {len(results)} stocks; Top ticker={top_stock['ticker']}, Score={top_stock['score']}.")
 
+        # ───────────────────────────────────────────────────────────────────────
+        # 7. Phase 5 Frontend Workspace HTML & Component Contract Check
+        # ───────────────────────────────────────────────────────────────────────
+        print("\n[Step 7] Verifying Phase 5 Frontend Portfolio Workspace (GET /)...")
+        res_html = client.get("/")
+        assert res_html.status_code == 200, f"Expected HTTP 200 from GET /, got {res_html.status_code}"
+        html_body = res_html.data.decode("utf-8")
+        for token in (
+            "workspace-screener",
+            "workspace-portfolio",
+            "portfolio-main-chart",
+            "portfolio-holdings-body",
+            "portfolio-tx-body",
+            "switchWorkspace",
+            "setPortfolioCurrency",
+            "portfolioChartInstance.destroy()",
+        ):
+            assert token in html_body, f"Missing required Phase 5 UI token in index.html: {token}"
+        print(" -> [PASS] Phase 5 Frontend Portfolio Workspace HTML & controller verified.")
+
         print("\n---------------------------------------------------------------------------------")
-        print("[SUCCESS] All Phase 4 & Checkpoint 2 Portfolio API assertions passed!")
+        print("[SUCCESS] All Phase 4, Phase 5 & Checkpoint 2 Portfolio API/UI assertions passed!")
         print("---------------------------------------------------------------------------------")
 
     finally:

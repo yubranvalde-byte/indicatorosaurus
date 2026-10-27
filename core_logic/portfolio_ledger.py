@@ -214,6 +214,7 @@ class PortfolioLedger:
         self._tx = self._load()
         self._state = None
         self._macro = None
+        self._snapshot_cache = {}
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
@@ -257,6 +258,7 @@ class PortfolioLedger:
         candidate = self._normalize_frame(candidate)
         previous = (self._tx, self._state, self._macro)
         self._tx, self._state, self._macro = candidate, None, None
+        self._snapshot_cache.clear()
         try:
             self.rebuild()
         except Exception:
@@ -532,6 +534,9 @@ class PortfolioLedger:
         Returns dict with 'positions' (DataFrame), 'lots' (DataFrame), 'tlh_candidates' (DataFrame), 'totals' (dict).
         """
         as_of_ts = pd.Timestamp(as_of).normalize() if as_of is not None else pd.Timestamp.now().normalize()
+        cache_key = (len(self._tx), as_of_ts.strftime("%Y-%m-%d"))
+        if market_prices is None and price_provider is None and cache_key in self._snapshot_cache:
+            return self._snapshot_cache[cache_key]
         state = self._state_as_of(as_of_ts)
         self._ensure_macro(extra_date=as_of_ts.strftime("%Y-%m-%d"))
         fx_now, cpi_now = self._macro_on(as_of_ts)
@@ -620,5 +625,8 @@ class PortfolioLedger:
             "ytd_taxable_real_gain_ils": ytd_taxable,
             "cash": self.cash_balances(state),
         }
-        return {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pos, "lots": lots_df,
-                "tlh_candidates": tlh, "totals": totals}
+        res_snap = {"as_of": as_of_ts.strftime("%Y-%m-%d"), "positions": pos, "lots": lots_df,
+                    "tlh_candidates": tlh, "totals": totals}
+        if market_prices is None and price_provider is None:
+            self._snapshot_cache[cache_key] = res_snap
+        return res_snap

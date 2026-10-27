@@ -438,6 +438,37 @@ On each `SELL`, open FIFO lots are consumed chronologically and decomposed in `I
 
 ---
 
+## 6E. Portfolio Intelligence Phase 5: Interactive Frontend Portfolio Workspace (`frontend/templates/index.html`)
+
+`frontend/templates/index.html` integrates an institutional Portfolio Intelligence workspace alongside the existing Screener & Backtester dashboard using Tailwind CSS, Chart.js, and asynchronous Vanilla JavaScript:
+
+### 1. Top-Level Workspace Navigation & Global Currency Toggle
+- **Zero-Reload View Switcher (`switchWorkspace`)**: Toggles seamlessly between **Screener & Backtester** (`#workspace-screener` + `#screener-sidebar`) and **Portfolio Intelligence** (`#workspace-portfolio`) without page reloads.
+- **Global Currency Toggle (`setPortfolioCurrency`)**: Switches between `USD $` and `ILS ₪` across both the top header and workspace toolbar, dynamically re-evaluating all KPI cards, multi-asset charts, holdings valuations, and tax liabilities via `/api/portfolio/summary` and `/api/portfolio/analytics`, alongside a live `USD/ILS` exchange rate badge.
+
+### 2. Executive KPI Ribbon & ILS Attribution Strip
+- **Total Portfolio NAV Card**: Displays Gross Market Value, Estimated Net Liquidation NAV After Israeli Tax, Invested Holdings Value, and Cash Balance (`USD` + `ILS`).
+- **TWR vs. MWR (XIRR) Card**: Side-by-side comparison of Cash-Flow Invariant Time-Weighted Return (Cumulative & Annualized) against Annualized Money-Weighted XIRR and Modified Dietz Return.
+- **Unrealized & YTD PnL Card**: Displays Unrealized Gross PnL (`%`), Unrealized Net PnL (after 25% real tax on gains), YTD Realized PnL, and Estimated Liquidation Tax.
+- **Israeli Tax Summary Card (`₪ ILS`)**: Displays statutory YTD Realized Tax Liability, Available YTD Tax Shield / Carry-Forward Loss Bucket, Dividend Withholding Tax paid, and Inflationary Exempt Gain (Part E Section 88).
+- **ILS Return Attribution & TLH Strip**: Decomposes total `ILS` return into Pure Asset Return, `USD/ILS` Exchange Rate Drift, and Tax/Fee Drag, and highlights actionable Tax-Loss Harvesting (`tlh_candidates`) opportunities.
+
+### 3. Interactive Multi-Benchmark & Time-Slice Charting (Chart.js)
+- **Time-Slice Controls**: Preset buttons (`1M`, `3M`, `6M`, `YTD`, `1Y`, `3Y`, `5Y`, `ALL`) plus custom `start_date` and `end_date` pickers.
+- **Chart Mode Switcher (`setPortfolioChartMode`)**:
+  - **Rebased TWR (`%`)**: Plots portfolio and up to 3 benchmark curves rebased to `0.0%` at $t_0$.
+  - **What-If Opportunity Simulator (`NAV`)**: Plots actual portfolio NAV against hypothetical cash-flow matched benchmark NAV trajectories (`what_if_<TICKER>_nav`), with an excess-value comparison banner.
+  - **Underwater Drawdown (`%`)**: Plots daily peak-to-trough percentage drawdown across the active window.
+- **Dynamic Benchmark Selector**: Toggle preset chips (`SPY`, `QQQ`, `SMH`, `LUMI.TA`) or add custom tickers (up to 3 simultaneous benchmarks). Calls `portfolioChartInstance.destroy()` prior to every re-render to prevent canvas memory leaks.
+- **Slice Risk KPI Strip**: Displays Annualized TWR, Annualized Volatility, Sharpe Ratio, Sortino Ratio, Beta vs. Benchmark, Jensen's Alpha, and Maximum Drawdown for the active window.
+
+### 4. Live Holdings Table, Expandable FIFO Tax Lots & Transaction Manager
+- **Open Positions Table (`renderHoldingsTable`)**: Displays Ticker, Native Currency (`USD` / `ILS`), Quantity, Avg Cost Basis, Current Price, Market Value, Portfolio Weight (`%`), Unrealized Gross PnL, Estimated Tax (25% real), and Unrealized Net PnL.
+- **Expandable FIFO Tax Lots (`togglePositionLots`)**: Clicking any position row expands an inline sub-table detailing each open FIFO lot (`lot_id`, `buy_date`, `quantity`, `buy_price`, base `USD/ILS` or Known CPI drift ratio, Inflationary Gain at 0% tax, Real Gain/Loss in `ILS`, and Estimated 25% Real Tax).
+- **Transaction Ledger & CSV Controls**: Form for recording `BUY`, `SELL`, `DIVIDEND`, `CASH_DEPOSIT`, and `CASH_WITHDRAWAL` transactions, one-click `Seed Sample Ledger`, chronological Transaction History table with per-row delete (`deletePortfolioTransaction`), and batch CSV Import/Export/Clear controls.
+
+---
+
 ## 7. Developer Onboarding & Extensibility Guide
 
 ### System Prerequisites

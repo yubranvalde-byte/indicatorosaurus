@@ -225,10 +225,12 @@ class PortfolioAnalytics:
         self.price_provider = price_provider
         self.macro_provider = macro_provider or ledger.macro_provider
         self._cached_daily_series: dict = {}
+        self._cached_slices: dict = {}
 
     def invalidate_cache(self):
         """Invalidate memoized daily time series when the underlying ledger mutates."""
         self._cached_daily_series.clear()
+        self._cached_slices.clear()
 
     def build_daily_series(self, end_date=None, cash_mode: str = "auto") -> pd.DataFrame:
         """
@@ -527,6 +529,12 @@ class PortfolioAnalytics:
         if view_cur not in ("USD", "ILS"):
             raise ValueError(f"view_currency must be 'USD' or 'ILS' (got {view_currency}).")
 
+        bench_tuple = tuple(str(b).upper().strip() for b in (benchmarks or []) if str(b).strip())[:3]
+        tx_count = len(self.ledger._tx) if hasattr(self.ledger, "_tx") else -1
+        slice_cache_key = (tx_count, str(window), str(start_date), str(end_date), view_cur, bench_tuple, str(cash_mode))
+        if slice_cache_key in self._cached_slices:
+            return self._cached_slices[slice_cache_key]
+
         daily_df = self.build_daily_series(end_date=end_date, cash_mode=cash_mode)
         if daily_df.empty:
             return {"series": pd.DataFrame(), "kpis": {}, "attribution": {}, "what_if": {}}
@@ -682,7 +690,7 @@ class PortfolioAnalytics:
         # ── FX & Tax Attribution Breakdown (ILS View) ────────────────────────
         attribution = self._compute_ils_attribution(daily_df, slice_df, t0, t1)
 
-        return {
+        res_dict = {
             "window": window,
             "start_date": t0.strftime("%Y-%m-%d"),
             "end_date": t1.strftime("%Y-%m-%d"),
@@ -692,6 +700,8 @@ class PortfolioAnalytics:
             "attribution": attribution,
             "what_if": what_if_results,
         }
+        self._cached_slices[slice_cache_key] = res_dict
+        return res_dict
 
     # Alias for API/consumer consistency
     slice_and_rebase = analyze_slice

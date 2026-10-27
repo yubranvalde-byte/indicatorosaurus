@@ -356,12 +356,15 @@ def portfolio_summary():
             "cash": {"USD": 0.0, "ILS": 0.0, "total_view": 0.0},
             "totals": {
                 "nav": 0.0,
+                "net_liquidation_nav": 0.0,
                 "market_value": 0.0,
                 "cost_basis": 0.0,
                 "unrealized_pnl": 0.0,
+                "unrealized_net_pnl": 0.0,
                 "unrealized_pnl_pct": 0.0,
                 "realized_pnl_ytd": 0.0,
                 "est_liquidation_tax_ils": 0.0,
+                "est_liquidation_tax_view": 0.0,
                 "unused_loss_shield_ils": 0.0,
                 "usd_ils": 1.0,
             },
@@ -422,6 +425,13 @@ def portfolio_summary():
             unrealized_pnl_pct = (unrealized_pnl_view / cost_view * 100.0) if cost_view > 1e-9 else 0.0
             weight_pct = (mv_view / total_nav_view * 100.0) if total_nav_view > 1e-9 else 0.0
 
+            est_tax_ils = _scalar_float(row.get("est_tax_ils", 0.0))
+            est_tax_view = est_tax_ils if view_currency == "ILS" else (est_tax_ils / fx_rate)
+            unrealized_net_pnl_view = unrealized_pnl_view - est_tax_view
+            inflationary_gain_ils = _scalar_float(row.get("unrealized_inflationary_ils", 0.0))
+            real_gain_ils = _scalar_float(row.get("unrealized_real_gain_ils", 0.0))
+            real_loss_ils = _scalar_float(row.get("unrealized_real_loss_ils", 0.0))
+
             lots_for_ticker = snap["lots"][snap["lots"]["ticker"] == ticker] if not snap["lots"].empty else pd.DataFrame()
             lots_count = len(lots_for_ticker)
 
@@ -437,6 +447,12 @@ def portfolio_summary():
                 "unrealized_pnl_native": unrealized_pnl_native,
                 "unrealized_pnl_view": unrealized_pnl_view,
                 "unrealized_pnl_pct": unrealized_pnl_pct,
+                "est_tax_ils": est_tax_ils,
+                "est_tax_view": est_tax_view,
+                "unrealized_net_pnl_view": unrealized_net_pnl_view,
+                "inflationary_gain_ils": inflationary_gain_ils,
+                "real_gain_ils": real_gain_ils,
+                "real_loss_ils": real_loss_ils,
                 "weight_pct": weight_pct,
                 "lots_count": lots_count,
             })
@@ -478,14 +494,20 @@ def portfolio_summary():
         net_realized_ils = tax_summary_dict["real_gains_ils"] - tax_summary_dict["real_losses_ils"]
         realized_pnl_ytd = net_realized_ils if view_currency == "ILS" else (net_realized_ils / fx_rate)
 
+    est_liq_tax_ils = _scalar_float(totals_raw.get("est_liquidation_tax_ils", 0.0))
+    est_liq_tax_view = est_liq_tax_ils if view_currency == "ILS" else (est_liq_tax_ils / fx_rate)
+
     totals_dict = {
         "nav": total_nav_view,
+        "net_liquidation_nav": total_nav_view - est_liq_tax_view,
         "market_value": mv_view,
         "cost_basis": cost_basis_view,
         "unrealized_pnl": unrealized_pnl_view,
+        "unrealized_net_pnl": unrealized_pnl_view - est_liq_tax_view,
         "unrealized_pnl_pct": unrealized_pnl_pct,
         "realized_pnl_ytd": realized_pnl_ytd,
-        "est_liquidation_tax_ils": _scalar_float(totals_raw.get("est_liquidation_tax_ils", 0.0)),
+        "est_liquidation_tax_ils": est_liq_tax_ils,
+        "est_liquidation_tax_view": est_liq_tax_view,
         "unused_loss_shield_ils": _scalar_float(totals_raw.get("unused_loss_shield_ils", 0.0)),
         "usd_ils": fx_rate,
     }
