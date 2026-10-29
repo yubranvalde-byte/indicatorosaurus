@@ -13,18 +13,18 @@ tailwind.config = {
   darkMode:"class",
   theme:{ extend:{
     colors:{
-      "primary":"#adc6ff","primary-container":"#4d8eff","on-primary":"#002e6a",
-      "secondary":"#4edea3","on-secondary":"#003824","secondary-container":"#00a572",
-      "tertiary":"#ffb3ad","tertiary-container":"#ff5451",
-      "surface":"#131313","surface-dim":"#131313","surface-bright":"#393939",
-      "surface-container-lowest":"#0e0e0e","surface-container-low":"#1c1b1b",
-      "surface-container":"#201f1f","surface-container-high":"#2a2a2a",
-      "surface-container-highest":"#353534","surface-variant":"#353534",
-      "on-surface":"#e5e2e1","on-surface-variant":"#c2c6d6",
-      "outline":"#8c909f","outline-variant":"#424754",
-      "background":"#131313","on-background":"#e5e2e1",
-      "inverse-surface":"#e5e2e1","inverse-on-surface":"#313030",
-      "error":"#ffb4ab","error-container":"#93000a"
+      "primary":"#60A5FA","primary-container":"#3B82F6","on-primary":"#06152D",
+      "secondary":"#10B981","on-secondary":"#022C22","secondary-container":"#059669",
+      "tertiary":"#F43F5E","tertiary-container":"#E11D48","on-tertiary":"#3F0514",
+      "surface":"#090B10","surface-dim":"#090B10","surface-bright":"#262D40",
+      "surface-container-lowest":"#06080C","surface-container-low":"#0E1117",
+      "surface-container":"#131722","surface-container-high":"#1C2130",
+      "surface-container-highest":"#262D40","surface-variant":"#1C2130",
+      "on-surface":"#F1F5F9","on-surface-variant":"#94A3B8",
+      "outline":"#64748B","outline-variant":"rgba(255, 255, 255, 0.08)",
+      "background":"#090B10","on-background":"#F1F5F9",
+      "inverse-surface":"#F1F5F9","inverse-on-surface":"#0E1117",
+      "error":"#F43F5E","error-container":"#3F0514"
     },
     borderRadius:{ DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem" },
     fontFamily:{ "body-md":["Inter","Heebo","sans-serif"],"headline-lg":["Inter","Heebo","sans-serif"],"headline-md":["Inter","Heebo","sans-serif"],
@@ -43,24 +43,24 @@ tailwind.config = {
 </script>
 <style>
   input[type=range]{-webkit-appearance:none;width:100%;background:transparent;direction:ltr}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#adc6ff;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(173,198,255,0.18)}
-  input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#4d8eff var(--pct,50%),#424754 var(--pct,50%));border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#60A5FA;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(96,165,250,0.2)}
+  input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#3B82F6 var(--pct,50%),#1C2130 var(--pct,50%));border-radius:2px}
   input[type=range]:focus{outline:none}
-  .profile-btn{transition:all .2s;border:1px solid #424754;background:#1c1b1b;color:#c2c6d6;font-size:12px;font-weight:700;letter-spacing:.05em;padding:6px 4px;border-radius:6px;cursor:pointer;text-align:center}
-  .profile-btn:hover,.profile-btn.active{border-color:#adc6ff;background:rgba(173,198,255,0.12);color:#adc6ff}
+  .profile-btn{transition:all .2s;border:1px solid rgba(255,255,255,0.08);background:#0E1117;color:#94A3B8;font-size:12px;font-weight:700;letter-spacing:.05em;padding:6px 4px;border-radius:6px;cursor:pointer;text-align:center}
+  .profile-btn:hover,.profile-btn.active{border-color:#60A5FA;background:rgba(96,165,250,0.12);color:#60A5FA}
   .tooltip-wrap{position:relative;display:inline-flex}
-  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#2a2a2a;color:#c2c6d6;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 10px;border:1px solid #424754;opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
+  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#1C2130;color:#94A3B8;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.08);opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
   .tooltip-wrap:hover .tip{opacity:1}
   /* Reusable Contextual Info (i) Badge */
-  .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgba(173,198,255,0.12);border:1px solid rgba(173,198,255,0.35);color:#adc6ff;font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
-  .info-tooltip:hover,.info-tooltip:focus{background:#adc6ff;color:#002e6a;border-color:#adc6ff;box-shadow:0 0 10px rgba(173,198,255,0.45);outline:none}
-  #global-info-popover{position:fixed;z-index:9999;max-width:310px;background:#1e1e1e;color:#e5e2e1;border:1px solid #4d8eff;border-radius:10px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .15s ease}
+  .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);color:#60A5FA;font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
+  .info-tooltip:hover,.info-tooltip:focus{background:#60A5FA;color:#06152D;border-color:#60A5FA;box-shadow:0 0 10px rgba(96,165,250,0.45);outline:none}
+  #global-info-popover{position:fixed;z-index:9999;max-width:310px;background:#131722;color:#F1F5F9;border:1px solid #3B82F6;border-radius:10px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .15s ease}
   #global-info-popover.visible{opacity:1}
   /* Strict LTR numeric & financial figure isolation in RTL mode */
   .num-ltr,.font-mono,.tabular-nums,canvas,input[type="number"],input[type="date"]{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
-  ::-webkit-scrollbar{width:4px}
-  ::-webkit-scrollbar-track{background:#131313}
-  ::-webkit-scrollbar-thumb{background:#424754;border-radius:2px}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-track{background:#090B10}
+  ::-webkit-scrollbar-thumb{background:#262D40;border-radius:2px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   .fade-in{animation:fadeIn .3s ease forwards}
   .accordion-row{transition:all .25s ease}
@@ -70,6 +70,28 @@ tailwind.config = {
 
 <!-- Global Viewport-Aware Contextual Info Popover -->
 <div id="global-info-popover" role="tooltip" aria-hidden="true"></div>
+
+<!-- Global Non-Blocking Toast Notification Stack -->
+<div id="global-toast-container" class="fixed bottom-5 end-5 z-[9990] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none" aria-live="polite"></div>
+
+<!-- Global Reusable Confirmation Modal -->
+<div id="global-confirm-modal" class="fixed inset-0 z-[9980] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-200" role="dialog" aria-modal="true">
+  <div id="global-confirm-dialog" class="bg-surface-container border border-outline-variant rounded-xl p-6 max-w-md w-full shadow-2xl transform scale-95 transition-transform duration-200 space-y-4">
+    <div class="flex items-start gap-3">
+      <div id="global-confirm-icon-wrap" class="w-10 h-10 rounded-lg bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0">
+        <span id="global-confirm-icon" class="material-symbols-outlined text-tertiary text-[20px]">warning</span>
+      </div>
+      <div class="space-y-1">
+        <h3 id="global-confirm-title" class="text-headline-sm font-bold text-on-surface">Confirm Action</h3>
+        <p id="global-confirm-desc" class="text-xs text-on-surface-variant leading-relaxed"></p>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-outline-variant">
+      <button type="button" onclick="closeConfirmModal()" data-i18n="btn_cancel" class="px-4 py-2 rounded-lg bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-xs font-bold text-on-surface-variant hover:text-on-surface transition-all">Cancel</button>
+      <button type="button" id="global-confirm-action-btn" data-i18n="btn_confirm" class="px-4 py-2 rounded-lg bg-tertiary hover:bg-tertiary-container text-on-surface text-xs font-bold transition-all shadow-sm">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- Top Bar -->
 <header id="top-header" class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-14 px-6 z-40 transition-all duration-200" style="left:288px">
@@ -151,11 +173,11 @@ tailwind.config = {
       <div class="space-y-1 mb-3">
         <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block" data-i18n="allowed_sectors">Allowed Sectors</label>
         <div class="relative">
-          <button id="sector-dropdown-btn" onclick="toggleSectorDropdown()" type="button" class="w-full text-left bg-surface-container border border-outline-variant rounded-md px-3 py-1.5 text-xs flex justify-between items-center text-on-surface hover:bg-surface-container-high transition-colors">
+          <button id="sector-dropdown-btn" onclick="toggleSectorDropdown()" type="button" class="w-full text-start bg-surface-container border border-outline-variant rounded-md px-3 py-1.5 text-xs flex justify-between items-center text-on-surface hover:bg-surface-container-high transition-colors">
             <span id="sector-btn-text" class="truncate" data-i18n="all_sectors">All Sectors</span>
             <span class="material-symbols-outlined text-[14px]">expand_more</span>
           </button>
-          <div id="sector-dropdown" class="hidden absolute top-full left-0 w-full bg-surface-container-high border border-outline-variant mt-1 rounded-md max-h-48 overflow-y-auto z-50 p-2 space-y-1.5 shadow-lg">
+          <div id="sector-dropdown" class="hidden absolute top-full inset-x-0 w-full bg-surface-container-high border border-outline-variant mt-1 rounded-md max-h-48 overflow-y-auto z-50 p-2 space-y-1.5 shadow-lg">
             <!-- Populated dynamically via JS -->
           </div>
         </div>
@@ -177,8 +199,8 @@ tailwind.config = {
     </div>
 
     <!-- Model Parameters Collapsible Drawer -->
-    <div class="border-t border-outline-variant/30 pt-3">
-      <button onclick="toggleSlidersDrawer()" type="button" class="w-full flex items-center justify-between py-2 text-left hover:bg-surface-bright/10 rounded px-2 transition-colors duration-200">
+    <div class="border-t border-outline-variant pt-3">
+      <button onclick="toggleSlidersDrawer()" type="button" class="w-full flex items-center justify-between py-2 text-start hover:bg-surface-bright/10 rounded px-2 transition-colors duration-200">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px] text-primary">settings</span>
           <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="model_parameters">Model Parameters (16)</span>
@@ -193,9 +215,10 @@ tailwind.config = {
 
   <!-- Calculate button -->
   <div class="px-4 py-4 border-t border-outline-variant flex-shrink-0">
-    <button id="calculate-btn" data-i18n="btn_calculate_score"
-      class="w-full bg-primary text-on-primary font-bold text-sm py-2.5 px-4 rounded-lg hover:bg-primary-container transition-all shadow-[0_0_20px_rgba(77,142,255,0.25)] hover:shadow-[0_0_28px_rgba(77,142,255,0.4)] active:scale-[.98]">
-      ⚡ Calculate Score
+    <button id="calculate-btn"
+      class="w-full bg-primary text-on-primary font-bold text-sm py-2.5 px-4 rounded-lg hover:bg-primary-container transition-all shadow-[0_0_20px_rgba(96,165,250,0.25)] hover:shadow-[0_0_28px_rgba(96,165,250,0.4)] active:scale-[.98] flex items-center justify-center gap-1.5">
+      <span class="material-symbols-outlined text-[18px]">bolt</span>
+      <span data-i18n="btn_calculate_score">Calculate Score</span>
     </button>
   </div>
 </nav>
@@ -225,15 +248,15 @@ tailwind.config = {
     </div>
 
     <!-- Leaderboard -->
-    <div id="screener-view-standard" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+    <div id="screener-view-standard" class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-start border-collapse">
           <thead>
-            <tr class="bg-surface-container border-b border-[#2a2a2a]">
+            <tr class="bg-surface-container-low border-b border-outline-variant">
               <th class="px-4 py-3 text-label-caps text-on-surface-variant w-16 text-center">#</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant" data-i18n="th_ticker">Ticker</th>
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-start" data-i18n="th_ticker">Ticker</th>
               <th class="px-4 py-3 text-label-caps text-on-surface-variant text-center w-28" data-i18n="th_profile">Profile</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-right w-32">
+              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-end w-32">
                 <span data-i18n="th_score">Score</span>
                 <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
               </th>
@@ -246,7 +269,7 @@ tailwind.config = {
           </tbody>
         </table>
       </div>
-      <div class="px-4 py-3 bg-surface-container-low border-t border-[#2a2a2a] flex flex-col sm:flex-row gap-2 justify-between items-center">
+      <div class="px-4 py-3 bg-surface-container-low border-t border-outline-variant flex flex-col sm:flex-row gap-2 justify-between items-center">
         <span class="text-label-caps text-on-surface-variant" id="result-count" data-i18n="no_results_yet">No results yet</span>
         <div id="pagination-controls" class="hidden items-center gap-2">
           <button id="load-more-btn" onclick="loadMoreStocks()" data-i18n="btn_load_more" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
@@ -260,8 +283,8 @@ tailwind.config = {
     </div>
 
     <!-- Backtesting Panel -->
-    <div id="backtest-panel" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] mt-6 p-6 space-y-6">
-      <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-[#2a2a2a] pb-4 gap-4">
+    <div id="backtest-panel" class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] mt-6 p-6 space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-outline-variant pb-4 gap-4">
         <div>
           <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">analytics</span>
@@ -272,20 +295,20 @@ tailwind.config = {
         
         <div class="flex items-center gap-3 flex-shrink-0">
           <!-- Time window select -->
-          <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg">
+          <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg">
             <button id="bt-window-3y" onclick="setBacktestWindow('3y')" data-i18n="bt_3y" class="px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
             <button id="bt-window-5y" onclick="setBacktestWindow('5y')" data-i18n="bt_5y" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
           </div>
           <!-- Run button -->
           <button id="run-backtest-btn" disabled onclick="runPortfolioBacktest()" class="bg-primary/20 text-primary border border-primary/30 opacity-50 cursor-not-allowed font-bold text-xs py-1.5 px-4 rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center gap-1.5 active:scale-[.98]">
-            <span class="material-symbols-outlined text-[14px]">play_arrow</span>
-            <span data-i18n="btn_run_backtest">📊 Run Trailing Backtest</span>
+            <span class="material-symbols-outlined text-[15px]">monitoring</span>
+            <span data-i18n="btn_run_backtest">Run Trailing Backtest</span>
           </button>
         </div>
       </div>
       
       <!-- State Boundary Helper message -->
-      <div id="backtest-helper-msg" class="text-center py-6 text-on-surface-variant/80 text-xs bg-surface-container/20 rounded-lg border border-dashed border-outline-variant/30 flex flex-col items-center justify-center gap-2">
+      <div id="backtest-helper-msg" class="text-center py-6 text-on-surface-variant/80 text-xs bg-surface-container-low rounded-lg border border-dashed border-outline-variant flex flex-col items-center justify-center gap-2">
         <span class="material-symbols-outlined text-[24px] text-outline">info</span>
         <span data-i18n="bt_helper_msg">Rank stocks to generate a portfolio before running a backtest.</span>
       </div>
@@ -293,7 +316,7 @@ tailwind.config = {
       <!-- Backtest Content (hidden initially) -->
       <div id="backtest-content" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
         <!-- Left 2 cols for Chart -->
-        <div class="md:col-span-2 bg-surface-container/40 border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
+        <div class="md:col-span-2 bg-surface-container-low border border-outline-variant rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
           <div class="flex justify-between items-center mb-4">
             <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="bt_chart_title">Trailing Cumulative Performance</span>
             <div class="flex items-center gap-4 text-[11px] font-bold">
@@ -311,7 +334,7 @@ tailwind.config = {
           <span class="text-label-caps text-on-surface-variant font-bold block" data-i18n="bt_key_metrics">Key Portfolio Metrics</span>
           
           <!-- Sharpe Grid -->
-          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 space-y-2">
             <div class="flex justify-between items-center">
               <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_sharpe_ratio">Annualized Sharpe Ratio</span><span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span></span>
               <span class="material-symbols-outlined text-[16px] text-primary">assessment</span>
@@ -329,7 +352,7 @@ tailwind.config = {
           </div>
 
           <!-- Max Drawdown Grid -->
-          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 space-y-2">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 space-y-2">
             <div class="flex justify-between items-center">
               <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_max_drawdown">Maximum Drawdown</span><span class="info-tooltip" data-term="MDD" tabindex="0">i</span></span>
               <span class="material-symbols-outlined text-[16px] text-tertiary">trending_down</span>
@@ -347,7 +370,7 @@ tailwind.config = {
           </div>
 
           <!-- Alpha Grid -->
-          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3.5 flex justify-between items-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 flex justify-between items-center">
             <div>
               <span class="text-[10px] text-secondary uppercase font-bold tracking-wide flex items-center"><span data-i18n="lbl_excess_alpha">Total Excess Return (Alpha)</span><span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span></span>
               <div id="kpi-total-alpha" class="text-headline-md font-bold text-secondary mt-1 num-ltr">--</div>
@@ -366,7 +389,7 @@ tailwind.config = {
   <!-- ===================================================================== -->
   <div id="workspace-portfolio" class="hidden max-w-7xl mx-auto space-y-6 pb-12 fade-in">
     <!-- Portfolio Header Bar + Two-Screen Progressive Disclosure Switcher -->
-    <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-[#2a2a2a] pb-4">
+    <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-outline-variant pb-4">
       <div>
         <div class="flex flex-wrap items-center gap-2.5">
           <span class="material-symbols-outlined text-primary text-[24px]">account_balance_wallet</span>
@@ -388,11 +411,10 @@ tailwind.config = {
           </button>
         </div>
 
-        <!-- Workspace Currency Toggle (synced with Top Header) -->
-        <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
-          <button id="ws-curr-btn-USD" onclick="setPortfolioCurrency('USD')" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">USD $</button>
-          <button id="ws-curr-btn-ILS" onclick="setPortfolioCurrency('ILS')" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ILS ₪</button>
-        </div>
+        <button onclick="openTxDrawer()" class="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-[.98]">
+          <span class="material-symbols-outlined text-[15px]">add_card</span>
+          <span data-i18n="btn_open_tx_drawer">+ Record Transaction / CSV</span>
+        </button>
         <button onclick="seedDemoPortfolio()" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center gap-1.5">
           <span class="material-symbols-outlined text-[14px] text-secondary">science</span>
           <span data-i18n="btn_seed_demo">Seed Sample Ledger</span>
@@ -411,7 +433,7 @@ tailwind.config = {
       <!-- 1. EXECUTIVE KPI RIBBON (4 Cards) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Card 1: Total Portfolio NAV (Gross & Net After Tax) -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
               <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
@@ -429,12 +451,12 @@ tailwind.config = {
               <span id="pf-kpi-net-nav" class="font-bold text-secondary font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
+          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
             <div>
               <span class="text-on-surface-variant block" data-i18n="kpi_invested_holdings">Invested Holdings</span>
               <span id="pf-kpi-mv" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-on-surface-variant block" data-i18n="kpi_cash_balance">Cash Balance</span>
               <span id="pf-kpi-cash" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
@@ -442,7 +464,7 @@ tailwind.config = {
         </div>
 
         <!-- Card 2: 3-Bucket Capital Accounting (Invested, Available Cash, Withdrawn) -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
               <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
@@ -466,7 +488,7 @@ tailwind.config = {
               <span id="pf-kpi-withdrawn" class="font-bold text-tertiary font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
+          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
             <div>
               <span class="text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_wealth_created">Wealth Created</span>
@@ -474,7 +496,7 @@ tailwind.config = {
               </span>
               <span id="pf-kpi-wealth" class="font-bold font-mono num-ltr">--</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-on-surface-variant flex items-center justify-end">
                 <span data-i18n="kpi_roi_invested">ROI on Capital</span>
                 <span class="info-tooltip" data-term="ROI on Invested Capital" tabindex="0">i</span>
@@ -485,7 +507,7 @@ tailwind.config = {
         </div>
 
         <!-- Card 3: Time-Weighted Return (TWR) vs Money-Weighted Return (XIRR) -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
               <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
@@ -501,7 +523,7 @@ tailwind.config = {
                 </span>
                 <div id="pf-kpi-twr" class="text-xl font-extrabold text-on-surface tracking-tight num-ltr">--</div>
               </div>
-              <div class="border-s border-[#2a2a2a] ps-3">
+              <div class="border-s border-outline-variant ps-3">
                 <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center">
                   <span data-i18n="kpi_xirr_ann">XIRR (Ann.)</span>
                   <span class="info-tooltip" data-term="MWR / XIRR" tabindex="0">i</span>
@@ -510,12 +532,12 @@ tailwind.config = {
               </div>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
+          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
             <div>
               <span class="text-on-surface-variant block" data-i18n="kpi_ann_twr">Annualized TWR</span>
               <span id="pf-kpi-twr-ann" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-on-surface-variant block" data-i18n="kpi_mod_dietz">Modified Dietz</span>
               <span id="pf-kpi-dietz" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
@@ -523,7 +545,7 @@ tailwind.config = {
         </div>
 
         <!-- Card 4: Unrealized PnL (Gross & Net) + Realized YTD PnL -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
               <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
@@ -538,12 +560,12 @@ tailwind.config = {
               <span id="pf-kpi-unr-net" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
+          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
             <div>
               <span class="text-on-surface-variant block" data-i18n="kpi_real_ytd_pnl">Realized YTD PnL</span>
               <span id="pf-kpi-real-ytd" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-on-surface-variant block" data-i18n="kpi_est_liq_tax">Est. Liquidation Tax</span>
               <span id="pf-kpi-est-tax" class="font-bold text-tertiary font-mono num-ltr">--</span>
             </div>
@@ -552,11 +574,11 @@ tailwind.config = {
       </div>
 
       <!-- 2. PRIMARY PERFORMANCE CHART PANEL (Standard TWR View) -->
-      <div id="pf-standard-chart-panel" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+      <div id="pf-standard-chart-panel" class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
         <!-- Top Chart Toolbar: Window Selector + Date Inputs -->
-        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-[#2a2a2a] pb-4">
+        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-outline-variant pb-4">
           <div class="flex flex-wrap items-center gap-2">
-            <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
+            <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg" dir="ltr">
               <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
               <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
               <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
@@ -567,9 +589,9 @@ tailwind.config = {
               <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ALL</button>
             </div>
             <div class="flex items-center gap-1.5 text-xs">
-              <input type="date" id="pf-start-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-start-date" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <span class="text-on-surface-variant" data-i18n="lbl_to">to</span>
-              <input type="date" id="pf-end-date" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-end-date" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <button onclick="applyCustomDateRange('std')" data-i18n="btn_apply" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
             </div>
           </div>
@@ -586,11 +608,11 @@ tailwind.config = {
             <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
             <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
             <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
-            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
-            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
+            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
+            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
             <div id="custom-bench-chips" class="flex items-center gap-1.5 num-ltr"></div>
             <div class="flex items-center gap-1 ms-1">
-              <input type="text" id="pf-custom-bench-input" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              <input type="text" id="pf-custom-bench-input" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
               <button onclick="addCustomBenchmark()" data-i18n="btn_add" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
             </div>
           </div>
@@ -598,174 +620,187 @@ tailwind.config = {
         </div>
 
         <!-- Canvas Container -->
-        <div class="relative w-full bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3" style="height: 340px;" dir="ltr">
+        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-3" style="height: 340px;" dir="ltr">
           <canvas id="portfolio-main-chart"></canvas>
         </div>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left 2 Cols: Live Holdings Table & Expandable FIFO Tax Lots -->
-        <div class="lg:col-span-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
-          <div class="px-5 py-4 border-b border-[#2a2a2a] flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-            <div>
-              <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-[18px]">layers</span>
-                <span data-i18n="holdings_title">Open Positions &amp; Expandable FIFO Tax Lots</span>
-                <span class="info-tooltip" data-term="FIFO Tax Lots" tabindex="0">i</span>
-              </h3>
-              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="holdings_subtitle">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
-            </div>
+
+      <!-- 3. FULL-WIDTH HOLDINGS TABLE & EXPANDABLE FIFO TAX LOTS -->
+      <div class="w-full bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+        <div class="px-5 py-4 border-b border-outline-variant flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+          <div>
+            <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[18px]">layers</span>
+              <span data-i18n="holdings_title">Open Positions &amp; Expandable FIFO Tax Lots</span>
+              <span class="info-tooltip" data-term="FIFO Tax Lots" tabindex="0">i</span>
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="holdings_subtitle">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
+          </div>
+          <div class="flex items-center gap-3">
             <span id="pf-positions-count" class="text-label-caps text-on-surface-variant">0 Open Positions</span>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-                  <th class="px-4 py-3" data-i18n="th_ticker_sector">Ticker &amp; Sector</th>
-                  <th class="px-3 py-3 text-center">
-                    <span data-i18n="th_quant_score">Quant Score</span>
-                    <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
-                  </th>
-                  <th class="px-3 py-3 text-center" data-i18n="th_native_ccy">Native CCY</th>
-                  <th class="px-3 py-3 text-right" data-i18n="th_quantity">Quantity</th>
-                  <th class="px-3 py-3 text-right">
-                    <span data-i18n="th_avg_cost">Avg Cost</span>
-                    <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
-                  </th>
-                  <th class="px-3 py-3 text-right" data-i18n="th_curr_price">Current Price</th>
-                  <th class="px-4 py-3 text-right" data-i18n="th_mkt_val">Market Value</th>
-                  <th class="px-3 py-3 text-right" data-i18n="th_weight">Weight</th>
-                  <th class="px-4 py-3 text-right" data-i18n="th_unr_gross">Unrealized Gross</th>
-                  <th class="px-3 py-3 text-right">
-                    <span data-i18n="th_est_tax">Est. Tax (25% Real)</span>
-                    <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
-                  </th>
-                  <th class="px-4 py-3 text-right" data-i18n="th_unr_net">Unrealized Net</th>
-                </tr>
-              </thead>
-              <tbody id="portfolio-holdings-body">
-                <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="loading_positions">Loading portfolio positions...</td></tr>
-              </tbody>
-            </table>
-          </div>
         </div>
-
-        <!-- Right 1 Col: Add Transaction Form & CSV Import/Export -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
-          <div class="border-b border-[#2a2a2a] pb-3">
-            <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-secondary text-[18px]">add_circle</span>
-              <span data-i18n="tx_form_title">Record Transaction</span>
-            </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_form_subtitle">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
-          </div>
-
-          <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-3 text-xs">
-            <!-- Quick Action Shortcuts -->
-            <div class="flex flex-wrap items-center gap-1.5 pb-1">
-              <button type="button" onclick="quickSelectTxType('BUY')" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface">Buy</button>
-              <button type="button" onclick="quickSelectTxType('SELL')" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface">Sell</button>
-              <button type="button" onclick="quickSelectTxType('DIVIDEND')" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface">Dividend</button>
-              <button type="button" onclick="quickSelectTxType('CASH_DEPOSIT')" class="px-2 py-0.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface">Deposit</button>
-              <button type="button" onclick="quickSelectWithdrawal()" class="px-2.5 py-0.5 rounded bg-tertiary/15 hover:bg-tertiary/25 border border-tertiary/40 text-[10px] font-bold text-tertiary flex items-center gap-1">
-                <span class="material-symbols-outlined text-[13px]">payments</span>
-                <span data-i18n="btn_quick_withdraw">Withdraw Capital</span>
-              </button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2.5">
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_date">Date</label>
-                <input type="date" id="tx-date" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_action_type">Action Type</label>
-                <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                  <option value="BUY">BUY</option>
-                  <option value="SELL">SELL</option>
-                  <option value="DIVIDEND">DIVIDEND</option>
-                  <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
-                  <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2.5">
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_ticker_sym">Ticker Symbol</label>
-                <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_currency">Currency</label>
-                <select id="tx-currency" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                  <option value="AUTO" data-i18n="opt_ccy_auto">Auto (.TA → ILS, else USD)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="ILS">ILS (₪)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-3 gap-2">
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="th_quantity">Quantity</label>
-                <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_unit_price">Unit Price</label>
-                <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              </div>
-              <div>
-                <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_fee_comm">Fee / Comm.</label>
-                <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              </div>
-            </div>
-
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_notes_opt">Notes (Optional)</label>
-              <input type="text" id="tx-notes" data-i18n-placeholder="ph_tx_notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
-            </div>
-
-            <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-md"></div>
-
-            <button type="submit" id="tx-submit-btn" data-i18n="btn_commit_tx" class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs py-2.5 px-4 rounded-lg transition-all shadow-sm">
-              + Commit Transaction to Ledger
-            </button>
-          </form>
-
-          <!-- CSV Import / Export / Clear Controls -->
-          <div class="border-t border-[#2a2a2a] pt-3 space-y-2">
-            <span class="text-[10px] font-bold uppercase text-on-surface-variant block" data-i18n="lbl_batch_csv">Batch CSV Operations</span>
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" onclick="exportPortfolioCsv()" class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center justify-center gap-1.5">
-                <span class="material-symbols-outlined text-[14px]">download</span>
-                <span data-i18n="btn_export_csv">Export CSV</span>
-              </button>
-              <label class="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                <span class="material-symbols-outlined text-[14px]">upload</span>
-                <span data-i18n="btn_import_csv">Import CSV</span>
-                <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
-              </label>
-            </div>
-            <button type="button" onclick="clearPortfolioLedger()" data-i18n="btn_clear_tx" class="w-full px-3 py-1.5 rounded bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
-              Clear All Transactions
-            </button>
-            <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
-            <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
-          </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-start border-collapse">
+            <thead>
+              <tr class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
+                <th class="px-4 py-3 text-start" data-i18n="th_ticker_sector">Ticker &amp; Sector</th>
+                <th class="px-3 py-3 text-center">
+                  <span data-i18n="th_quant_score">Quant Score</span>
+                  <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
+                </th>
+                <th class="px-3 py-3 text-center" data-i18n="th_native_ccy">Native CCY</th>
+                <th class="px-3 py-3 text-end" data-i18n="th_quantity">Quantity</th>
+                <th class="px-3 py-3 text-end">
+                  <span data-i18n="th_avg_cost">Avg Cost</span>
+                  <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
+                </th>
+                <th class="px-3 py-3 text-end" data-i18n="th_curr_price">Current Price</th>
+                <th class="px-4 py-3 text-end" data-i18n="th_mkt_val">Market Value</th>
+                <th class="px-3 py-3 text-end" data-i18n="th_weight">Weight</th>
+                <th class="px-4 py-3 text-end" data-i18n="th_unr_gross">Unrealized Gross</th>
+                <th class="px-3 py-3 text-end">
+                  <span data-i18n="th_est_tax">Est. Tax (25% Real)</span>
+                  <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
+                </th>
+                <th class="px-4 py-3 text-end" data-i18n="th_unr_net">Unrealized Net</th>
+              </tr>
+            </thead>
+            <tbody id="portfolio-holdings-body">
+              <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="loading_positions">Loading portfolio positions...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
+
+    <!-- =================================================================== -->
+    <!-- SLIDE-OVER TRANSACTION ENTRY & CSV DRAWER                           -->
+    <!-- =================================================================== -->
+    <div id="pf-tx-drawer-backdrop" onclick="closeTxDrawer()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300"></div>
+    <aside id="pf-tx-drawer" class="fixed top-0 end-0 h-full w-full max-w-md bg-surface-container border-s border-outline-variant z-[55] shadow-2xl transform translate-x-full rtl:-translate-x-full transition-transform duration-300 flex flex-col">
+      <!-- Drawer Header -->
+      <div class="px-5 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+        <div>
+          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-secondary text-[18px]">add_card</span>
+            <span data-i18n="tx_form_title">Record Transaction</span>
+          </h3>
+          <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_form_subtitle">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
+        </div>
+        <button type="button" onclick="closeTxDrawer()" class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+          <span class="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- Drawer Body -->
+      <div class="flex-1 overflow-y-auto p-5 space-y-5">
+        <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-3.5 text-xs">
+          <!-- Quick Action Shortcuts -->
+          <div class="flex flex-wrap items-center gap-1.5 pb-1">
+            <button type="button" onclick="quickSelectTxType('BUY')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Buy</button>
+            <button type="button" onclick="quickSelectTxType('SELL')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Sell</button>
+            <button type="button" onclick="quickSelectTxType('DIVIDEND')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Dividend</button>
+            <button type="button" onclick="quickSelectTxType('CASH_DEPOSIT')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Deposit</button>
+            <button type="button" onclick="quickSelectWithdrawal()" class="px-2.5 py-1 rounded bg-tertiary/15 hover:bg-tertiary/25 border border-tertiary/40 text-[10px] font-bold text-tertiary flex items-center gap-1 transition-colors">
+              <span class="material-symbols-outlined text-[13px]">payments</span>
+              <span data-i18n="btn_quick_withdraw">Withdraw Capital</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_date">Date</label>
+              <input type="date" id="tx-date" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_action_type">Action Type</label>
+              <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
+                <option value="BUY">BUY</option>
+                <option value="SELL">SELL</option>
+                <option value="DIVIDEND">DIVIDEND</option>
+                <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
+                <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_ticker_sym">Ticker Symbol</label>
+              <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_currency">Currency</label>
+              <select id="tx-currency" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
+                <option value="AUTO" data-i18n="opt_ccy_auto">Auto (.TA → ILS, else USD)</option>
+                <option value="USD">USD ($)</option>
+                <option value="ILS">ILS (₪)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="th_quantity">Quantity</label>
+              <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_unit_price">Unit Price</label>
+              <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_fee_comm">Fee / Comm.</label>
+              <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_notes_opt">Notes (Optional)</label>
+            <input type="text" id="tx-notes" data-i18n-placeholder="ph_tx_notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
+          </div>
+
+          <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-md"></div>
+
+          <button type="submit" id="tx-submit-btn" data-i18n="btn_commit_tx" class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs py-2.5 px-4 rounded-lg transition-all shadow-sm">
+            + Commit Transaction to Ledger
+          </button>
+        </form>
+
+        <!-- CSV Import / Export / Clear Controls -->
+        <div class="border-t border-outline-variant pt-4 space-y-2.5">
+          <span class="text-[10px] font-bold uppercase text-on-surface-variant block" data-i18n="lbl_batch_csv">Batch CSV Operations</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="exportPortfolioCsv()" class="px-3 py-2 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center justify-center gap-1.5">
+              <span class="material-symbols-outlined text-[14px]">download</span>
+              <span data-i18n="btn_export_csv">Export CSV</span>
+            </button>
+            <label class="px-3 py-2 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px]">upload</span>
+              <span data-i18n="btn_import_csv">Import CSV</span>
+              <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
+            </label>
+          </div>
+          <button type="button" onclick="clearPortfolioLedger()" data-i18n="btn_clear_tx" class="w-full px-3 py-2 rounded-lg bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
+            Clear All Transactions
+          </button>
+          <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
+          <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
+        </div>
+      </div>
+    </aside>
 
     <!-- =================================================================== -->
     <!-- SCREEN 2: ADVANCED QUANT & TAX LAB (Hidden by Default)              -->
     <!-- =================================================================== -->
     <div id="pf-view-advanced" class="hidden space-y-6">
       <!-- 1. DEEP-DIVE CHART & WHAT-IF OPPORTUNITY SIMULATOR PANEL -->
-      <div id="pf-adv-chart-panel" class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+      <div id="pf-adv-chart-panel" class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
         <!-- Top Chart Toolbar: Window Selector + Date Inputs + Mode Switcher -->
-        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-[#2a2a2a] pb-4">
+        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-outline-variant pb-4">
           <!-- Time-Slice Window Buttons + Custom Dates -->
           <div class="flex flex-wrap items-center gap-2">
-            <div class="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
+            <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg" dir="ltr">
               <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
               <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
               <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
@@ -776,15 +811,15 @@ tailwind.config = {
               <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ALL</button>
             </div>
             <div class="flex items-center gap-1.5 text-xs">
-              <input type="date" id="pf-start-date-adv" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-start-date-adv" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <span class="text-on-surface-variant" data-i18n="lbl_to">to</span>
-              <input type="date" id="pf-end-date-adv" class="bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-end-date-adv" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <button onclick="applyCustomDateRange('adv')" data-i18n="btn_apply" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
             </div>
           </div>
 
           <!-- Chart Mode Switcher -->
-          <div class="flex flex-wrap items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg gap-0.5">
+          <div class="flex flex-wrap items-center bg-surface-container-low border border-outline-variant p-0.5 rounded-lg gap-0.5">
             <div class="flex items-center">
               <button id="pf-mode-TWR" onclick="setPortfolioChartMode('TWR')" data-i18n="mode_twr" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">Rebased TWR (%)</button>
               <span class="info-tooltip me-1" data-term="TWR" tabindex="0">i</span>
@@ -806,11 +841,11 @@ tailwind.config = {
             <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
             <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY-adv" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
             <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ-adv" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
-            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
-            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
+            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
+            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
             <div id="custom-bench-chips-adv" class="flex items-center gap-1.5 num-ltr"></div>
             <div class="flex items-center gap-1 ms-1">
-              <input type="text" id="pf-custom-bench-input-adv" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              <input type="text" id="pf-custom-bench-input-adv" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
               <button onclick="addCustomBenchmark('adv')" data-i18n="btn_add" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
             </div>
           </div>
@@ -818,7 +853,7 @@ tailwind.config = {
         </div>
 
         <!-- Canvas Container -->
-        <div class="relative w-full bg-surface-container/30 border border-outline-variant/20 rounded-xl p-3" style="height: 340px;" dir="ltr">
+        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-3" style="height: 340px;" dir="ltr">
           <canvas id="portfolio-adv-chart"></canvas>
         </div>
 
@@ -826,50 +861,50 @@ tailwind.config = {
         <div id="pf-whatif-banner" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 pt-1"></div>
 
         <!-- Slice Risk KPI Strip (7 Institutional Metrics — Revealed in Advanced Quant & Tax Lab) -->
-        <div id="pf-slice-risk-strip" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-[#2a2a2a]">
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+        <div id="pf-slice-risk-strip" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-outline-variant">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_ann_twr">Annualized TWR</span>
               <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
             </span>
             <span id="pf-slice-ann-ret" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_volatility">Volatility (Ann.)</span>
               <span class="info-tooltip" data-term="Annualized Volatility" tabindex="0">i</span>
             </span>
             <span id="pf-slice-vol" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_sharpe">Sharpe Ratio</span>
               <span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span>
             </span>
             <span id="pf-slice-sharpe" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_sortino">Sortino Ratio</span>
               <span class="info-tooltip" data-term="Sortino Ratio" tabindex="0">i</span>
             </span>
             <span id="pf-slice-sortino" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_beta_bench">Beta vs Bench</span>
               <span class="info-tooltip" data-term="Beta" tabindex="0">i</span>
             </span>
             <span id="pf-slice-beta" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_jensens_alpha">Jensen's Alpha</span>
               <span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span>
             </span>
             <span id="pf-slice-alpha" class="text-sm font-bold text-secondary font-mono mt-0.5 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2.5 text-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
             <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_max_dd">Max Drawdown</span>
               <span class="info-tooltip" data-term="MDD" tabindex="0">i</span>
@@ -882,7 +917,7 @@ tailwind.config = {
       <!-- 2. STATUTORY ISRAELI TAX CARD & ILS RETURN ATTRIBUTION -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left 1 Col: Israeli Tax Summary Card (Always ILS Statutory Reporting) -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
               <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
@@ -906,12 +941,12 @@ tailwind.config = {
               <span id="pf-tax-shield" class="font-bold text-secondary font-mono num-ltr">₪0.00</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-[#2a2a2a] text-[11px]">
+          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
             <div>
               <span class="text-on-surface-variant block" data-i18n="kpi_div_tax_paid">Dividend Tax Paid</span>
               <span id="pf-tax-div" class="font-bold text-on-surface font-mono num-ltr">₪0.00</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-on-surface-variant flex items-center justify-end">
                 <span data-i18n="kpi_infl_exempt">Inflationary Exempt</span>
                 <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span>
@@ -922,7 +957,7 @@ tailwind.config = {
         </div>
 
         <!-- Right 2 Cols: ILS Return Attribution & TLH Strip -->
-        <div id="pf-attr-bar" class="lg:col-span-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-5 py-4 flex flex-col justify-between gap-3 text-xs shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+        <div id="pf-attr-bar" class="lg:col-span-2 bg-surface-container border border-outline-variant rounded-xl px-5 py-4 flex flex-col justify-between gap-3 text-xs shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
           <div class="flex flex-wrap items-center gap-5">
             <span class="text-label-caps text-on-surface-variant font-bold flex items-center gap-1.5">
               <span class="material-symbols-outlined text-[16px] text-primary">pie_chart</span>
@@ -934,7 +969,7 @@ tailwind.config = {
             <div><span class="text-on-surface-variant" data-i18n="lbl_tax_fee_drag">Tax &amp; Fee Drag:</span> <strong id="pf-attr-drag" class="font-mono text-tertiary num-ltr font-bold">--</strong></div>
             <div><span class="text-on-surface-variant" data-i18n="lbl_net_after_tax_twr">Net After-Tax TWR:</span> <strong id="pf-attr-net" class="font-mono text-secondary num-ltr font-bold">--</strong></div>
           </div>
-          <div id="pf-tlh-strip" class="flex items-center gap-2 text-[11px] text-on-surface-variant border-t border-[#2a2a2a] pt-2.5">
+          <div id="pf-tlh-strip" class="flex items-center gap-2 text-[11px] text-on-surface-variant border-t border-outline-variant pt-2.5">
             <span class="material-symbols-outlined text-[15px] text-secondary">tips_and_updates</span>
             <span data-i18n="tlh_none_detected">Tax-Loss Harvesting: No unrealized real-loss positions detected.</span>
           </div>
@@ -944,8 +979,8 @@ tailwind.config = {
       <!-- PHASE 6: PORTFOLIO FACTOR DNA RADAR & GICS SECTOR ATTRIBUTION -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Left Card: Portfolio Factor DNA Radar (C-FFI 16-Indicator Engine) -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-[#2a2a2a] pb-3">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-outline-variant pb-3">
             <div>
               <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary text-[18px]">radar</span>
@@ -956,7 +991,7 @@ tailwind.config = {
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center">
-                <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">Factor Coverage: --%</span>
+                <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container-low border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">Factor Coverage: --%</span>
                 <span class="info-tooltip" data-term="Factor Coverage %" tabindex="0">i</span>
               </span>
               <span id="pf-dna-score-badge" class="px-2.5 py-1 rounded-md bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary num-ltr">Score: --</span>
@@ -972,18 +1007,18 @@ tailwind.config = {
           <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2 text-center pt-1"></div>
 
           <!-- Expandable 16-Indicator Breakdown Drawer -->
-          <div class="border-t border-[#2a2a2a] pt-2.5">
+          <div class="border-t border-outline-variant pt-2.5">
             <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs font-bold text-primary hover:text-on-surface transition-colors py-1">
               <span data-i18n="btn_inspect_16_dna">Inspect All 16 Normalized C-FFI Factor Exposures</span>
               <span id="pf-dna-16-icon" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
             </button>
-            <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1"></div>
+            <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pe-1"></div>
           </div>
         </div>
 
         <!-- Right Card: GICS Sector Allocation & Return Attribution -->
-        <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-          <div class="flex justify-between items-center border-b border-[#2a2a2a] pb-3">
+        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
+          <div class="flex justify-between items-center border-b border-outline-variant pb-3">
             <div>
               <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
                 <span class="material-symbols-outlined text-secondary text-[18px]">donut_large</span>
@@ -1000,14 +1035,14 @@ tailwind.config = {
           </div>
 
           <!-- Sector Breakdown Table -->
-          <div class="overflow-x-auto max-h-48 overflow-y-auto border border-[#262626] rounded-lg">
-            <table class="w-full text-left border-collapse text-xs">
-              <thead class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
+          <div class="overflow-x-auto max-h-48 overflow-y-auto border border-outline-variant rounded-lg">
+            <table class="w-full text-start border-collapse text-xs">
+              <thead class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
                 <tr>
-                  <th class="py-2 px-3" data-i18n="th_gics_sector">GICS Sector</th>
-                  <th class="py-2 px-2 text-right" data-i18n="th_weight">Weight</th>
-                  <th class="py-2 px-3 text-right" data-i18n="th_mkt_val">Market Value</th>
-                  <th class="py-2 px-3 text-right" data-i18n="th_unr_gross">Unrealized PnL</th>
+                  <th class="py-2 px-3 text-start" data-i18n="th_gics_sector">GICS Sector</th>
+                  <th class="py-2 px-2 text-end" data-i18n="th_weight">Weight</th>
+                  <th class="py-2 px-3 text-end" data-i18n="th_mkt_val">Market Value</th>
+                  <th class="py-2 px-3 text-end" data-i18n="th_unr_gross">Unrealized PnL</th>
                   <th class="py-2 px-2 text-center" data-i18n="th_quant_health">Quant Health</th>
                 </tr>
               </thead>
@@ -1020,8 +1055,8 @@ tailwind.config = {
       </div>
 
       <!-- PHASE 6: INTERACTIVE ISRAELI TAX-LOSS HARVESTING (TLH) SIMULATOR -->
-      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
-        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-[#2a2a2a] pb-3">
+      <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-outline-variant pb-3">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
               <span class="material-symbols-outlined text-secondary text-[18px]">savings</span>
@@ -1035,22 +1070,22 @@ tailwind.config = {
 
         <!-- Simulated Tax Impact Ribbon -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-3">
             <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_selected_loss">Selected Real Capital Loss</span>
             <span id="tlh-sim-loss" class="text-lg font-extrabold text-tertiary font-mono mt-0.5 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container/40 border border-secondary/30 rounded-lg p-3">
+          <div class="bg-surface-container-low border border-secondary/30 rounded-lg p-3">
             <span class="text-[10px] uppercase font-bold text-secondary flex items-center">
               <span data-i18n="tlh_shield_gen">Immediate 25% Tax Shield Generated</span>
               <span class="info-tooltip" data-term="YTD Tax Shield" tabindex="0">i</span>
             </span>
             <span id="tlh-sim-shield" class="text-lg font-extrabold text-secondary font-mono mt-0.5 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container/40 border border-primary/30 rounded-lg p-3">
+          <div class="bg-surface-container-low border border-primary/30 rounded-lg p-3">
             <span class="text-[10px] uppercase font-bold text-primary block" data-i18n="tlh_ytd_wiped">YTD Capital Gains Tax Wiped Out</span>
             <span id="tlh-sim-ytd-wiped" class="text-lg font-extrabold text-primary font-mono mt-0.5 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-3">
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-3">
             <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_carry_forward">Carry-Forward Shield (Future Years)</span>
             <span id="tlh-sim-carry" class="text-lg font-extrabold text-on-surface font-mono mt-0.5 block num-ltr">₪0.00</span>
           </div>
@@ -1058,17 +1093,17 @@ tailwind.config = {
 
         <!-- Harvestable FIFO Lots Table -->
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-xs">
+          <table class="w-full text-start border-collapse text-xs">
             <thead>
-              <tr class="bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
+              <tr class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
                 <th class="py-2.5 px-3 w-10 text-center" data-i18n="th_sim">Sim</th>
-                <th class="py-2.5 px-3" data-i18n="th_ticker_lot">Ticker &amp; Lot</th>
-                <th class="py-2.5 px-3" data-i18n="th_acq_date">Acquisition Date</th>
-                <th class="py-2.5 px-3 text-right" data-i18n="th_quantity">Quantity</th>
-                <th class="py-2.5 px-3 text-right" data-i18n="th_idx_cost">Indexed Cost (₪)</th>
-                <th class="py-2.5 px-3 text-right" data-i18n="th_curr_proceeds">Current Proceeds (₪)</th>
-                <th class="py-2.5 px-3 text-right" data-i18n="th_unr_real_loss">Unrealized Real Loss (₪)</th>
-                <th class="py-2.5 px-3 text-right" data-i18n="th_tax_shield_25">25% Tax Shield (₪)</th>
+                <th class="py-2.5 px-3 text-start" data-i18n="th_ticker_lot">Ticker &amp; Lot</th>
+                <th class="py-2.5 px-3 text-start" data-i18n="th_acq_date">Acquisition Date</th>
+                <th class="py-2.5 px-3 text-end" data-i18n="th_quantity">Quantity</th>
+                <th class="py-2.5 px-3 text-end" data-i18n="th_idx_cost">Indexed Cost (₪)</th>
+                <th class="py-2.5 px-3 text-end" data-i18n="th_curr_proceeds">Current Proceeds (₪)</th>
+                <th class="py-2.5 px-3 text-end" data-i18n="th_unr_real_loss">Unrealized Real Loss (₪)</th>
+                <th class="py-2.5 px-3 text-end" data-i18n="th_tax_shield_25">25% Tax Shield (₪)</th>
               </tr>
             </thead>
             <tbody id="portfolio-tlh-body">
@@ -1079,8 +1114,8 @@ tailwind.config = {
       </div>
 
       <!-- Full Chronological Transaction History Table -->
-      <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col">
-        <div class="px-5 py-4 border-b border-[#2a2a2a] flex justify-between items-center">
+      <div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col">
+        <div class="px-5 py-4 border-b border-outline-variant flex justify-between items-center">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
               <span class="material-symbols-outlined text-primary text-[18px]">receipt_long</span>
@@ -1091,17 +1126,17 @@ tailwind.config = {
           <span id="pf-tx-count" class="text-label-caps text-on-surface-variant">0 Transactions</span>
         </div>
         <div class="overflow-x-auto flex-1 max-h-[460px] overflow-y-auto">
-          <table class="w-full text-left border-collapse">
-            <thead class="sticky top-0 bg-surface-container border-b border-[#2a2a2a] text-[10px] uppercase tracking-wider text-on-surface-variant font-bold z-10">
+          <table class="w-full text-start border-collapse">
+            <thead class="sticky top-0 bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold z-10">
               <tr>
-                <th class="px-3 py-2.5" data-i18n="lbl_date">Date</th>
-                <th class="px-3 py-2.5" data-i18n="th_type">Type</th>
-                <th class="px-3 py-2.5" data-i18n="th_ticker">Ticker</th>
-                <th class="px-3 py-2.5 text-right" data-i18n="th_qty">Qty</th>
-                <th class="px-3 py-2.5 text-right" data-i18n="th_price">Price</th>
-                <th class="px-3 py-2.5 text-right" data-i18n="th_fee">Fee</th>
+                <th class="px-3 py-2.5 text-start" data-i18n="lbl_date">Date</th>
+                <th class="px-3 py-2.5 text-start" data-i18n="th_type">Type</th>
+                <th class="px-3 py-2.5 text-start" data-i18n="th_ticker">Ticker</th>
+                <th class="px-3 py-2.5 text-end" data-i18n="th_qty">Qty</th>
+                <th class="px-3 py-2.5 text-end" data-i18n="th_price">Price</th>
+                <th class="px-3 py-2.5 text-end" data-i18n="th_fee">Fee</th>
                 <th class="px-3 py-2.5 text-center" data-i18n="th_ccy">CCY</th>
-                <th class="px-3 py-2.5" data-i18n="th_notes">Notes</th>
+                <th class="px-3 py-2.5 text-start" data-i18n="th_notes">Notes</th>
                 <th class="px-3 py-2.5 text-center" data-i18n="th_action">Action</th>
               </tr>
             </thead>
@@ -1171,15 +1206,15 @@ const INDICATORS = [
 // ── 5 Master Investment Profile Preset Matrix ───────────────────────────────
 // Weights indexed 0-15 matching INDICATORS array order. Each sums to 100.
 const PROFILES = {
-  'deep-value':   { label:'Deep Value',   color:'#4edea3',
+  'deep-value':   { label:'Deep Value',   color:'#10B981',
     w:[25,20,25, 0, 5, 0, 0, 0,15,10, 0, 0, 0, 0, 0, 0] },
-  'hyper-growth': { label:'Hyper-Growth', color:'#adc6ff',
+  'hyper-growth': { label:'Hyper-Growth', color:'#60A5FA',
     w:[ 0, 0, 20, 25, 25, 15, 0, 15, 0, 0, 0, 0, 0, 0, 0, 0] },
-  'momentum':     { label:'Momentum',     color:'#ffb3ad',
+  'momentum':     { label:'Momentum',     color:'#F43F5E',
     w:[ 0, 0, 0, 10, 10, 0, 0, 0, 0, 0, 0, 0, 0, 30, 20, 30] },
-  'income':       { label:'Income',       color:'#f9d97e',
+  'income':       { label:'Income',       color:'#F59E0B',
     w:[ 5, 0, 35, 0, 0, 0, 0, 0, 10, 20, 15, 10, 0, 0, 0, 5] },
-  'quality':      { label:'Quality',      color:'#c084fc',
+  'quality':      { label:'Quality',      color:'#A855F7',
     w:[15,10,20,10,15,10,10,10, 0, 0, 0, 0, 0, 0, 0, 0] },
 };
 
@@ -1198,6 +1233,151 @@ function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ── Global Toast Notification System, Confirmation Modal & Skeletons ────────
+function showToast(message, type = 'info') {
+  const container = document.getElementById('global-toast-container');
+  if (!container) return;
+
+  const styles = {
+    success: {
+      border: 'border-secondary/40',
+      bg: 'bg-surface-container',
+      icon: 'check_circle',
+      iconColor: 'text-secondary'
+    },
+    error: {
+      border: 'border-tertiary/40',
+      bg: 'bg-surface-container',
+      icon: 'error',
+      iconColor: 'text-tertiary'
+    },
+    info: {
+      border: 'border-primary/40',
+      bg: 'bg-surface-container',
+      icon: 'info',
+      iconColor: 'text-primary'
+    }
+  };
+  const cfg = styles[type] || styles.info;
+
+  const toast = document.createElement('div');
+  toast.className = `pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl border ${cfg.border} ${cfg.bg} text-on-surface shadow-2xl transform translate-y-2 opacity-0 transition-all duration-200`;
+  toast.innerHTML = `
+    <span class="material-symbols-outlined ${cfg.iconColor} text-[18px] mt-0.5 flex-shrink-0">${cfg.icon}</span>
+    <div class="flex-1 text-xs font-medium leading-relaxed break-words">${escapeHTML(message)}</div>
+    <button type="button" class="text-on-surface-variant hover:text-on-surface transition-colors ms-1 flex-shrink-0" aria-label="Close">
+      <span class="material-symbols-outlined text-[15px]">close</span>
+    </button>
+  `;
+
+  const closeBtn = toast.querySelector('button');
+  const dismiss = () => {
+    toast.classList.add('opacity-0', 'translate-y-2');
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 200);
+  };
+  if (closeBtn) closeBtn.addEventListener('click', dismiss);
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.classList.remove('opacity-0', 'translate-y-2');
+  });
+
+  setTimeout(dismiss, 4500);
+}
+
+let pendingConfirmAction = null;
+
+function openConfirmModal({ title, desc, onConfirm, variant = 'danger' }) {
+  const modal = document.getElementById('global-confirm-modal');
+  const dialog = document.getElementById('global-confirm-dialog');
+  const titleEl = document.getElementById('global-confirm-title');
+  const descEl = document.getElementById('global-confirm-desc');
+  const iconWrap = document.getElementById('global-confirm-icon-wrap');
+  const iconEl = document.getElementById('global-confirm-icon');
+  const actionBtn = document.getElementById('global-confirm-action-btn');
+
+  if (!modal || !dialog) return;
+
+  if (titleEl) titleEl.textContent = title || '';
+  if (descEl) descEl.textContent = desc || '';
+
+  if (variant === 'primary') {
+    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0';
+    if (iconEl) { iconEl.className = 'material-symbols-outlined text-primary text-[20px]'; iconEl.textContent = 'science'; }
+    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition-all shadow-sm';
+  } else {
+    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-lg bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0';
+    if (iconEl) { iconEl.className = 'material-symbols-outlined text-tertiary text-[20px]'; iconEl.textContent = 'warning'; }
+    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-lg bg-tertiary hover:bg-tertiary-container text-on-surface text-xs font-bold transition-all shadow-sm';
+  }
+
+  pendingConfirmAction = onConfirm;
+  if (actionBtn) {
+    actionBtn.onclick = async () => {
+      const fn = pendingConfirmAction;
+      closeConfirmModal();
+      if (typeof fn === 'function') await fn();
+    };
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  requestAnimationFrame(() => {
+    modal.classList.remove('opacity-0');
+    dialog.classList.remove('scale-95');
+  });
+}
+
+function closeConfirmModal() {
+  const modal = document.getElementById('global-confirm-modal');
+  const dialog = document.getElementById('global-confirm-dialog');
+  if (!modal || !dialog) return;
+  modal.classList.add('opacity-0');
+  dialog.classList.add('scale-95');
+  pendingConfirmAction = null;
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 200);
+}
+
+function openTxDrawer() {
+  const backdrop = document.getElementById('pf-tx-drawer-backdrop');
+  const drawer = document.getElementById('pf-tx-drawer');
+  if (!backdrop || !drawer) return;
+  backdrop.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    backdrop.classList.remove('opacity-0');
+    drawer.classList.remove('translate-x-full', 'rtl:-translate-x-full');
+  });
+}
+
+function closeTxDrawer() {
+  const backdrop = document.getElementById('pf-tx-drawer-backdrop');
+  const drawer = document.getElementById('pf-tx-drawer');
+  if (!backdrop || !drawer) return;
+  backdrop.classList.add('opacity-0');
+  drawer.classList.add('translate-x-full', 'rtl:-translate-x-full');
+  setTimeout(() => {
+    backdrop.classList.add('hidden');
+  }, 300);
+}
+
+function renderTableSkeleton(tbodyId, cols, rows = 5) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  let html = '';
+  for (let r = 0; r < rows; r++) {
+    let cells = '';
+    for (let c = 0; c < cols; c++) {
+      const widthCls = c === 0 ? 'w-24' : (c % 2 === 0 ? 'w-16 ms-auto' : 'w-20 ms-auto');
+      cells += `<td class="px-4 py-3.5"><div class="animate-pulse bg-surface-container-high/60 h-4 rounded ${widthCls}"></div></td>`;
+    }
+    html += `<tr class="border-b border-outline-variant">${cells}</tr>`;
+  }
+  tbody.innerHTML = html;
 }
 
 const SECTORS = [
@@ -1308,7 +1488,7 @@ function toggleSlidersDrawer() {
   INDICATORS.forEach((ind, i) => {
     if (ind.group !== lastGroup) {
       const sep = document.createElement('p');
-      sep.className = 'text-label-caps text-on-surface-variant/60 mt-3 mb-1.5 pl-0.5 uppercase tracking-widest text-[10px]';
+      sep.className = 'text-label-caps text-on-surface-variant/60 mt-3 mb-1.5 ps-0.5 uppercase tracking-widest text-[10px]';
       sep.textContent = '— ' + ind.group;
       container.appendChild(sep);
       lastGroup = ind.group;
@@ -1381,15 +1561,15 @@ function setActiveProfile(key) {
 
 // ── Score colour ─────────────────────────────────────────────────────────────
 function scoreColor(s) {
-  if (s >= 70) return '#4edea3';
-  if (s >= 40) return '#adc6ff';
-  return '#ffb3ad';
+  if (s >= 70) return '#10B981';
+  if (s >= 40) return '#60A5FA';
+  return '#F43F5E';
 }
 
 function scoreBg(s) {
-  if (s >= 70) return 'rgba(78,222,163,0.1)';
-  if (s >= 40) return 'rgba(173,198,255,0.1)';
-  return 'rgba(255,179,173,0.1)';
+  if (s >= 70) return 'rgba(16,185,129,0.1)';
+  if (s >= 40) return 'rgba(96,165,250,0.1)';
+  return 'rgba(244,63,94,0.1)';
 }
 
 // ── Toggle accordion ─────────────────────────────────────────────────────────
@@ -1413,13 +1593,13 @@ function buildAccordion(item) {
     const c   = scoreColor(sc);
     const bg  = scoreBg(sc);
     return `
-      <div style="background:${bg};border:1px solid rgba(255,255,255,0.06)" class="p-2 rounded-lg flex flex-col gap-1">
-        <span style="font-size:10px;letter-spacing:.06em;font-weight:700;color:#8c909f;text-transform:uppercase">${meta.label}</span>
+      <div style="background:${bg};border:1px solid rgba(255,255,255,0.08)" class="p-2 rounded-lg flex flex-col gap-1">
+        <span style="font-size:10px;letter-spacing:.06em;font-weight:700;color:#94A3B8;text-transform:uppercase">${meta.label}</span>
         <div class="flex items-baseline justify-between mt-0.5">
-          <span class="font-data-display text-data-display text-on-surface" style="font-size:13px">${rawStr}</span>
-          <span style="font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c}">${pct}/100</span>
+          <span class="font-data-display text-data-display text-on-surface num-ltr" style="font-size:13px">${rawStr}</span>
+          <span class="num-ltr" style="font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c}">${pct}/100</span>
         </div>
-        <div style="height:3px;border-radius:2px;background:#2a2a2a;margin-top:2px">
+        <div style="height:3px;border-radius:2px;background:#1C2130;margin-top:2px">
           <div style="height:100%;border-radius:2px;width:${pct}%;background:${c};transition:width .4s"></div>
         </div>
       </div>`;
@@ -1427,7 +1607,6 @@ function buildAccordion(item) {
   return `<div class="grid gap-2 p-4" style="grid-template-columns:repeat(4,1fr)">${cells}</div>`;
 }
 
-// ── Calculate button ─────────────────────────────────────────────────────────
 // ── Client-Side Pagination & Table Rendering ────────────────────────────────
 function renderLeaderboard() {
   const tbody = document.getElementById('leaderboard-body');
@@ -1436,23 +1615,22 @@ function renderLeaderboard() {
   const profileLabel = (activeProfile && PROFILES[activeProfile])
     ? PROFILES[activeProfile].label : 'Custom';
   const chipColor = (activeProfile && PROFILES[activeProfile])
-    ? PROFILES[activeProfile].color : '#c2c6d6';
+    ? PROFILES[activeProfile].color : '#94A3B8';
 
   const visibleResults = currentResults.slice(0, visibleCount);
 
   visibleResults.forEach((item, idx) => {
     const sc = parseFloat(item.score);
-    const rowBg = idx % 2 === 0 ? '#1a1a1a' : '#1e1e1e';
+    const rowBgClass = idx % 2 === 0 ? 'bg-surface-container' : 'bg-surface-container-low';
     const initial = (item.ticker || '?').charAt(0);
 
     // Parent row
     const tr = document.createElement('tr');
-    tr.style.cssText = `background:${rowBg};border-bottom:1px solid #2a2a2a;cursor:pointer`;
-    tr.className = 'hover:bg-surface-container-high transition-colors fade-in';
+    tr.className = `${rowBgClass} border-b border-outline-variant hover:bg-surface-container-high cursor-pointer transition-colors fade-in`;
     tr.setAttribute('onclick', `toggleRow('acc-${idx}')`);
     tr.innerHTML = `
-      <td class="px-4 py-3 text-center text-data-display text-on-surface-variant tabular-nums">${idx+1}</td>
-      <td class="px-4 py-3">
+      <td class="px-4 py-3 text-center text-data-display text-on-surface-variant tabular-nums num-ltr">${idx+1}</td>
+      <td class="px-4 py-3 text-start">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-md bg-surface-container-high flex items-center justify-center text-data-display text-primary font-bold flex-shrink-0">${escapeHTML(initial)}</div>
           <div class="flex flex-col min-w-0">
@@ -1468,16 +1646,15 @@ function renderLeaderboard() {
       <td class="px-4 py-3 text-center">
         <span class="text-label-caps px-2 py-0.5 rounded-full" style="color:${chipColor};background:${chipColor}22;border:1px solid ${chipColor}44">${profileLabel}</span>
       </td>
-      <td class="px-4 py-3 text-right">
-        <span class="font-bold text-data-display tabular-nums" style="color:${scoreColor(sc)};font-size:15px">${item.score}</span>
+      <td class="px-4 py-3 text-end">
+        <span class="font-bold text-data-display tabular-nums num-ltr" style="color:${scoreColor(sc)};font-size:15px">${item.score}</span>
       </td>`;
     tbody.appendChild(tr);
 
     // Accordion row
     const acc = document.createElement('tr');
     acc.id = `acc-${idx}`;
-    acc.className = 'hidden accordion-row';
-    acc.style.cssText = `background:#161616;border-bottom:1px solid #2a2a2a`;
+    acc.className = 'hidden accordion-row bg-surface-container-low border-b border-outline-variant';
     const td = document.createElement('td');
     td.setAttribute('colspan','4');
     td.innerHTML = buildAccordion(item);
@@ -1500,11 +1677,11 @@ function renderLeaderboard() {
 
       if (visibleCount < currentResults.length) {
         loadMoreBtn.classList.remove('hidden');
-        toggleAllBtn.textContent = 'Show All';
+        toggleAllBtn.textContent = t('btn_show_all');
         toggleAllBtn.setAttribute('onclick', 'showAllStocks()');
       } else {
         loadMoreBtn.classList.add('hidden');
-        toggleAllBtn.textContent = 'Hide All';
+        toggleAllBtn.textContent = t('btn_hide_all');
         toggleAllBtn.setAttribute('onclick', 'hideAllStocks()');
       }
     } else {
@@ -1512,7 +1689,7 @@ function renderLeaderboard() {
       paginationControls.classList.remove('flex');
     }
   } else {
-    countSpan.textContent = 'No results yet';
+    countSpan.textContent = t('no_results_yet');
     paginationControls.classList.add('hidden');
     paginationControls.classList.remove('flex');
   }
@@ -1536,9 +1713,11 @@ function hideAllStocks() {
 // ── Calculate button ─────────────────────────────────────────────────────────
 document.getElementById('calculate-btn').addEventListener('click', async () => {
   const btn = document.getElementById('calculate-btn');
-  btn.textContent = '⏳ Computing…';
+  btn.innerHTML = `<span class="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_calculate_score'))}</span>`;
   btn.disabled = true;
   btn.classList.add('opacity-75');
+
+  renderTableSkeleton('leaderboard-body', 4, 5);
 
   const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
 
@@ -1590,17 +1769,17 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
       const contentDiv = document.getElementById('backtest-content');
       helperMsg.innerHTML = `
         <span class="material-symbols-outlined text-[24px] text-outline">info</span>
-        <span>Rank stocks to generate a portfolio before running a backtest.</span>
+        <span>${escapeHTML(t('bt_helper_msg'))}</span>
       `;
       helperMsg.classList.remove('hidden');
       contentDiv.classList.add('hidden');
     }
 
   } catch (err) {
-    alert('Error: ' + err.message);
+    showToast('Error: ' + err.message, 'error');
     console.error(err);
   } finally {
-    btn.textContent = '⚡ Calculate Score';
+    btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">bolt</span><span data-i18n="btn_calculate_score">${escapeHTML(t('btn_calculate_score'))}</span>`;
     btn.disabled = false;
     btn.classList.remove('opacity-75');
   }
@@ -1632,18 +1811,17 @@ async function runPortfolioBacktest() {
   const contentDiv = document.getElementById('backtest-content');
   
   if (!currentResults || currentResults.length === 0) {
-    alert("No ranked stocks available to backtest.");
+    showToast("No ranked stocks available to backtest.", "error");
     return;
   }
 
   const topTickers = currentResults.slice(0, 10).map(item => item.ticker);
   if (topTickers.length === 0) {
-    alert("No tickers found to run simulation.");
+    showToast("No tickers found to run simulation.", "error");
     return;
   }
 
-  const originalText = btn.innerHTML;
-  btn.innerHTML = `⏳ Running Simulation...`;
+  btn.innerHTML = `<span class="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_run_backtest'))}</span>`;
   btn.disabled = true;
   btn.classList.add('opacity-75');
 
@@ -1704,7 +1882,7 @@ async function runPortfolioBacktest() {
     renderBacktestChart(data.performance_series);
 
   } catch (err) {
-    alert('Backtest Error: ' + err.message);
+    showToast('Backtest Error: ' + err.message, 'error');
     console.error(err);
     helperMsg.classList.remove('hidden');
     helperMsg.innerHTML = `
@@ -1713,7 +1891,7 @@ async function runPortfolioBacktest() {
     `;
     contentDiv.classList.add('hidden');
   } finally {
-    btn.innerHTML = originalText;
+    btn.innerHTML = `<span class="material-symbols-outlined text-[15px]">monitoring</span><span data-i18n="btn_run_backtest">${escapeHTML(t('btn_run_backtest'))}</span>`;
     btn.disabled = false;
     btn.classList.remove('opacity-75');
   }
@@ -1738,8 +1916,8 @@ function renderBacktestChart(series) {
         {
           label: 'Portfolio',
           data: portfolioData,
-          borderColor: '#4edea3',
-          backgroundColor: 'rgba(78, 222, 163, 0.1)',
+          borderColor: '#10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
           borderWidth: 2,
           pointRadius: 0,
           fill: true,
@@ -1748,7 +1926,7 @@ function renderBacktestChart(series) {
         {
           label: 'SPY Benchmark',
           data: spyData,
-          borderColor: '#4d8eff',
+          borderColor: '#60A5FA',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
@@ -1767,10 +1945,10 @@ function renderBacktestChart(series) {
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: '#1c1b1b',
-          titleColor: '#e5e2e1',
-          bodyColor: '#c2c6d6',
-          borderColor: '#424754',
+          backgroundColor: '#131722',
+          titleColor: '#F1F5F9',
+          bodyColor: '#94A3B8',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
           borderWidth: 1,
           callbacks: {
             label: function(context) {
@@ -1792,7 +1970,7 @@ function renderBacktestChart(series) {
             color: 'rgba(255, 255, 255, 0.03)'
           },
           ticks: {
-            color: '#8c909f',
+            color: '#94A3B8',
             font: {
               size: 9
             },
@@ -1804,7 +1982,7 @@ function renderBacktestChart(series) {
             color: 'rgba(255, 255, 255, 0.05)'
           },
           ticks: {
-            color: '#8c909f',
+            color: '#94A3B8',
             font: {
               size: 10
             },
@@ -1840,7 +2018,7 @@ const I18N = {
     min_cap: 'Min Cap ($B)',
     max_cap: 'Max Cap ($B)',
     model_parameters: 'Model Parameters (16)',
-    btn_calculate_score: '⚡ Calculate Score',
+    btn_calculate_score: 'Calculate Score',
     screener_title: 'Algorithm Results',
     screener_subtitle: 'Top ranking equities scored by the C-engine weighted dot product.',
     tier_standard: 'Standard Overview',
@@ -1859,7 +2037,7 @@ const I18N = {
     bt_subtitle: 'Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.',
     bt_3y: '3 Years',
     bt_5y: '5 Years',
-    btn_run_backtest: '📊 Run Trailing Backtest',
+    btn_run_backtest: 'Run Trailing Backtest',
     bt_helper_msg: 'Rank stocks to generate a portfolio before running a backtest.',
     bt_chart_title: 'Trailing Cumulative Performance',
     lbl_portfolio: 'Portfolio',
@@ -1870,8 +2048,15 @@ const I18N = {
     lbl_excess_alpha: 'Total Excess Return (Alpha)',
     pf_title: 'Portfolio Intelligence & Tax Engine',
     pf_subtitle: 'Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.',
+    btn_open_tx_drawer: '+ Record Transaction / CSV',
     btn_seed_demo: 'Seed Sample Ledger',
     btn_refresh: 'Refresh',
+    confirm_clear_title: 'Clear All Ledger Transactions?',
+    confirm_clear_desc: 'This action will permanently remove all recorded trades, dividends, and cash flows from your portfolio ledger.',
+    confirm_seed_title: 'Seed Sample Institutional Ledger?',
+    confirm_seed_desc: 'This will replace your current portfolio ledger with a multi-currency sample dataset (AAPL, MSFT, LUMI.TA) to demonstrate FIFO tax lots and analytics.',
+    btn_cancel: 'Cancel',
+    btn_confirm: 'Confirm',
     kpi_total_nav: 'Total Portfolio NAV',
     kpi_net_after_tax: 'Net After Tax:',
     kpi_invested_holdings: 'Invested Holdings',
@@ -2004,7 +2189,7 @@ const I18N = {
     min_cap: 'שווי שוק מינ׳ ($B)',
     max_cap: 'שווי שוק מקס׳ ($B)',
     model_parameters: 'משקולות מודל (16 פקטורים)',
-    btn_calculate_score: '⚡ חשב דירוג כמותי',
+    btn_calculate_score: 'חשב דירוג כמותי',
     screener_title: 'תוצאות דירוג אלגוריתמי',
     screener_subtitle: 'המניות המובילות בדירוג מנוע ה-C המהיר לפי מכפלה פנימית משוקללת.',
     tier_standard: 'תצוגה סטנדרטית',
@@ -2023,7 +2208,7 @@ const I18N = {
     bt_subtitle: 'הדמיית תשואת תיק שווה-משקל של 10 המניות המובילות מול מדד הייחוס SPY.',
     bt_3y: '3 שנים',
     bt_5y: '5 שנים',
-    btn_run_backtest: '📊 הרץ סימולציית בק-טסט',
+    btn_run_backtest: 'הרץ סימולציית בק-טסט',
     bt_helper_msg: 'דרג מניות תחילה כדי להריץ סימולציית בק-טסט היסטורית.',
     bt_chart_title: 'תשואה מצטברת היסטורית',
     lbl_portfolio: 'תיק השקעות',
@@ -2034,8 +2219,15 @@ const I18N = {
     lbl_excess_alpha: 'תשואה עודפת מצטברת (אלפא)',
     pf_title: 'מודיעין תיק השקעות ומנוע מס ישראלי',
     pf_subtitle: 'ניהול שכבות מס FIFO דו-מטבעי (חלק ה׳ סעיף 88), ייחוס תשואות TWR מול XIRR וסימולציית השוואת תזרימים.',
+    btn_open_tx_drawer: '+ תיעוד עסקה / CSV',
     btn_seed_demo: 'טען תיק לדוגמה',
     btn_refresh: 'רענן נתונים',
+    confirm_clear_title: 'לנקות את כל יומן העסקאות?',
+    confirm_clear_desc: 'פעולה זו תמחק לצמיתות את כל העסקאות, הדיבידנדים ותנועות המזומן הרשומים בתיק.',
+    confirm_seed_title: 'לטעון תיק השקעות לדוגמה?',
+    confirm_seed_desc: 'פעולה זו תחליף את יומן העסקאות הנוכחי בנתוני דוגמה דו-מטבעיים (AAPL, MSFT, LUMI.TA) להדגמת שכבות מס FIFO וניתוחי תשואה.',
+    btn_cancel: 'ביטול',
+    btn_confirm: 'אישור',
     kpi_total_nav: 'שווי תיק כולל (NAV)',
     kpi_net_after_tax: 'שווי נטו לאחר מס:',
     kpi_invested_holdings: 'שווי אחזקות בני״ע',
@@ -2518,7 +2710,7 @@ let portfolioAdvChartInstance = null;
 let portfolioRadarChartInstance = null;
 let portfolioSectorChartInstance = null;
 
-const BENCH_COLORS = ['#4d8eff', '#ffb3ad', '#f59e0b', '#a855f7'];
+const BENCH_COLORS = ['#60A5FA', '#F43F5E', '#F59E0B', '#A855F7'];
 const PRESET_BENCHMARKS = ['SPY', 'QQQ', 'SMH', 'LUMI.TA'];
 
 function fmtMoney(val, ccy) {
@@ -2596,12 +2788,10 @@ function setPortfolioCurrency(ccy) {
   ['USD', 'ILS'].forEach(c => {
     const active = c === ccy;
     const btn1 = document.getElementById(`curr-btn-${c}`);
-    const btn2 = document.getElementById(`ws-curr-btn-${c}`);
     const cls = active
       ? 'px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
       : 'px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
     if (btn1) btn1.className = cls;
-    if (btn2) btn2.className = cls;
   });
   refreshPortfolioWorkspace();
 }
@@ -2680,8 +2870,8 @@ function renderBenchmarkChips() {
       if (!chip) return;
       const active = portfolioState.benchmarks.includes(sym);
       chip.className = active
-        ? 'px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all'
-        : 'px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container text-on-surface-variant font-bold text-xs transition-all hover:text-on-surface';
+        ? 'px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr'
+        : 'px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all hover:text-on-surface num-ltr';
       chip.textContent = active ? `${sym} ✓` : sym;
     });
   });
@@ -2691,7 +2881,7 @@ function renderBenchmarkChips() {
     const customContainer = document.getElementById(cId);
     if (customContainer) {
       customContainer.innerHTML = customSyms.map(sym => `
-        <button onclick="toggleBenchmark('${sym}')" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all">
+        <button onclick="toggleBenchmark('${sym}')" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">
           ${sym} ✕
         </button>
       `).join('');
@@ -2746,6 +2936,7 @@ async function refreshPortfolioWorkspace() {
 }
 
 async function fetchPortfolioSummary() {
+  renderTableSkeleton('portfolio-holdings-body', 11, 5);
   try {
     const res = await fetch(`/api/portfolio/summary?view_currency=${encodeURIComponent(portfolioState.viewCurrency)}`);
     const data = await res.json();
@@ -2754,6 +2945,7 @@ async function fetchPortfolioSummary() {
     renderPortfolioSummary(data);
   } catch (err) {
     console.error('Portfolio summary error:', err);
+    showToast('Failed to load portfolio summary: ' + err.message, 'error');
   }
 }
 
@@ -2772,7 +2964,7 @@ function renderPortfolioSummary(data) {
   }
   const asOfBadge = document.getElementById('pf-as-of-badge');
   if (asOfBadge && data.as_of) {
-    asOfBadge.textContent = `As of ${data.as_of}`;
+    asOfBadge.textContent = `${t('as_of_prefix')} ${data.as_of}`;
   }
 
   // Card 1: NAV & Net Liquidation NAV
@@ -2808,18 +3000,18 @@ function renderPortfolioSummary(data) {
   if (unrGrossEl) {
     const pctStr = totals.unrealized_pnl_pct !== undefined ? ` (${fmtPct(totals.unrealized_pnl_pct, 2)})` : '';
     unrGrossEl.textContent = `${fmtSignedMoney(totals.unrealized_pnl, ccy)}${pctStr}`;
-    unrGrossEl.className = `text-xl font-extrabold mt-1.5 tracking-tight ${colorClassForVal(totals.unrealized_pnl)}`;
+    unrGrossEl.className = `text-xl font-extrabold mt-1.5 tracking-tight num-ltr ${colorClassForVal(totals.unrealized_pnl)}`;
   }
   const unrNetEl = document.getElementById('pf-kpi-unr-net');
   if (unrNetEl) {
     const netVal = totals.unrealized_net_pnl ?? totals.unrealized_pnl;
     unrNetEl.textContent = fmtSignedMoney(netVal, ccy);
-    unrNetEl.className = `font-bold font-mono ${colorClassForVal(netVal)}`;
+    unrNetEl.className = `font-bold font-mono num-ltr ${colorClassForVal(netVal)}`;
   }
   const realYtdEl = document.getElementById('pf-kpi-real-ytd');
   if (realYtdEl) {
     realYtdEl.textContent = fmtSignedMoney(totals.realized_pnl_ytd, ccy);
-    realYtdEl.className = `font-bold font-mono ${colorClassForVal(totals.realized_pnl_ytd)}`;
+    realYtdEl.className = `font-bold font-mono num-ltr ${colorClassForVal(totals.realized_pnl_ytd)}`;
   }
   const estTaxEl = document.getElementById('pf-kpi-est-tax');
   if (estTaxEl) {
@@ -2841,11 +3033,11 @@ function renderPortfolioSummary(data) {
   if (tlhStrip) {
     if (tlh.length > 0) {
       const items = tlh.slice(0, 3).map(c =>
-        `<span class="px-2 py-0.5 rounded bg-secondary/10 border border-secondary/30 text-secondary font-mono font-bold">${c.ticker}: Shield ${fmtMoney(c.potential_tax_shield_ils, 'ILS')}</span>`
+        `<span class="px-2 py-0.5 rounded bg-secondary/10 border border-secondary/30 text-secondary font-mono font-bold num-ltr">${c.ticker}: Shield ${fmtMoney(c.potential_tax_shield_ils, 'ILS')}</span>`
       ).join(' ');
       tlhStrip.innerHTML = `<span class="material-symbols-outlined text-[14px] text-secondary">tips_and_updates</span><span class="font-bold text-on-surface">TLH Opportunities:</span> ${items}`;
     } else {
-      tlhStrip.innerHTML = `<span class="material-symbols-outlined text-[14px] text-secondary">tips_and_updates</span><span>Tax-Loss Harvesting: Zero unrealized real-loss positions detected.</span>`;
+      tlhStrip.innerHTML = `<span class="material-symbols-outlined text-[14px] text-secondary">tips_and_updates</span><span>${escapeHTML(t('tlh_none_detected'))}</span>`;
     }
   }
 
@@ -2859,27 +3051,27 @@ function renderPortfolioSummary(data) {
 
 function renderQuantScoreBadge(score, status) {
   if (status === 'ETF_TASE' || score === null || score === undefined) {
-    return `<span class="px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant text-[10px] font-mono text-on-surface-variant">ETF / TASE</span>`;
+    return `<span class="px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">ETF / TASE</span>`;
   }
   const s = Number(score);
   if (s >= 70.0) {
-    return `<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/40 text-secondary font-mono font-bold text-xs">${s.toFixed(1)} · Strong</span>`;
+    return `<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/40 text-secondary font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Strong</span>`;
   }
   if (s >= 45.0) {
-    return `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-mono font-bold text-xs">${s.toFixed(1)} · Neutral</span>`;
+    return `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Neutral</span>`;
   }
-  return `<span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/40 text-tertiary font-mono font-bold text-xs">${s.toFixed(1)} · Warn</span>`;
+  return `<span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/40 text-tertiary font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Warn</span>`;
 }
 
 function renderHoldingsTable(positions, allLots, ccy) {
   const tbody = document.getElementById('portfolio-holdings-body');
   const countEl = document.getElementById('pf-positions-count');
-  if (countEl) countEl.textContent = `${positions.length} Open Position${positions.length === 1 ? '' : 's'}`;
+  if (countEl) countEl.textContent = `${positions.length} ${t('open_positions_suffix')}`;
   if (!tbody) return;
 
   if (!positions.length) {
     tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-10 text-center text-on-surface-variant text-xs">
-      No open equity positions in ledger. Click <strong class="text-secondary">Seed Sample Ledger</strong> or record a transaction below.
+      No open equity positions in ledger. Click <strong class="text-secondary">${escapeHTML(t('btn_seed_demo'))}</strong> or <strong class="text-primary">${escapeHTML(t('btn_open_tx_drawer'))}</strong>.
     </td></tr>`;
     return;
   }
@@ -2902,32 +3094,32 @@ function renderHoldingsTable(positions, allLots, ccy) {
     const sectorLabel = p.sector || 'Unclassified';
 
     html += `
-      <tr onclick="togglePositionLots('${p.ticker}')" class="border-b border-[#2a2a2a] hover:bg-surface-container/60 cursor-pointer transition-colors text-xs">
-        <td class="px-4 py-3 font-bold text-on-surface">
+      <tr onclick="togglePositionLots('${p.ticker}')" class="border-b border-outline-variant hover:bg-surface-container-high/60 cursor-pointer transition-colors text-xs">
+        <td class="px-4 py-3 font-bold text-on-surface text-start">
           <div class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-[15px] text-primary transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
-            <span>${p.ticker}</span>
-            <span class="text-[10px] text-on-surface-variant font-normal">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
+            <span class="num-ltr">${p.ticker}</span>
+            <span class="text-[10px] text-on-surface-variant font-normal num-ltr">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
           </div>
-          <span class="text-[10px] text-on-surface-variant font-normal pl-5 block truncate max-w-[160px]">${sectorLabel}</span>
+          <span class="text-[10px] text-on-surface-variant font-normal ps-5 block truncate max-w-[160px]">${sectorLabel}</span>
         </td>
         <td class="px-3 py-3 text-center">
           ${renderQuantScoreBadge(p.quant_score, p.quant_status)}
         </td>
         <td class="px-3 py-3 text-center">
-          <span class="px-2 py-0.5 rounded bg-surface-container border border-outline-variant text-[10px] font-mono">${nativeCcy}</span>
+          <span class="px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant text-[10px] font-mono num-ltr">${nativeCcy}</span>
         </td>
-        <td class="px-3 py-3 text-right font-mono text-on-surface">${Number(p.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-        <td class="px-3 py-3 text-right font-mono text-on-surface-variant">${nativeSym}${Number(p.avg_cost_native).toFixed(2)}</td>
-        <td class="px-3 py-3 text-right font-mono text-on-surface">${nativeSym}${Number(p.current_price_native).toFixed(2)}</td>
-        <td class="px-4 py-3 text-right font-mono font-bold text-on-surface">${fmtMoney(p.market_value_view, ccy)}</td>
-        <td class="px-3 py-3 text-right font-mono text-on-surface-variant">${Number(p.weight_pct || 0).toFixed(1)}%</td>
-        <td class="px-4 py-3 text-right font-mono font-bold ${grossColor}">
+        <td class="px-3 py-3 text-end font-mono text-on-surface num-ltr">${Number(p.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+        <td class="px-3 py-3 text-end font-mono text-on-surface-variant num-ltr">${nativeSym}${Number(p.avg_cost_native).toFixed(2)}</td>
+        <td class="px-3 py-3 text-end font-mono text-on-surface num-ltr">${nativeSym}${Number(p.current_price_native).toFixed(2)}</td>
+        <td class="px-4 py-3 text-end font-mono font-bold text-on-surface num-ltr">${fmtMoney(p.market_value_view, ccy)}</td>
+        <td class="px-3 py-3 text-end font-mono text-on-surface-variant num-ltr">${Number(p.weight_pct || 0).toFixed(1)}%</td>
+        <td class="px-4 py-3 text-end font-mono font-bold num-ltr ${grossColor}">
           ${fmtSignedMoney(p.unrealized_pnl_view, ccy)}
-          <span class="text-[10px] block opacity-80">${fmtPct(p.unrealized_pnl_pct, 2)}</span>
+          <span class="text-[10px] block opacity-80 num-ltr">${fmtPct(p.unrealized_pnl_pct, 2)}</span>
         </td>
-        <td class="px-3 py-3 text-right font-mono text-tertiary">${fmtMoney(p.est_tax_view || 0, ccy)}</td>
-        <td class="px-4 py-3 text-right font-mono font-bold ${netColor}">${fmtSignedMoney(netVal, ccy)}</td>
+        <td class="px-3 py-3 text-end font-mono text-tertiary num-ltr">${fmtMoney(p.est_tax_view || 0, ccy)}</td>
+        <td class="px-4 py-3 text-end font-mono font-bold num-ltr ${netColor}">${fmtSignedMoney(netVal, ccy)}</td>
       </tr>
     `;
 
@@ -2939,38 +3131,38 @@ function renderHoldingsTable(positions, allLots, ccy) {
         const inflGain = Number(l.inflationary_gain_ils || 0);
         const realGain = Number(l.real_gain_ils || 0) - Number(l.real_loss_ils || 0);
         return `
-          <tr class="border-b border-[#252525] text-[11px] font-mono text-on-surface-variant">
-            <td class="py-1.5 px-3 text-primary">${l.lot_id}</td>
-            <td class="py-1.5 px-3">${l.buy_date}</td>
-            <td class="py-1.5 px-3 text-right text-on-surface">${Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-            <td class="py-1.5 px-3 text-right">${nativeSym}${Number(l.buy_price).toFixed(2)}</td>
-            <td class="py-1.5 px-3 text-left text-[10px]">${indexLabel} (${fmtPct((Number(l.inflationary_ratio || 1) - 1) * 100, 2)})</td>
-            <td class="py-1.5 px-3 text-right">${fmtSignedMoney(inflGain, 'ILS')}</td>
-            <td class="py-1.5 px-3 text-right ${colorClassForVal(realGain)}">${fmtSignedMoney(realGain, 'ILS')}</td>
-            <td class="py-1.5 px-3 text-right text-tertiary font-bold">${fmtMoney(l.tax_ils || 0, 'ILS')}</td>
+          <tr class="border-b border-outline-variant text-[11px] font-mono text-on-surface-variant">
+            <td class="py-1.5 px-3 text-start text-primary num-ltr">${l.lot_id}</td>
+            <td class="py-1.5 px-3 text-start num-ltr">${l.buy_date}</td>
+            <td class="py-1.5 px-3 text-end text-on-surface num-ltr">${Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+            <td class="py-1.5 px-3 text-end num-ltr">${nativeSym}${Number(l.buy_price).toFixed(2)}</td>
+            <td class="py-1.5 px-3 text-start text-[10px] num-ltr">${indexLabel} (${fmtPct((Number(l.inflationary_ratio || 1) - 1) * 100, 2)})</td>
+            <td class="py-1.5 px-3 text-end num-ltr">${fmtSignedMoney(inflGain, 'ILS')}</td>
+            <td class="py-1.5 px-3 text-end num-ltr ${colorClassForVal(realGain)}">${fmtSignedMoney(realGain, 'ILS')}</td>
+            <td class="py-1.5 px-3 text-end text-tertiary font-bold num-ltr">${fmtMoney(l.tax_ils || 0, 'ILS')}</td>
           </tr>
         `;
       }).join('');
 
       html += `
-        <tr class="bg-[#141414] border-b border-[#2a2a2a]">
+        <tr class="bg-surface-container-low border-b border-outline-variant">
           <td colspan="11" class="p-3">
-            <div class="bg-[#1c1b1b] border border-outline-variant/30 rounded-lg overflow-hidden">
-              <div class="px-3 py-1.5 bg-surface-container text-[10px] font-bold uppercase tracking-wider text-primary flex justify-between items-center">
+            <div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+              <div class="px-3 py-1.5 bg-surface-container-high text-[10px] font-bold uppercase tracking-wider text-primary flex justify-between items-center">
                 <span>FIFO Tax Lot Breakdown — ${p.ticker} (Section 88 Inflationary vs. Real Split)</span>
                 <span class="text-on-surface-variant font-mono">Statutory Tax Computation in ILS (₪)</span>
               </div>
-              <table class="w-full text-left border-collapse">
+              <table class="w-full text-start border-collapse">
                 <thead>
-                  <tr class="border-b border-[#2a2a2a] text-[10px] uppercase text-on-surface-variant">
-                    <th class="py-1.5 px-3">Lot ID</th>
-                    <th class="py-1.5 px-3">Buy Date</th>
-                    <th class="py-1.5 px-3 text-right">Open Qty</th>
-                    <th class="py-1.5 px-3 text-right">Buy Price</th>
-                    <th class="py-1.5 px-3">Base Index Drift <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-right">Inflationary Gain (0%) <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-right">Real Gain / Loss (₪) <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-right">Est. Real Tax (25%)</th>
+                  <tr class="border-b border-outline-variant text-[10px] uppercase text-on-surface-variant">
+                    <th class="py-1.5 px-3 text-start">Lot ID</th>
+                    <th class="py-1.5 px-3 text-start">Buy Date</th>
+                    <th class="py-1.5 px-3 text-end">Open Qty</th>
+                    <th class="py-1.5 px-3 text-end">Buy Price</th>
+                    <th class="py-1.5 px-3 text-start">Base Index Drift <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span></th>
+                    <th class="py-1.5 px-3 text-end">Inflationary Gain (0%) <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span></th>
+                    <th class="py-1.5 px-3 text-end">Real Gain / Loss (₪) <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span></th>
+                    <th class="py-1.5 px-3 text-end">Est. Real Tax (25%)</th>
                   </tr>
                 </thead>
                 <tbody>${lotsRows}</tbody>
@@ -2998,13 +3190,13 @@ function renderPortfolioQuantDNA(dna, ccy) {
 
   const covBadge = document.getElementById('pf-dna-coverage-badge');
   if (covBadge) {
-    covBadge.textContent = `Factor Coverage: ${Number(dna.factor_coverage_pct || 0).toFixed(1)}% (${dna.covered_holdings_count || 0}/${dna.total_holdings_count || 0})`;
+    covBadge.textContent = `${t('factor_coverage_prefix')}: ${Number(dna.factor_coverage_pct || 0).toFixed(1)}% (${dna.covered_holdings_count || 0}/${dna.total_holdings_count || 0})`;
   }
   const scoreBadge = document.getElementById('pf-dna-score-badge');
   if (scoreBadge) {
     const sc = Number(dna.portfolio_quant_score || 0);
     const bSc = Number(dna.benchmark_quant_score || 50);
-    scoreBadge.textContent = `C-FFI Score: ${sc.toFixed(1)} vs ${bSc.toFixed(1)}`;
+    scoreBadge.textContent = `${t('c_ffi_score_prefix')}: ${sc.toFixed(1)} vs ${bSc.toFixed(1)}`;
   }
 
   // 1. Render 5-Pillar Radar Chart
@@ -3027,20 +3219,20 @@ function renderPortfolioQuantDNA(dna, ccy) {
           {
             label: 'Portfolio DNA',
             data: portPillarVals,
-            borderColor: '#4edea3',
-            backgroundColor: 'rgba(78, 222, 163, 0.20)',
+            borderColor: '#10B981',
+            backgroundColor: 'rgba(16, 185, 129, 0.20)',
             borderWidth: 2,
-            pointBackgroundColor: '#4edea3',
+            pointBackgroundColor: '#10B981',
             pointRadius: 3
           },
           {
             label: 'Market Baseline',
             data: benchPillarVals,
-            borderColor: '#4d8eff',
-            backgroundColor: 'rgba(77, 142, 255, 0.10)',
+            borderColor: '#60A5FA',
+            backgroundColor: 'rgba(96, 165, 250, 0.10)',
             borderWidth: 1.5,
             borderDash: [4, 3],
-            pointBackgroundColor: '#4d8eff',
+            pointBackgroundColor: '#60A5FA',
             pointRadius: 2
           }
         ]
@@ -3052,7 +3244,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
           legend: {
             display: true,
             position: 'top',
-            labels: { color: '#c2c6d6', font: { size: 10 }, boxWidth: 10 }
+            labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 }
           }
         },
         scales: {
@@ -3061,7 +3253,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
             max: 100,
             angleLines: { color: 'rgba(255,255,255,0.08)' },
             grid: { color: 'rgba(255,255,255,0.08)' },
-            pointLabels: { color: '#e5e2e1', font: { size: 11, weight: 'bold' } },
+            pointLabels: { color: '#F1F5F9', font: { size: 11, weight: 'bold' } },
             ticks: { display: false, stepSize: 25 }
           }
         }
@@ -3077,7 +3269,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
       const tilt = Number(dna.pillar_tilts?.[p] || 0);
       const tiltColor = colorClassForVal(tilt);
       return `
-        <div class="bg-surface-container/40 border border-outline-variant/20 rounded-lg p-2">
+        <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2">
           <div class="flex items-center justify-between gap-1">
             <span class="text-[9px] uppercase font-bold text-on-surface-variant truncate">${p}</span>
             <span class="info-tooltip" data-term="${p}" tabindex="0">i</span>
@@ -3099,12 +3291,12 @@ function renderPortfolioQuantDNA(dna, ccy) {
       const b = Number(baseObj[col] || 50);
       const diff = v - b;
       return `
-        <div class="bg-surface-container/30 border border-outline-variant/20 rounded p-2 text-[10px]">
+        <div class="bg-surface-container-low border border-outline-variant rounded p-2 text-[10px]">
           <div class="flex justify-between items-center font-bold text-on-surface">
             <span class="truncate flex items-center gap-1">${col} <span class="info-tooltip" data-term="${col}" tabindex="0">i</span></span>
             <span class="font-mono num-ltr ${colorClassForVal(diff)}">${v.toFixed(0)}</span>
           </div>
-          <div class="w-full h-1.5 bg-[#262626] rounded-full overflow-hidden mt-1">
+          <div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden mt-1">
             <div class="h-full bg-primary rounded-full" style="width:${Math.min(100, Math.max(0, v))}%"></div>
           </div>
           <span class="text-[9px] text-on-surface-variant font-mono num-ltr block mt-0.5">Mkt Base: ${b.toFixed(0)}</span>
@@ -3117,7 +3309,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
   const sectors = dna.sector_attribution || [];
   const secCountBadge = document.getElementById('pf-sector-count-badge');
   if (secCountBadge) {
-    secCountBadge.textContent = `${sectors.length} Sector${sectors.length === 1 ? '' : 's'}`;
+    secCountBadge.textContent = `${sectors.length} ${t('sectors_suffix')}`;
   }
 
   const sectorCanvas = document.getElementById('portfolio-sector-chart');
@@ -3127,7 +3319,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
       portfolioSectorChartInstance.destroy();
       portfolioSectorChartInstance = null;
     }
-    const secColors = ['#4d8eff', '#4edea3', '#f59e0b', '#a855f7', '#ec4899', '#06b6d4', '#8c909f'];
+    const secColors = ['#60A5FA', '#10B981', '#F59E0B', '#A855F7', '#EC4899', '#06B6D4', '#64748B'];
     portfolioSectorChartInstance = new Chart(sCtx, {
       type: 'bar',
       data: {
@@ -3149,9 +3341,11 @@ function renderPortfolioQuantDNA(dna, ccy) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#1c1b1b',
-            titleColor: '#e5e2e1',
-            bodyColor: '#c2c6d6',
+            backgroundColor: '#131722',
+            titleColor: '#F1F5F9',
+            bodyColor: '#94A3B8',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderWidth: 1,
             callbacks: {
               label: ctx => `Weight: ${Number(ctx.parsed.x || 0).toFixed(2)}%`
             }
@@ -3162,11 +3356,11 @@ function renderPortfolioQuantDNA(dna, ccy) {
             min: 0,
             max: 100,
             grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#8c909f', font: { size: 9 }, callback: v => `${v}%` }
+            ticks: { color: '#94A3B8', font: { size: 9 }, callback: v => `${v}%` }
           },
           y: {
             grid: { display: false },
-            ticks: { color: '#e5e2e1', font: { size: 10, weight: 'bold' } }
+            ticks: { color: '#F1F5F9', font: { size: 10, weight: 'bold' } }
           }
         }
       }
@@ -3176,24 +3370,24 @@ function renderPortfolioQuantDNA(dna, ccy) {
   const secTbody = document.getElementById('pf-sector-table-body');
   if (secTbody) {
     if (!sectors.length) {
-      secTbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs">No open positions to attribute.</td></tr>`;
+      secTbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs">${escapeHTML(t('no_sector_data'))}</td></tr>`;
     } else {
       secTbody.innerHTML = sectors.map(s => {
         const pnlColor = colorClassForVal(s.unrealized_pnl_view);
         const qBadge = s.avg_quant_score !== null && s.avg_quant_score !== undefined
           ? renderQuantScoreBadge(s.avg_quant_score, s.avg_quant_score >= 70 ? 'STRONG' : (s.avg_quant_score >= 45 ? 'NEUTRAL' : 'WARNING'))
-          : `<span class="text-[10px] font-mono text-on-surface-variant">ETF / TASE</span>`;
+          : `<span class="text-[10px] font-mono text-on-surface-variant num-ltr">ETF / TASE</span>`;
         return `
-          <tr class="border-b border-[#242424] hover:bg-surface-container/40 font-mono text-[11px]">
-            <td class="py-2 px-3 font-sans font-bold text-on-surface">
+          <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 font-mono text-[11px]">
+            <td class="py-2 px-3 text-start font-sans font-bold text-on-surface">
               ${s.sector}
-              <span class="text-[10px] text-on-surface-variant font-normal block">${(s.tickers || []).join(', ')}</span>
+              <span class="text-[10px] text-on-surface-variant font-normal block num-ltr">${(s.tickers || []).join(', ')}</span>
             </td>
-            <td class="py-2 px-2 text-right font-bold text-on-surface">${Number(s.weight_pct).toFixed(1)}%</td>
-            <td class="py-2 px-3 text-right text-on-surface">${fmtMoney(s.market_value_view, ccy)}</td>
-            <td class="py-2 px-3 text-right font-bold ${pnlColor}">
+            <td class="py-2 px-2 text-end font-bold text-on-surface num-ltr">${Number(s.weight_pct).toFixed(1)}%</td>
+            <td class="py-2 px-3 text-end text-on-surface num-ltr">${fmtMoney(s.market_value_view, ccy)}</td>
+            <td class="py-2 px-3 text-end font-bold num-ltr ${pnlColor}">
               ${fmtSignedMoney(s.unrealized_pnl_view, ccy)}
-              <span class="text-[9px] block opacity-80">(${fmtPct(s.sector_return_pct, 1)})</span>
+              <span class="text-[9px] block opacity-80 num-ltr">(${fmtPct(s.sector_return_pct, 1)})</span>
             </td>
             <td class="py-2 px-2 text-center">${qBadge}</td>
           </tr>
@@ -3208,7 +3402,7 @@ function renderTlhSimulator(tlhCandidates, taxSummary) {
   const tbody = document.getElementById('portfolio-tlh-body');
   const list = tlhCandidates || [];
   if (countBadge) {
-    countBadge.textContent = `${list.length} Harvestable Lot${list.length === 1 ? '' : 's'}`;
+    countBadge.textContent = `${list.length} ${t('harvestable_lots_suffix')}`;
   }
 
   // Default: select all harvestable lots on initial load if none selected
@@ -3219,7 +3413,7 @@ function renderTlhSimulator(tlhCandidates, taxSummary) {
   if (tbody) {
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs">
-        No open FIFO tax lots currently carry an unrealized real ILS loss (<code class="text-secondary">real_loss_ils &lt; 0</code>).
+        ${escapeHTML(t('tlh_empty_table'))}
       </td></tr>`;
     } else {
       tbody.innerHTML = list.map(c => {
@@ -3227,17 +3421,17 @@ function renderTlhSimulator(tlhCandidates, taxSummary) {
         const checked = portfolioState.selectedTlhLots.has(lotId) ? 'checked' : '';
         const shield = Number(c.immediate_tax_shield_ils ?? c.potential_tax_shield_ils ?? (Math.abs(Number(c.real_loss_ils || 0)) * 0.25));
         return `
-          <tr class="border-b border-[#242424] hover:bg-surface-container/50 font-mono text-xs">
+          <tr class="border-b border-outline-variant hover:bg-surface-container-high/50 font-mono text-xs">
             <td class="py-2.5 px-3 text-center">
-              <input type="checkbox" ${checked} onchange="toggleTlhLotSelection(${lotId})" class="accent-[#4edea3] cursor-pointer" />
+              <input type="checkbox" ${checked} onchange="toggleTlhLotSelection(${lotId})" class="accent-[#10B981] cursor-pointer" />
             </td>
-            <td class="py-2.5 px-3 font-bold text-on-surface">${c.ticker} <span class="text-[10px] text-primary">#${lotId}</span></td>
-            <td class="py-2.5 px-3 text-on-surface-variant">${c.buy_date}</td>
-            <td class="py-2.5 px-3 text-right text-on-surface">${Number(c.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-            <td class="py-2.5 px-3 text-right text-on-surface-variant">${fmtMoney(c.original_cost_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-right text-on-surface">${fmtMoney(c.proceeds_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-right font-bold text-tertiary">${fmtSignedMoney(c.real_loss_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-right font-bold text-secondary">+${fmtMoney(shield, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-start font-bold text-on-surface num-ltr">${c.ticker} <span class="text-[10px] text-primary">#${lotId}</span></td>
+            <td class="py-2.5 px-3 text-start text-on-surface-variant num-ltr">${c.buy_date}</td>
+            <td class="py-2.5 px-3 text-end text-on-surface num-ltr">${Number(c.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+            <td class="py-2.5 px-3 text-end text-on-surface-variant num-ltr">${fmtMoney(c.original_cost_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-end text-on-surface num-ltr">${fmtMoney(c.proceeds_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-end font-bold text-tertiary num-ltr">${fmtSignedMoney(c.real_loss_ils, 'ILS')}</td>
+            <td class="py-2.5 px-3 text-end font-bold text-secondary num-ltr">+${fmtMoney(shield, 'ILS')}</td>
           </tr>
         `;
       }).join('');
@@ -3324,6 +3518,7 @@ async function fetchPortfolioAnalytics() {
     renderPortfolioChart(data);
   } catch (err) {
     console.error('Portfolio analytics error:', err);
+    showToast('Analytics calculation error: ' + err.message, 'error');
   }
 }
 
@@ -3337,12 +3532,12 @@ function renderPortfolioAnalyticsKPIs(data) {
   const twrEl = document.getElementById('pf-kpi-twr');
   if (twrEl) {
     twrEl.textContent = fmtPct(kpis.twr_total_pct, 2);
-    twrEl.className = `text-xl font-extrabold tracking-tight ${colorClassForVal(kpis.twr_total_pct)}`;
+    twrEl.className = `text-xl font-extrabold tracking-tight num-ltr ${colorClassForVal(kpis.twr_total_pct)}`;
   }
   const xirrEl = document.getElementById('pf-kpi-xirr');
   if (xirrEl) {
     xirrEl.textContent = fmtPct(kpis.xirr_annualized_pct, 2);
-    xirrEl.className = `text-xl font-extrabold tracking-tight ${colorClassForVal(kpis.xirr_annualized_pct)}`;
+    xirrEl.className = `text-xl font-extrabold tracking-tight num-ltr ${colorClassForVal(kpis.xirr_annualized_pct)}`;
   }
   const twrAnnEl = document.getElementById('pf-kpi-twr-ann');
   if (twrAnnEl) twrAnnEl.textContent = fmtPct(kpis.twr_annualized_pct, 2);
@@ -3353,12 +3548,12 @@ function renderPortfolioAnalyticsKPIs(data) {
   const attrAsset = document.getElementById('pf-attr-asset');
   if (attrAsset) {
     attrAsset.textContent = fmtPct(attr.pure_asset_return_pct, 2);
-    attrAsset.className = `font-mono ${colorClassForVal(attr.pure_asset_return_pct)}`;
+    attrAsset.className = `font-mono num-ltr ${colorClassForVal(attr.pure_asset_return_pct)}`;
   }
   const attrFx = document.getElementById('pf-attr-fx');
   if (attrFx) {
     attrFx.textContent = fmtPct(attr.fx_impact_pct, 2);
-    attrFx.className = `font-mono ${colorClassForVal(attr.fx_impact_pct)}`;
+    attrFx.className = `font-mono num-ltr ${colorClassForVal(attr.fx_impact_pct)}`;
   }
   const attrDrag = document.getElementById('pf-attr-drag');
   if (attrDrag) {
@@ -3367,7 +3562,7 @@ function renderPortfolioAnalyticsKPIs(data) {
   const attrNet = document.getElementById('pf-attr-net');
   if (attrNet) {
     attrNet.textContent = fmtPct(attr.net_after_tax_twr_pct, 2);
-    attrNet.className = `font-mono ${colorClassForVal(attr.net_after_tax_twr_pct)}`;
+    attrNet.className = `font-mono num-ltr ${colorClassForVal(attr.net_after_tax_twr_pct)}`;
   }
 
   // Subtitle
@@ -3385,7 +3580,7 @@ function renderPortfolioAnalyticsKPIs(data) {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = text;
-    if (colorCls) el.className = `text-sm font-bold font-mono mt-0.5 block ${colorCls}`;
+    if (colorCls) el.className = `text-sm font-bold font-mono mt-0.5 block num-ltr ${colorCls}`;
   };
   setSlice('pf-slice-ann-ret', fmtPct(kpis.twr_annualized_pct, 2), colorClassForVal(kpis.twr_annualized_pct));
   setSlice('pf-slice-vol', fmtPct(kpis.annualized_volatility_pct, 2, false), 'text-on-surface');
@@ -3406,15 +3601,15 @@ function renderPortfolioAnalyticsKPIs(data) {
         const exVal = w.excess_value_created ?? w.excess_value ?? 0;
         const excessColor = colorClassForVal(exVal);
         return `
-          <div class="bg-surface-container/30 border border-outline-variant/20 rounded-lg px-3.5 py-2.5 flex justify-between items-center text-xs">
-            <div>
+          <div class="bg-surface-container-low border border-outline-variant rounded-lg px-3.5 py-2.5 flex justify-between items-center text-xs">
+            <div class="text-start">
               <span class="text-[10px] uppercase font-bold text-on-surface-variant block">What-If Cash Flows → ${w.benchmark}</span>
-              <span class="font-mono text-on-surface font-bold">Sim NAV: ${fmtMoney(termVal, ccy)}</span>
-              <span class="text-[10px] text-on-surface-variant font-mono ml-1">(XIRR ${fmtPct(xirrVal, 1)})</span>
+              <span class="font-mono text-on-surface font-bold num-ltr">Sim NAV: ${fmtMoney(termVal, ccy)}</span>
+              <span class="text-[10px] text-on-surface-variant font-mono ms-1 num-ltr">(XIRR ${fmtPct(xirrVal, 1)})</span>
             </div>
-            <div class="text-right">
+            <div class="text-end">
               <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Portfolio Excess</span>
-              <span class="font-mono font-bold ${excessColor}">${fmtSignedMoney(exVal, ccy)}</span>
+              <span class="font-mono font-bold num-ltr ${excessColor}">${fmtSignedMoney(exVal, ccy)}</span>
             </div>
           </div>
         `;
@@ -3431,8 +3626,8 @@ function buildChartDatasets(curves, mode, ccy) {
     datasets.push({
       label: `Portfolio TWR (${ccy})`,
       data: curves.map(r => Number(r.port_twr_rebased_pct ?? r.portfolio_twr_pct ?? 0)),
-      borderColor: '#4edea3',
-      backgroundColor: 'rgba(78, 222, 163, 0.12)',
+      borderColor: '#10B981',
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
       borderWidth: 2.2,
       pointRadius: 0,
       fill: true,
@@ -3459,8 +3654,8 @@ function buildChartDatasets(curves, mode, ccy) {
     datasets.push({
       label: `Actual Portfolio NAV (${ccy})`,
       data: curves.map(r => Number(r.port_nav ?? r.nav ?? 0)),
-      borderColor: '#4edea3',
-      backgroundColor: 'rgba(78, 222, 163, 0.10)',
+      borderColor: '#10B981',
+      backgroundColor: 'rgba(16, 185, 129, 0.10)',
       borderWidth: 2.2,
       pointRadius: 0,
       fill: true,
@@ -3487,8 +3682,8 @@ function buildChartDatasets(curves, mode, ccy) {
     datasets.push({
       label: 'Portfolio Underwater Drawdown (%)',
       data: curves.map(r => Number(r.port_drawdown_pct ?? r.portfolio_drawdown_pct ?? 0)),
-      borderColor: '#ffb3ad',
-      backgroundColor: 'rgba(255, 179, 173, 0.18)',
+      borderColor: '#F43F5E',
+      backgroundColor: 'rgba(244, 63, 94, 0.18)',
       borderWidth: 2,
       pointRadius: 0,
       fill: true,
@@ -3510,13 +3705,13 @@ function createPortfolioChartObject(canvas, labels, datasets, mode, ccy) {
       plugins: {
         legend: {
           display: true,
-          labels: { color: '#c2c6d6', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+          labels: { color: '#94A3B8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
         },
         tooltip: {
-          backgroundColor: '#1c1b1b',
-          titleColor: '#e5e2e1',
-          bodyColor: '#c2c6d6',
-          borderColor: '#424754',
+          backgroundColor: '#131722',
+          titleColor: '#F1F5F9',
+          bodyColor: '#94A3B8',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
           borderWidth: 1,
           callbacks: {
             label: function(context) {
@@ -3534,12 +3729,12 @@ function createPortfolioChartObject(canvas, labels, datasets, mode, ccy) {
       scales: {
         x: {
           grid: { color: 'rgba(255,255,255,0.03)' },
-          ticks: { color: '#8c909f', font: { size: 10 }, maxTicksLimit: 9 }
+          ticks: { color: '#94A3B8', font: { size: 10 }, maxTicksLimit: 9 }
         },
         y: {
           grid: { color: 'rgba(255,255,255,0.05)' },
           ticks: {
-            color: '#8c909f',
+            color: '#94A3B8',
             font: { size: 10 },
             callback: function(value) {
               if (mode === 'WHAT_IF') {
@@ -3624,11 +3819,11 @@ async function fetchPortfolioTransactions() {
 function renderTransactionsTable(txs) {
   const tbody = document.getElementById('portfolio-tx-body');
   const countEl = document.getElementById('pf-tx-count');
-  if (countEl) countEl.textContent = `${txs.length} Transaction${txs.length === 1 ? '' : 's'}`;
+  if (countEl) countEl.textContent = `${txs.length} ${t('transactions_suffix')}`;
   if (!tbody) return;
 
   if (!txs.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-on-surface-variant text-xs">No transactions recorded yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-on-surface-variant text-xs">${escapeHTML(t('no_tx_yet'))}</td></tr>`;
     return;
   }
 
@@ -3642,17 +3837,17 @@ function renderTransactionsTable(txs) {
   tbody.innerHTML = txs.slice().reverse().map(tx => {
     const sym = tx.currency === 'ILS' ? '₪' : '$';
     return `
-      <tr class="border-b border-[#242424] hover:bg-surface-container/40 text-xs font-mono">
-        <td class="px-3 py-2 text-on-surface-variant">${tx.date}</td>
-        <td class="px-3 py-2">
-          <span class="px-2 py-0.5 rounded border text-[10px] font-bold ${badgeForType(tx.tx_type)}">${tx.tx_type}</span>
+      <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 text-xs font-mono">
+        <td class="px-3 py-2 text-start text-on-surface-variant num-ltr">${tx.date}</td>
+        <td class="px-3 py-2 text-start">
+          <span class="px-2 py-0.5 rounded border text-[10px] font-bold num-ltr ${badgeForType(tx.tx_type)}">${tx.tx_type}</span>
         </td>
-        <td class="px-3 py-2 font-bold text-on-surface">${tx.ticker}</td>
-        <td class="px-3 py-2 text-right text-on-surface">${Number(tx.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-        <td class="px-3 py-2 text-right text-on-surface-variant">${sym}${Number(tx.price).toFixed(2)}</td>
-        <td class="px-3 py-2 text-right text-on-surface-variant">${sym}${Number(tx.fee || 0).toFixed(2)}</td>
-        <td class="px-3 py-2 text-center text-[10px]">${tx.currency}</td>
-        <td class="px-3 py-2 text-on-surface-variant font-sans truncate max-w-[160px]" title="${tx.notes || ''}">${tx.notes || '-'}</td>
+        <td class="px-3 py-2 text-start font-bold text-on-surface num-ltr">${tx.ticker}</td>
+        <td class="px-3 py-2 text-end text-on-surface num-ltr">${Number(tx.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+        <td class="px-3 py-2 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.price).toFixed(2)}</td>
+        <td class="px-3 py-2 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.fee || 0).toFixed(2)}</td>
+        <td class="px-3 py-2 text-center text-[10px] num-ltr">${tx.currency}</td>
+        <td class="px-3 py-2 text-start text-on-surface-variant font-sans truncate max-w-[160px]" title="${escapeHTML(tx.notes || '')}">${escapeHTML(tx.notes || '-')}</td>
         <td class="px-3 py-2 text-center">
           <button onclick="deletePortfolioTransaction('${tx.tx_id}')" class="text-on-surface-variant hover:text-tertiary transition-colors" title="Delete transaction">
             <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -3704,10 +3899,14 @@ async function submitPortfolioTransaction(event) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Transaction failed');
-    showTxFeedback(`Recorded ${tx_type} ${ticker} (${quantity} @ ${price})`);
+    const msg = `Recorded ${tx_type} ${ticker} (${quantity} @ ${price})`;
+    showTxFeedback(msg);
+    showToast(msg, 'success');
+    closeTxDrawer();
     await refreshPortfolioWorkspace();
   } catch (err) {
     showTxFeedback(err.message, true);
+    showToast(err.message, 'error');
   }
 }
 
@@ -3720,26 +3919,40 @@ async function deletePortfolioTransaction(txId) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Delete failed');
+    showToast('Transaction deleted.', 'info');
     await refreshPortfolioWorkspace();
   } catch (err) {
     console.error('Delete transaction error:', err);
+    showToast(err.message, 'error');
   }
 }
 
-async function clearPortfolioLedger() {
-  try {
-    const res = await fetch('/api/portfolio/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'clear' })
-    });
-    if (res.ok) {
-      portfolioState.expandedTickers.clear();
-      await refreshPortfolioWorkspace();
+function clearPortfolioLedger() {
+  openConfirmModal({
+    title: t('confirm_clear_title'),
+    desc: t('confirm_clear_desc'),
+    variant: 'danger',
+    onConfirm: async () => {
+      try {
+        const res = await fetch('/api/portfolio/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear' })
+        });
+        if (res.ok) {
+          portfolioState.expandedTickers.clear();
+          showToast('Portfolio ledger cleared.', 'info');
+          await refreshPortfolioWorkspace();
+        } else {
+          const data = await res.json();
+          throw new Error(data.error || 'Clear ledger failed');
+        }
+      } catch (err) {
+        console.error('Clear ledger error:', err);
+        showToast(err.message, 'error');
+      }
     }
-  } catch (err) {
-    console.error('Clear ledger error:', err);
-  }
+  });
 }
 
 function exportPortfolioCsv() {
@@ -3781,12 +3994,12 @@ function renderCsvImportDiagnostic(data) {
       const sym = sr.symbol || 'UNKNOWN';
       const reason = sr.reason || (Array.isArray(sr.missing_fields) ? `Missing ${sr.missing_fields.join(', ')}` : 'Invalid row');
       return `
-        <div class="bg-[#141414]/80 border border-outline-variant/25 rounded px-2.5 py-1.5 font-mono text-[11px] flex flex-col gap-0.5">
+        <div class="bg-surface-container-low border border-outline-variant rounded px-2.5 py-1.5 font-mono text-[11px] flex flex-col gap-0.5">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-amber-300">Line ${lineNum} (${sym})</span>
+            <span class="font-bold text-amber-300 num-ltr">Line ${lineNum} (${sym})</span>
             <span class="text-[9px] uppercase px-1.5 py-0.2 rounded bg-tertiary/15 text-tertiary font-bold">Skipped</span>
           </div>
-          <span class="text-on-surface-variant font-sans text-[11px]">${reason}</span>
+          <span class="text-on-surface-variant font-sans text-[11px]">${escapeHTML(reason)}</span>
         </div>
       `;
     }).join('');
@@ -3802,7 +4015,7 @@ function renderCsvImportDiagnostic(data) {
         </div>
         <button type="button" onclick="dismissCsvDiagnostic()" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1">✕</button>
       </div>
-      <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+      <div class="max-h-40 overflow-y-auto space-y-1.5 pe-1">
         ${itemsHtml}
       </div>
     `;
@@ -3822,39 +4035,54 @@ async function importPortfolioCsv(event) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'CSV Import failed');
     renderCsvImportDiagnostic(data);
-    showTxFeedback(data.message || `Imported CSV (${data.imported_count ?? 0} transactions)`);
+    const msg = data.message || `Imported CSV (${data.imported_count ?? 0} transactions)`;
+    showTxFeedback(msg);
+    showToast(msg, 'success');
     event.target.value = '';
     await refreshPortfolioWorkspace();
   } catch (err) {
     showTxFeedback(err.message, true);
+    showToast(err.message, 'error');
   }
 }
 
-async function seedDemoPortfolio() {
-  const sampleCsv = [
-    'date,ticker,tx_type,quantity,price,fee,currency,notes',
-    '2024-01-10,CASH,CASH_DEPOSIT,25000,1.0,0.0,USD,Initial USD Capital',
-    '2024-01-10,CASH,CASH_DEPOSIT,50000,1.0,0.0,ILS,Initial ILS Capital',
-    '2024-01-16,AAPL,BUY,40,185.0,2.5,USD,Core US Tech Lot 1',
-    '2024-02-15,MSFT,BUY,20,405.0,2.5,USD,Cloud Infrastructure Lot',
-    '2024-03-12,LUMI.TA,BUY,800,29.5,15.0,ILS,TASE Banking Core Position',
-    '2024-06-10,AAPL,BUY,20,195.0,2.0,USD,AAPL Add-on Lot 2 (FIFO)',
-    '2024-11-15,AAPL,SELL,15,225.0,2.5,USD,Partial Profit Taking (FIFO Lot 1)',
-    '2025-02-20,AAPL,DIVIDEND,45,0.25,0.0,USD,Quarterly Cash Dividend'
-  ].join('\n');
+function seedDemoPortfolio() {
+  openConfirmModal({
+    title: t('confirm_seed_title'),
+    desc: t('confirm_seed_desc'),
+    variant: 'primary',
+    onConfirm: async () => {
+      const sampleCsv = [
+        'date,ticker,tx_type,quantity,price,fee,currency,notes',
+        '2024-01-10,CASH,CASH_DEPOSIT,25000,1.0,0.0,USD,Initial USD Capital',
+        '2024-01-10,CASH,CASH_DEPOSIT,50000,1.0,0.0,ILS,Initial ILS Capital',
+        '2024-01-16,AAPL,BUY,40,185.0,2.5,USD,Core US Tech Lot 1',
+        '2024-02-15,MSFT,BUY,20,405.0,2.5,USD,Cloud Infrastructure Lot',
+        '2024-03-12,LUMI.TA,BUY,800,29.5,15.0,ILS,TASE Banking Core Position',
+        '2024-06-10,AAPL,BUY,20,195.0,2.0,USD,AAPL Add-on Lot 2 (FIFO)',
+        '2024-11-15,AAPL,SELL,15,225.0,2.5,USD,Partial Profit Taking (FIFO Lot 1)',
+        '2025-02-20,AAPL,DIVIDEND,45,0.25,0.0,USD,Quarterly Cash Dividend'
+      ].join('\n');
 
-  try {
-    const res = await fetch('/api/portfolio/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'import_csv', csv_content: sampleCsv, merge: false })
-    });
-    if (res.ok) {
-      await refreshPortfolioWorkspace();
+      try {
+        const res = await fetch('/api/portfolio/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'import_csv', csv_content: sampleCsv, merge: false })
+        });
+        if (res.ok) {
+          showToast('Sample multi-currency ledger seeded.', 'success');
+          await refreshPortfolioWorkspace();
+        } else {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to seed sample portfolio');
+        }
+      } catch (err) {
+        console.error('Failed to seed sample portfolio:', err);
+        showToast(err.message, 'error');
+      }
     }
-  } catch (err) {
-    console.error('Failed to seed sample portfolio:', err);
-  }
+  });
 }
 
 // Initialize saved language preference (EN/HE) and RTL/LTR layout on load

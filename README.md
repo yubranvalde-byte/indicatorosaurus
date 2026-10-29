@@ -517,34 +517,42 @@ Phase 6 bridges the personal multi-currency portfolio ledger with the 80-byte `S
 
 ---
 
-## 6G. Bilingual (`EN` / `HE`) Localization, Contextual Info (`i`) Tooltips & Two-Screen Progressive Disclosure
+## 6G. Institutional Obsidian Fintech Design System, Bilingual (`EN` / `HE`) Logical CSS Symmetry & Two-Screen Progressive Disclosure
 
-To make institutional-grade quantitative analytics and Israeli tax mechanics accessible without overwhelming the user, `frontend/templates/index.html` implements:
+To make institutional-grade quantitative analytics and Israeli tax mechanics accessible without overwhelming the user, `frontend/templates/index.html` implements a single-file zero-build Obsidian Fintech design system:
 
-### 1. Bilingual Localization (`EN` | `עב`) & Dynamic RTL/LTR Layout (`setAppLanguage`, `applyLayoutDirection`)
+### 1. Obsidian Color & Surface Hierarchy (`tailwind.config` & CSS)
+- **Crisp Cool-Toned Surface Hierarchy**: Uses a dark Obsidian palette (`background` / `surface`: `#090B10`, `surface-container-low`: `#0E1117`, `surface-container`: `#131722`, `surface-container-high`: `#1C2130`, `surface-bright`: `#262D40`, `outline-variant`: `rgba(255, 255, 255, 0.08)`) paired with high-contrast semantic accents (`primary`: `#60A5FA`, `secondary` bullish/shield: `#10B981`, `tertiary`/`error` bearish/tax due: `#F43F5E`, `on-surface`: `#F1F5F9`, `on-surface-variant`: `#94A3B8`).
+- **Authoritative Top-Header Currency Toggle**: Centralizes the `USD $` / `ILS ₪` switcher inside `#top-header` (`#portfolio-header-controls`) alongside the live `USD/ILS` exchange rate badge (`#header-fx-badge`), eliminating duplicate workspace currency controls.
+
+### 2. Bilingual Localization (`EN` | `עב`) & Logical RTL/LTR Symmetry (`setAppLanguage`, `applyLayoutDirection`)
 - **Top-Header Language Switcher (`#lang-btn-en` | `#lang-btn-he`)**: Persisted in `localStorage` (`aq_lang`), switching instantaneously between English (`en`) and Hebrew (`he`) via the structured `I18N = { en: {...}, he: {...} }` dictionary (`data-i18n` and `data-i18n-placeholder` bindings).
-- **RTL Layout with Strict LTR Financial Figure Isolation**: When Hebrew (`he`) is active, the root document switches to `dir="rtl"` (`Heebo` / `Inter` typography) and docks the Screener sidebar to the right, while strictly enforcing `dir="ltr"` (`unicode-bidi: isolate; font-variant-numeric: tabular-nums;`) on all currency amounts, signed percentages, dates, ticker symbols, and Chart.js canvases so financial numbers never invert.
+- **Logical CSS Utilities & Strict LTR Financial Figure Isolation**: Uses CSS logical properties (`text-start`, `text-end`, `ps-*`, `pe-*`, `ms-*`, `end-*`) across all tables, headers, drawers, and cards so layout geometry mirrors automatically when `dir="rtl"` is active, while strictly enforcing `.num-ltr` (`direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums;`) on all currency amounts, signed percentages, dates, ticker symbols, and Chart.js canvases.
 
-### 2. Contextual Info (`i`) Tooltips Dictionary (`TOOLTIPS`, `#global-info-popover`)
+### 3. Contextual Info (`i`) Tooltips Dictionary (`TOOLTIPS`, `#global-info-popover`)
 - Every technical, quantitative, and Israeli tax metric across both workspaces features an interactive `<span class="info-tooltip" data-term="...">i</span>` badge.
 - Hovering, focusing, or tapping any `i` badge opens a viewport-aware popover (`#global-info-popover`) with a concise 2–3 line explanation in the active language (`EN` or `HE`), covering:
   - **Portfolio & Return Metrics**: `NAV`, `Net Liquidation NAV`, `TWR`, `MWR / XIRR`, `What-If Opportunity Simulator`, `Underwater Drawdown`, `MDD`, `Sharpe Ratio`, `Sortino Ratio`, `Beta`, `Jensen's Alpha`, `Annualized Volatility`.
   - **Israeli Tax & Dual-Currency Terms**: `FIFO Tax Lots`, `Original vs. Adjusted Cost Basis`, `Inflationary Exempt Gain`, `Real Taxable Gain`, `YTD Tax Shield`, `Tax-Loss Harvesting (TLH)`, `FX Attribution & Tax Drag`.
   - **Screener & Quant DNA Terms**: `C-FFI Quant Score`, `Factor Coverage %`, `Goldilocks Normalization`, `Sector-Neutral Sigmoid Z-Score`, the 5 Factor Pillars (`Valuation`, `Growth`, `Quality`, `Safety & Income`, `Momentum`), and all 16 quantitative indicators.
 
-### 3. Strict Two-Screen DOM Separation & Progressive Disclosure (`setPortfolioViewTier`)
+### 4. Strict Two-Screen DOM Separation, Full-Width Holdings & Slide-Over Drawer (`setPortfolioViewTier`)
 To provide both an accessible high-level overview and deep quant research capabilities without visual clutter, the workspace implements strict DOM separation between two mutually exclusive screens (`#pf-view-standard` and `#pf-view-advanced`):
 - **Screen 1 — Standard Overview (`#pf-view-standard`, Default)**:
   - **Executive KPI Ribbon**: Card 1 (Total Portfolio NAV & Net Liquidation NAV), Card 2 (3-Bucket Capital Accounting: Total Invested Capital, Available Cash, Withdrawn Capital, Total Wealth Created, and ROI %), Card 3 (TWR vs XIRR / Modified Dietz), and Card 4 (Unrealized Gross/Net PnL & YTD Realized PnL).
   - **Primary Performance Chart (`#portfolio-main-chart`)**: Rebased TWR (%) performance canvas with dynamic benchmark comparison chips and time-slice selectors (`1M`, `3M`, `6M`, `YTD`, `1Y`, `3Y`, `5Y`, `ALL`).
-  - **Live Holdings Table**: Open positions table with one-click expandable inline FIFO tax lot breakdowns.
-  - **Record Transaction & Brokerage CSV Importer**: Quick-action buttons (`Buy`, `Sell`, `Dividend`, `Deposit`, `Withdraw Capital`) and fault-tolerant schema-adaptive CSV import with row-by-row diagnostic inspection.
+  - **Full-Width Live Holdings Table (`w-full`)**: 11-column open positions table spanning 100% of the workspace width with one-click expandable inline FIFO tax lot breakdowns.
+  - **Slide-Over Transaction & Batch CSV Drawer (`#pf-tx-drawer` & `#pf-tx-drawer-backdrop`)**: Triggered from the workspace header CTA (`+ Record Transaction / CSV`, `openTxDrawer()`), sliding smoothly from the inline-end edge (`right-0` in LTR, `left-0` in RTL). Houses quick-action transaction entry (`Buy`, `Sell`, `Dividend`, `Deposit`, `Withdraw Capital`) and schema-adaptive CSV import/export/clear controls with row-by-row diagnostic inspection (`#pf-csv-diagnostic-panel`). Automatically closes and triggers a success toast upon transaction submission.
 - **Screen 2 — Advanced Quant & Tax Lab (`#pf-view-advanced`)**:
   - **Deep-Dive Multi-Mode Chart (`#portfolio-adv-chart`)**: Interactive canvas toggling between Rebased TWR (%), What-If Simulator NAV, and Underwater Drawdown (%), accompanied by the What-If Opportunity comparison banner (`#pf-whatif-banner`) and 7-metric institutional risk KPI strip (`#pf-slice-risk-strip`).
   - **Statutory Israeli Tax Card & Return Attribution Bar**: Full Section 88 indexation, YTD tax shield, loss carry-forward, and visual ILS return attribution bar (`#pf-attr-bar`).
   - **Portfolio Factor DNA Radar (`C-FFI` Engine)**: 5-Pillar radar canvas (`#portfolio-dna-radar-chart`), factor pillar chips, expandable 16-indicator drawer, and GICS Sector Allocation/Attribution chart (`#portfolio-sector-chart`).
   - **Interactive Israeli TLH Simulator**: Section 92 loss lot selector calculating immediate tax shields and loss carry-forward.
   - **Chronological Transaction Ledger**: Full historical ledger table with per-row deletion.
+- **Global Toast Stack, Confirmation Modal & Shimmer Skeletons**:
+  - **Non-Blocking Toasts (`showToast`, `#global-toast-container`)**: Replaces blocking browser `alert()` dialogs with auto-dismissing (`4000ms`) color-coded notifications (`error`, `success`, `info`) anchored at `bottom-5 end-5 z-[9990]`.
+  - **Destructive Action Confirmation Modal (`openConfirmModal`, `#global-confirm-modal`)**: Guards `clearPortfolioLedger()` and `seedDemoPortfolio()` behind an accessible confirmation dialog.
+  - **Shimmer Skeleton Loaders (`renderTableSkeleton`) & Material Symbols**: Renders 5 animated shimmer skeleton rows (`animate-pulse bg-surface-container-high/60`) inside `#leaderboard-body` and `#portfolio-holdings-body` during async fetches, and uses `material-symbols-outlined` icons (`bolt`, `monitoring`, and CSS spinners) across action buttons.
 - **Dual Chart.js Lifecycle Management**: Dedicated chart instances (`portfolioChartInstance` and `portfolioAdvChartInstance`) synchronized via `renderPortfolioChart` with automatic `requestAnimationFrame` resizing upon view toggling, completely eliminating canvas layout thrashing and ghost rendering.
 
 ---
