@@ -26,7 +26,6 @@ tailwind.config = {
       "inverse-surface":"#F1F5F9","inverse-on-surface":"#0E1117",
       "error":"#F43F5E","error-container":"#3F0514"
     },
-    borderRadius:{ DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem" },
     fontFamily:{ "body-md":["Inter","Heebo","sans-serif"],"headline-lg":["Inter","Heebo","sans-serif"],"headline-md":["Inter","Heebo","sans-serif"],
       "headline-sm":["Inter","Heebo","sans-serif"],"body-lg":["Inter","Heebo","sans-serif"],"label-caps":["Inter","Heebo","sans-serif"],"data-display":["JetBrains Mono","monospace"] },
     fontSize:{
@@ -42,14 +41,36 @@ tailwind.config = {
 };
 </script>
 <style>
+  body, #main-viewport {
+    background-color: #07090E;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.14), transparent), radial-gradient(ellipse 60% 40% at 85% 20%, rgba(16,185,129,0.07), transparent);
+  }
+  .aq-card {
+    background: linear-gradient(180deg, rgba(22, 27, 41, 0.88) 0%, rgba(14, 17, 26, 0.96) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    backdrop-filter: blur(16px);
+  }
+  .aq-btn-primary {
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    color: #FFFFFF;
+    font-weight: 600;
+    box-shadow: 0 4px 18px -2px rgba(59, 130, 246, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+    transition: all 0.2s ease;
+  }
+  .aq-btn-primary:hover {
+    background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+    transform: translateY(-1px);
+  }
   input[type=range]{-webkit-appearance:none;width:100%;background:transparent;direction:ltr}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#60A5FA;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(96,165,250,0.2)}
   input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#3B82F6 var(--pct,50%),#1C2130 var(--pct,50%));border-radius:2px}
   input[type=range]:focus{outline:none}
-  .profile-btn{transition:all .2s;border:1px solid rgba(255,255,255,0.08);background:#0E1117;color:#94A3B8;font-size:12px;font-weight:700;letter-spacing:.05em;padding:6px 4px;border-radius:6px;cursor:pointer;text-align:center}
+  .profile-btn{transition:all .2s;border:1px solid rgba(255,255,255,0.08);background:#0E1117;color:#94A3B8;font-size:12px;font-weight:700;letter-spacing:.05em;padding:7px 6px;border-radius:8px;cursor:pointer;text-align:center}
   .profile-btn:hover,.profile-btn.active{border-color:#60A5FA;background:rgba(96,165,250,0.12);color:#60A5FA}
   .tooltip-wrap{position:relative;display:inline-flex}
-  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#1C2130;color:#94A3B8;font-size:11px;line-height:1.5;border-radius:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.08);opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
+  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#1C2130;color:#94A3B8;font-size:11px;line-height:1.5;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.08);opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
   .tooltip-wrap:hover .tip{opacity:1}
   /* Reusable Contextual Info (i) Badge */
   .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);color:#60A5FA;font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
@@ -58,15 +79,15 @@ tailwind.config = {
   #global-info-popover.visible{opacity:1}
   /* Strict LTR numeric & financial figure isolation in RTL mode */
   .num-ltr,.font-mono,.tabular-nums,canvas,input[type="number"],input[type="date"]{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
-  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:#090B10}
-  ::-webkit-scrollbar-thumb{background:#262D40;border-radius:2px}
+  ::-webkit-scrollbar-thumb{background:#262D40;border-radius:3px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   .fade-in{animation:fadeIn .3s ease forwards}
   .accordion-row{transition:all .25s ease}
 </style>
 </head>
-<body class="bg-background text-on-surface font-body-md overflow-hidden">
+<body class="bg-background text-on-surface font-body-md overflow-hidden overflow-x-hidden">
 
 <!-- Global Viewport-Aware Contextual Info Popover -->
 <div id="global-info-popover" role="tooltip" aria-hidden="true"></div>
@@ -75,57 +96,57 @@ tailwind.config = {
 <div id="global-toast-container" class="fixed bottom-5 end-5 z-[9990] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none" aria-live="polite"></div>
 
 <!-- Global Reusable Confirmation Modal -->
-<div id="global-confirm-modal" class="fixed inset-0 z-[9980] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-200" role="dialog" aria-modal="true">
-  <div id="global-confirm-dialog" class="bg-surface-container border border-outline-variant rounded-xl p-6 max-w-md w-full shadow-2xl transform scale-95 transition-transform duration-200 space-y-4">
+<div id="global-confirm-modal" onclick="if(event.target===this) closeConfirmModal()" class="fixed inset-0 z-[9980] hidden items-center justify-center p-4 bg-black/70 backdrop-blur-md opacity-0 transition-opacity duration-200" role="dialog" aria-modal="true">
+  <div id="global-confirm-dialog" class="aq-card p-6 max-w-md w-full transform scale-95 transition-transform duration-200 space-y-4">
     <div class="flex items-start gap-3">
-      <div id="global-confirm-icon-wrap" class="w-10 h-10 rounded-lg bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0">
+      <div id="global-confirm-icon-wrap" class="w-10 h-10 rounded-xl bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0">
         <span id="global-confirm-icon" class="material-symbols-outlined text-tertiary text-[20px]">warning</span>
       </div>
       <div class="space-y-1">
         <h3 id="global-confirm-title" class="text-headline-sm font-bold text-on-surface">Confirm Action</h3>
-        <p id="global-confirm-desc" class="text-xs text-on-surface-variant leading-relaxed"></p>
+        <p id="global-confirm-desc" class="text-xs sm:text-sm text-on-surface-variant leading-relaxed"></p>
       </div>
     </div>
-    <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-outline-variant">
-      <button type="button" onclick="closeConfirmModal()" data-i18n="btn_cancel" class="px-4 py-2 rounded-lg bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-xs font-bold text-on-surface-variant hover:text-on-surface transition-all">Cancel</button>
-      <button type="button" id="global-confirm-action-btn" data-i18n="btn_confirm" class="px-4 py-2 rounded-lg bg-tertiary hover:bg-tertiary-container text-on-surface text-xs font-bold transition-all shadow-sm">Confirm</button>
+    <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-outline-variant">
+      <button type="button" onclick="closeConfirmModal()" data-i18n="btn_cancel" class="px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-xs sm:text-sm font-semibold text-on-surface-variant hover:text-on-surface transition-all">Cancel</button>
+      <button type="button" id="global-confirm-action-btn" data-i18n="btn_confirm" class="px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-surface text-xs sm:text-sm font-semibold transition-all shadow-sm">Confirm</button>
     </div>
   </div>
 </div>
 
 <!-- Top Bar -->
-<header id="top-header" class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-14 px-6 z-40 transition-all duration-200" style="left:288px">
-  <div class="flex items-center gap-3">
-    <h1 class="text-headline-md font-bold text-on-surface" data-i18n="app_title">Financial Intelligence Dashboard</h1>
+<header id="top-header" class="fixed top-0 right-0 bg-surface/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center h-16 px-8 z-40 transition-all duration-200" style="left:288px">
+  <div class="flex items-center gap-4">
+    <h1 class="text-headline-md font-bold text-on-surface whitespace-nowrap" data-i18n="app_title">Financial Intelligence Dashboard</h1>
     <!-- Workspace Switcher Navigation -->
-    <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg">
-      <button id="nav-tab-screener" onclick="switchWorkspace('screener')" class="px-3 py-1 rounded-md text-xs font-bold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5">
-        <span class="material-symbols-outlined text-[14px]">Tune</span>
+    <div class="flex items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1">
+      <button id="nav-tab-screener" onclick="switchWorkspace('screener')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-[16px]">tune</span>
         <span data-i18n="tab_screener">Screener &amp; Backtester</span>
       </button>
-      <button id="nav-tab-portfolio" onclick="switchWorkspace('portfolio')" class="px-3 py-1 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
-        <span class="material-symbols-outlined text-[14px]">account_balance_wallet</span>
+      <button id="nav-tab-portfolio" onclick="switchWorkspace('portfolio')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
         <span data-i18n="tab_portfolio">Portfolio Intelligence</span>
       </button>
     </div>
-    <span id="active-profile-chip" class="hidden px-3 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-label-caps"></span>
+    <span id="active-profile-chip" class="hidden px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-label-caps whitespace-nowrap"></span>
   </div>
-  <div class="flex items-center gap-2.5">
+  <div class="flex items-center gap-3">
     <!-- Global Portfolio Currency Toggle (visible in Portfolio workspace) -->
-    <div id="portfolio-header-controls" class="hidden items-center gap-2">
-      <span id="header-fx-badge" class="px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-[11px] font-mono text-on-surface-variant num-ltr">USD/ILS: --</span>
-      <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr">
-        <button id="curr-btn-USD" onclick="setPortfolioCurrency('USD')" class="px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">USD $</button>
-        <button id="curr-btn-ILS" onclick="setPortfolioCurrency('ILS')" class="px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ILS ₪</button>
+    <div id="portfolio-header-controls" class="hidden items-center gap-2.5">
+      <span id="header-fx-badge" class="px-3 py-1.5 rounded-lg bg-surface-container border border-outline-variant text-xs font-mono text-on-surface-variant num-ltr whitespace-nowrap">USD/ILS: --</span>
+      <div class="flex items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-0.5" dir="ltr">
+        <button id="curr-btn-USD" onclick="setPortfolioCurrency('USD')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">USD $</button>
+        <button id="curr-btn-ILS" onclick="setPortfolioCurrency('ILS')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary">ILS ₪</button>
       </div>
     </div>
     <!-- Bilingual Language Toggle (EN | עב) -->
-    <div class="flex items-center bg-surface-container border border-outline-variant p-0.5 rounded-lg" dir="ltr" title="Switch Language / החלף שפה">
-      <button id="lang-btn-en" onclick="setAppLanguage('en')" class="px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">EN</button>
-      <button id="lang-btn-he" onclick="setAppLanguage('he')" class="px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">עב</button>
+    <div class="flex items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-0.5" dir="ltr" title="Switch Language / החלף שפה">
+      <button id="lang-btn-en" onclick="setAppLanguage('en')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary">EN</button>
+      <button id="lang-btn-he" onclick="setAppLanguage('he')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">עב</button>
     </div>
-    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant text-label-caps text-on-surface-variant">
-      <span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse inline-block"></span>
+    <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-surface-container-high border border-outline-variant text-label-caps text-on-surface-variant whitespace-nowrap">
+      <span class="w-2 h-2 rounded-full bg-secondary animate-pulse inline-block"></span>
       <span data-i18n="live_data">Live Data</span>
     </span>
   </div>
@@ -216,7 +237,7 @@ tailwind.config = {
   <!-- Calculate button -->
   <div class="px-4 py-4 border-t border-outline-variant flex-shrink-0">
     <button id="calculate-btn"
-      class="w-full bg-primary text-on-primary font-bold text-sm py-2.5 px-4 rounded-lg hover:bg-primary-container transition-all shadow-[0_0_20px_rgba(96,165,250,0.25)] hover:shadow-[0_0_28px_rgba(96,165,250,0.4)] active:scale-[.98] flex items-center justify-center gap-1.5">
+      class="aq-btn-primary w-full text-sm py-3 px-4 rounded-xl active:scale-[.98] flex items-center justify-center gap-2 whitespace-nowrap">
       <span class="material-symbols-outlined text-[18px]">bolt</span>
       <span data-i18n="btn_calculate_score">Calculate Score</span>
     </button>
@@ -224,9 +245,9 @@ tailwind.config = {
 </nav>
 
 <!-- Main Content -->
-<main id="main-viewport" class="overflow-y-auto p-6 transition-all duration-200" style="margin-left:288px;margin-top:56px;height:calc(100vh - 56px)">
-  <div id="workspace-screener" class="max-w-5xl mx-auto">
-    <div class="mb-5 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+<main id="main-viewport" class="overflow-y-auto overflow-x-hidden p-6 lg:p-8 transition-all duration-200" style="margin-left:288px;margin-top:64px;height:calc(100vh - 64px)">
+  <div id="workspace-screener" class="max-w-[1360px] mx-auto">
+    <div class="mb-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
       <div>
         <h2 class="text-headline-lg text-on-surface font-bold flex items-center gap-2">
           <span data-i18n="screener_title">Algorithm Results</span>
@@ -235,47 +256,47 @@ tailwind.config = {
         <p class="text-body-lg text-on-surface-variant mt-1" data-i18n="screener_subtitle">Top ranking equities scored by the C-engine weighted dot product.</p>
       </div>
       <!-- Screener Two-Tier Progressive Disclosure Switcher -->
-      <div class="flex items-center bg-surface-container border border-outline-variant p-1 rounded-xl self-start">
-        <button id="scr-tier-standard" onclick="setScreenerViewTier('standard')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[15px]">format_list_numbered</span>
+      <div class="inline-flex flex-nowrap items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1 self-start">
+        <button id="scr-tier-standard" onclick="setScreenerViewTier('standard')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
           <span data-i18n="tier_standard">Standard Overview</span>
         </button>
-        <button id="scr-tier-advanced" onclick="setScreenerViewTier('advanced')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[15px]">science</span>
+        <button id="scr-tier-advanced" onclick="setScreenerViewTier('advanced')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">science</span>
           <span data-i18n="tier_advanced_bt">Advanced Backtest Lab</span>
         </button>
       </div>
     </div>
 
     <!-- Leaderboard -->
-    <div id="screener-view-standard" class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+    <div id="screener-view-standard" class="aq-card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-start border-collapse">
           <thead>
             <tr class="bg-surface-container-low border-b border-outline-variant">
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant w-16 text-center">#</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-start" data-i18n="th_ticker">Ticker</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-center w-28" data-i18n="th_profile">Profile</th>
-              <th class="px-4 py-3 text-label-caps text-on-surface-variant text-end w-32">
+              <th class="py-3.5 px-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant w-16 text-center">#</th>
+              <th class="py-3.5 px-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant text-start" data-i18n="th_ticker">Ticker</th>
+              <th class="py-3.5 px-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant text-center w-32" data-i18n="th_profile">Profile</th>
+              <th class="py-3.5 px-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant text-end w-36">
                 <span data-i18n="th_score">Score</span>
                 <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
               </th>
             </tr>
           </thead>
           <tbody id="leaderboard-body">
-            <tr><td colspan="4" class="px-4 py-12 text-center text-on-surface-variant text-body-md" data-i18n="screener_empty_prompt">
+            <tr><td colspan="4" class="px-4 py-12 text-center text-on-surface-variant text-sm" data-i18n="screener_empty_prompt">
               Set your weights and click Calculate Score to rank all stocks.
             </td></tr>
           </tbody>
         </table>
       </div>
-      <div class="px-4 py-3 bg-surface-container-low border-t border-outline-variant flex flex-col sm:flex-row gap-2 justify-between items-center">
-        <span class="text-label-caps text-on-surface-variant" id="result-count" data-i18n="no_results_yet">No results yet</span>
+      <div class="px-5 py-3.5 bg-surface-container-low border-t border-outline-variant flex flex-col sm:flex-row gap-2 justify-between items-center">
+        <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant" id="result-count" data-i18n="no_results_yet">No results yet</span>
         <div id="pagination-controls" class="hidden items-center gap-2">
-          <button id="load-more-btn" onclick="loadMoreStocks()" data-i18n="btn_load_more" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
-          <button id="toggle-all-btn" onclick="showAllStocks()" data-i18n="btn_show_all" class="px-3 py-1 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
+          <button id="load-more-btn" onclick="loadMoreStocks()" data-i18n="btn_load_more" class="whitespace-nowrap px-3.5 py-1.5 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded-lg text-xs font-bold text-primary transition-all active:scale-95 cursor-pointer">Load 10 More</button>
+          <button id="toggle-all-btn" onclick="showAllStocks()" data-i18n="btn_show_all" class="whitespace-nowrap px-3.5 py-1.5 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded-lg text-xs font-bold text-on-surface transition-all active:scale-95 cursor-pointer">Show All</button>
         </div>
-        <span class="text-label-caps text-on-surface-variant flex items-center gap-1">
+        <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
           <span data-i18n="c_engine_footer">C Engine · QuickSort · Sector-Neutral Sigmoid</span>
           <span class="info-tooltip" data-term="Sector-Neutral Sigmoid Z-Score" tabindex="0">i</span>
         </span>
@@ -283,32 +304,32 @@ tailwind.config = {
     </div>
 
     <!-- Backtesting Panel -->
-    <div id="backtest-panel" class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] mt-6 p-6 space-y-6">
+    <div id="backtest-panel" class="aq-card overflow-hidden mt-6 p-6 space-y-6">
       <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-outline-variant pb-4 gap-4">
         <div>
           <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">analytics</span>
             <span data-i18n="bt_title">Historical Backtesting Dashboard</span>
           </h3>
-          <p class="text-xs text-on-surface-variant mt-1" data-i18n="bt_subtitle">Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.</p>
+          <p class="text-xs sm:text-sm text-on-surface-variant mt-1" data-i18n="bt_subtitle">Simulate the trailing returns of the top-ranked equities in an equally weighted portfolio against the SPY benchmark.</p>
         </div>
         
         <div class="flex items-center gap-3 flex-shrink-0">
           <!-- Time window select -->
-          <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg">
-            <button id="bt-window-3y" onclick="setBacktestWindow('3y')" data-i18n="bt_3y" class="px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
-            <button id="bt-window-5y" onclick="setBacktestWindow('5y')" data-i18n="bt_5y" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
+          <div class="flex bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1">
+            <button id="bt-window-3y" onclick="setBacktestWindow('3y')" data-i18n="bt_3y" class="whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-primary bg-primary/10">3 Years</button>
+            <button id="bt-window-5y" onclick="setBacktestWindow('5y')" data-i18n="bt_5y" class="whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5 Years</button>
           </div>
           <!-- Run button -->
-          <button id="run-backtest-btn" disabled onclick="runPortfolioBacktest()" class="bg-primary/20 text-primary border border-primary/30 opacity-50 cursor-not-allowed font-bold text-xs py-1.5 px-4 rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center gap-1.5 active:scale-[.98]">
-            <span class="material-symbols-outlined text-[15px]">monitoring</span>
+          <button id="run-backtest-btn" disabled onclick="runPortfolioBacktest()" class="whitespace-nowrap bg-primary/20 text-primary border border-primary/30 opacity-50 cursor-not-allowed font-bold text-xs sm:text-sm py-2 px-4 rounded-xl hover:bg-primary hover:text-on-primary transition-all flex items-center gap-1.5 active:scale-[.98]">
+            <span class="material-symbols-outlined text-[16px]">monitoring</span>
             <span data-i18n="btn_run_backtest">Run Trailing Backtest</span>
           </button>
         </div>
       </div>
       
       <!-- State Boundary Helper message -->
-      <div id="backtest-helper-msg" class="text-center py-6 text-on-surface-variant/80 text-xs bg-surface-container-low rounded-lg border border-dashed border-outline-variant flex flex-col items-center justify-center gap-2">
+      <div id="backtest-helper-msg" class="text-center py-8 text-on-surface-variant/80 text-xs sm:text-sm bg-surface-container-low rounded-xl border border-dashed border-outline-variant flex flex-col items-center justify-center gap-2">
         <span class="material-symbols-outlined text-[24px] text-outline">info</span>
         <span data-i18n="bt_helper_msg">Rank stocks to generate a portfolio before running a backtest.</span>
       </div>
@@ -316,12 +337,12 @@ tailwind.config = {
       <!-- Backtest Content (hidden initially) -->
       <div id="backtest-content" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
         <!-- Left 2 cols for Chart -->
-        <div class="md:col-span-2 bg-surface-container-low border border-outline-variant rounded-xl p-4 flex flex-col justify-between" style="min-height: 320px;">
+        <div class="md:col-span-2 bg-surface-container-low border border-outline-variant rounded-xl p-5 flex flex-col justify-between" style="min-height: 320px;">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="bt_chart_title">Trailing Cumulative Performance</span>
-            <div class="flex items-center gap-4 text-[11px] font-bold">
-              <span class="flex items-center gap-1.5 text-secondary"><span class="w-2 h-2 rounded-full bg-secondary inline-block"></span><span data-i18n="lbl_portfolio">Portfolio</span></span>
-              <span class="flex items-center gap-1.5 text-primary"><span class="w-2 h-2 rounded-full bg-primary inline-block"></span><span data-i18n="lbl_spy_bench">SPY Benchmark</span></span>
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant" data-i18n="bt_chart_title">Trailing Cumulative Performance</span>
+            <div class="flex items-center gap-4 text-xs font-bold">
+              <span class="flex items-center gap-1.5 text-secondary"><span class="w-2.5 h-2.5 rounded-full bg-secondary inline-block"></span><span data-i18n="lbl_portfolio">Portfolio</span></span>
+              <span class="flex items-center gap-1.5 text-primary"><span class="w-2.5 h-2.5 rounded-full bg-primary inline-block"></span><span data-i18n="lbl_spy_bench">SPY Benchmark</span></span>
             </div>
           </div>
           <div class="relative flex-1" style="height: 250px;" dir="ltr">
@@ -331,49 +352,49 @@ tailwind.config = {
         
         <!-- Right col for KPIs -->
         <div class="space-y-4">
-          <span class="text-label-caps text-on-surface-variant font-bold block" data-i18n="bt_key_metrics">Key Portfolio Metrics</span>
+          <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant block" data-i18n="bt_key_metrics">Key Portfolio Metrics</span>
           
           <!-- Sharpe Grid -->
-          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 space-y-2">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-2.5">
             <div class="flex justify-between items-center">
-              <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_sharpe_ratio">Annualized Sharpe Ratio</span><span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span></span>
-              <span class="material-symbols-outlined text-[16px] text-primary">assessment</span>
+              <span class="text-xs sm:text-sm text-on-surface-variant flex items-center"><span data-i18n="lbl_sharpe_ratio">Annualized Sharpe Ratio</span><span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span></span>
+              <span class="material-symbols-outlined text-[18px] text-primary">assessment</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 mt-1">
-              <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
+            <div class="grid grid-cols-2 gap-2.5 mt-1">
+              <div class="bg-secondary/5 border border-secondary/20 rounded-xl p-2.5 text-center">
+                <span class="text-[11px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
                 <div id="kpi-port-sharpe" class="text-headline-sm font-bold text-on-surface mt-0.5 num-ltr">--</div>
               </div>
-              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
+              <div class="bg-primary/5 border border-primary/20 rounded-xl p-2.5 text-center">
+                <span class="text-[11px] text-primary uppercase font-bold tracking-wide">SPY</span>
                 <div id="kpi-spy-sharpe" class="text-headline-sm font-bold text-on-surface-variant mt-0.5 num-ltr">--</div>
               </div>
             </div>
           </div>
 
           <!-- Max Drawdown Grid -->
-          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 space-y-2">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-2.5">
             <div class="flex justify-between items-center">
-              <span class="text-xs text-on-surface-variant flex items-center"><span data-i18n="lbl_max_drawdown">Maximum Drawdown</span><span class="info-tooltip" data-term="MDD" tabindex="0">i</span></span>
-              <span class="material-symbols-outlined text-[16px] text-tertiary">trending_down</span>
+              <span class="text-xs sm:text-sm text-on-surface-variant flex items-center"><span data-i18n="lbl_max_drawdown">Maximum Drawdown</span><span class="info-tooltip" data-term="MDD" tabindex="0">i</span></span>
+              <span class="material-symbols-outlined text-[18px] text-tertiary">trending_down</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 mt-1">
-              <div class="bg-secondary/5 border border-secondary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
+            <div class="grid grid-cols-2 gap-2.5 mt-1">
+              <div class="bg-secondary/5 border border-secondary/20 rounded-xl p-2.5 text-center">
+                <span class="text-[11px] text-secondary uppercase font-bold tracking-wide" data-i18n="lbl_portfolio">Portfolio</span>
                 <div id="kpi-port-max-dd" class="text-headline-sm font-bold text-on-surface mt-0.5 num-ltr">--</div>
               </div>
-              <div class="bg-primary/5 border border-primary/20 rounded-lg p-2 text-center">
-                <span class="text-[10px] text-primary uppercase font-bold tracking-wide">SPY</span>
+              <div class="bg-primary/5 border border-primary/20 rounded-xl p-2.5 text-center">
+                <span class="text-[11px] text-primary uppercase font-bold tracking-wide">SPY</span>
                 <div id="kpi-spy-max-dd" class="text-headline-sm font-bold text-on-surface-variant mt-0.5 num-ltr">--</div>
               </div>
             </div>
           </div>
 
           <!-- Alpha Grid -->
-          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3.5 flex justify-between items-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex justify-between items-center">
             <div>
-              <span class="text-[10px] text-secondary uppercase font-bold tracking-wide flex items-center"><span data-i18n="lbl_excess_alpha">Total Excess Return (Alpha)</span><span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span></span>
-              <div id="kpi-total-alpha" class="text-headline-md font-bold text-secondary mt-1 num-ltr">--</div>
+              <span class="text-[11px] text-secondary uppercase font-bold tracking-wide flex items-center"><span data-i18n="lbl_excess_alpha">Total Excess Return (Alpha)</span><span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span></span>
+              <div id="kpi-total-alpha" class="text-2xl xl:text-3xl font-extrabold text-secondary mt-1 tracking-tight num-ltr">--</div>
             </div>
             <div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center border border-secondary/20">
               <span class="material-symbols-outlined text-secondary text-[24px]">insights</span>
@@ -387,40 +408,40 @@ tailwind.config = {
   <!-- ===================================================================== -->
   <!-- WORKSPACE 2: PORTFOLIO INTELLIGENCE (Multi-Currency + Israeli Tax)    -->
   <!-- ===================================================================== -->
-  <div id="workspace-portfolio" class="hidden max-w-7xl mx-auto space-y-6 pb-12 fade-in">
+  <div id="workspace-portfolio" class="hidden max-w-[1560px] mx-auto space-y-6 pb-12 fade-in">
     <!-- Portfolio Header Bar + Two-Screen Progressive Disclosure Switcher -->
-    <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-outline-variant pb-4">
-      <div>
-        <div class="flex flex-wrap items-center gap-2.5">
-          <span class="material-symbols-outlined text-primary text-[24px]">account_balance_wallet</span>
+    <div class="flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 border-b border-outline-variant pb-5">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-[26px]">account_balance_wallet</span>
           <h2 class="text-headline-lg text-on-surface font-bold" data-i18n="pf_title">Portfolio Intelligence &amp; Tax Engine</h2>
-          <span id="pf-as-of-badge" class="px-2.5 py-0.5 rounded-full bg-surface-container border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">As of --</span>
+          <span id="pf-as-of-badge" class="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-xs font-mono text-on-surface-variant num-ltr whitespace-nowrap">As of --</span>
         </div>
-        <p class="text-xs text-on-surface-variant mt-1" data-i18n="pf_subtitle">Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.</p>
+        <p class="text-xs sm:text-sm text-on-surface-variant mt-1.5" data-i18n="pf_subtitle">Multi-currency FIFO tax lot accounting (Part E Section 88), exact TWR vs. XIRR attribution, and cash-flow matched benchmark simulation.</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2.5">
+      <div class="flex flex-wrap xl:flex-nowrap items-center gap-2.5 flex-shrink-0">
         <!-- Two-Tier Progressive Disclosure Switcher (Standard Overview vs. Advanced Quant & Tax Lab) -->
-        <div class="flex items-center bg-surface-container border border-outline-variant p-1 rounded-xl shadow-sm">
-          <button id="pf-tier-standard" onclick="setPortfolioViewTier('standard')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[15px]">dashboard</span>
+        <div class="inline-flex flex-nowrap items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1 shadow-sm">
+          <button id="pf-tier-standard" onclick="setPortfolioViewTier('standard')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">dashboard</span>
             <span data-i18n="tier_standard">Standard Overview</span>
           </button>
-          <button id="pf-tier-advanced" onclick="setPortfolioViewTier('advanced')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[15px]">biotech</span>
+          <button id="pf-tier-advanced" onclick="setPortfolioViewTier('advanced')" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">biotech</span>
             <span data-i18n="tier_advanced">Advanced Quant &amp; Tax Lab</span>
           </button>
         </div>
 
-        <button onclick="openTxDrawer()" class="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-[.98]">
-          <span class="material-symbols-outlined text-[15px]">add_card</span>
+        <button onclick="openTxDrawer()" class="aq-btn-primary whitespace-nowrap px-4 py-2 text-sm rounded-xl flex items-center gap-1.5 active:scale-[.98]">
+          <span class="material-symbols-outlined text-[17px]">add_card</span>
           <span data-i18n="btn_open_tx_drawer">+ Record Transaction / CSV</span>
         </button>
-        <button onclick="seedDemoPortfolio()" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[14px] text-secondary">science</span>
+        <button onclick="seedDemoPortfolio()" class="whitespace-nowrap px-4 py-2 text-sm rounded-xl bg-surface-container hover:bg-surface-bright border border-outline-variant font-semibold text-on-surface transition-all flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-secondary">science</span>
           <span data-i18n="btn_seed_demo">Seed Sample Ledger</span>
         </button>
-        <button onclick="refreshPortfolioWorkspace()" id="pf-refresh-btn" class="px-3 py-1.5 rounded-lg bg-primary/15 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 text-xs font-bold transition-all flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[14px]">refresh</span>
+        <button onclick="refreshPortfolioWorkspace()" id="pf-refresh-btn" class="whitespace-nowrap px-4 py-2 text-sm rounded-xl bg-primary/15 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 font-semibold transition-all flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">refresh</span>
           <span data-i18n="btn_refresh">Refresh</span>
         </button>
       </div>
@@ -431,19 +452,19 @@ tailwind.config = {
     <!-- =================================================================== -->
     <div id="pf-view-standard" class="space-y-6">
       <!-- 1. EXECUTIVE KPI RIBBON (4 Cards) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <!-- Card 1: Total Portfolio NAV (Gross & Net After Tax) -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="aq-card p-6 flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
-              <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_total_nav">Total Portfolio NAV</span>
                 <span class="info-tooltip" data-term="NAV" tabindex="0">i</span>
               </span>
-              <span class="material-symbols-outlined text-primary text-[18px]">account_balance</span>
+              <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
             </div>
-            <div id="pf-kpi-nav" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight num-ltr">--</div>
-            <div class="flex items-center gap-1.5 mt-1 text-xs">
+            <div id="pf-kpi-nav" class="text-2xl xl:text-3xl font-extrabold text-on-surface mt-2 tracking-tight num-ltr">--</div>
+            <div class="flex items-center gap-1.5 mt-1.5 text-xs sm:text-sm">
               <span class="text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_net_after_tax">Net After Tax:</span>
                 <span class="info-tooltip" data-term="Net Liquidation NAV" tabindex="0">i</span>
@@ -451,30 +472,30 @@ tailwind.config = {
               <span id="pf-kpi-net-nav" class="font-bold text-secondary font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
+          <div class="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-outline-variant text-xs sm:text-sm">
             <div>
-              <span class="text-on-surface-variant block" data-i18n="kpi_invested_holdings">Invested Holdings</span>
-              <span id="pf-kpi-mv" class="font-bold text-on-surface font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_invested_holdings">Invested Holdings</span>
+              <span id="pf-kpi-mv" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">--</span>
             </div>
             <div class="text-end">
-              <span class="text-on-surface-variant block" data-i18n="kpi_cash_balance">Cash Balance</span>
-              <span id="pf-kpi-cash" class="font-bold text-on-surface font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_cash_balance">Cash Balance</span>
+              <span id="pf-kpi-cash" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">--</span>
             </div>
           </div>
         </div>
 
         <!-- Card 2: 3-Bucket Capital Accounting (Invested, Available Cash, Withdrawn) -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="aq-card p-6 flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
-              <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_invested_cap">Total Invested Capital</span>
                 <span class="info-tooltip" data-term="Total Invested Capital" tabindex="0">i</span>
               </span>
-              <span class="material-symbols-outlined text-primary text-[18px]">payments</span>
+              <span class="material-symbols-outlined text-primary text-[20px]">payments</span>
             </div>
-            <div id="pf-kpi-invested" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight num-ltr">--</div>
-            <div class="flex items-center gap-1.5 mt-1 text-xs">
+            <div id="pf-kpi-invested" class="text-2xl xl:text-3xl font-extrabold text-on-surface mt-2 tracking-tight num-ltr">--</div>
+            <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-xs sm:text-sm">
               <span class="text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_avail_cash">Available Cash:</span>
                 <span class="info-tooltip" data-term="Available Cash" tabindex="0">i</span>
@@ -488,115 +509,115 @@ tailwind.config = {
               <span id="pf-kpi-withdrawn" class="font-bold text-tertiary font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
+          <div class="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-outline-variant text-xs sm:text-sm">
             <div>
-              <span class="text-on-surface-variant flex items-center">
+              <span class="text-on-surface-variant flex items-center text-xs">
                 <span data-i18n="kpi_wealth_created">Wealth Created</span>
                 <span class="info-tooltip" data-term="Total Wealth Created" tabindex="0">i</span>
               </span>
-              <span id="pf-kpi-wealth" class="font-bold font-mono num-ltr">--</span>
+              <span id="pf-kpi-wealth" class="font-bold font-mono num-ltr mt-0.5 block">--</span>
             </div>
             <div class="text-end">
-              <span class="text-on-surface-variant flex items-center justify-end">
+              <span class="text-on-surface-variant flex items-center justify-end text-xs">
                 <span data-i18n="kpi_roi_invested">ROI on Capital</span>
                 <span class="info-tooltip" data-term="ROI on Invested Capital" tabindex="0">i</span>
               </span>
-              <span id="pf-kpi-roi" class="font-bold font-mono num-ltr">--</span>
+              <span id="pf-kpi-roi" class="font-bold font-mono num-ltr mt-0.5 block">--</span>
             </div>
           </div>
         </div>
 
         <!-- Card 3: Time-Weighted Return (TWR) vs Money-Weighted Return (XIRR) -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="aq-card p-6 flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
-              <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_twr_vs_mwr">TWR vs. MWR (XIRR)</span>
                 <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
               </span>
-              <span class="material-symbols-outlined text-secondary text-[18px]">trending_up</span>
+              <span class="material-symbols-outlined text-secondary text-[20px]">trending_up</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 mt-1.5">
+            <div class="grid grid-cols-2 gap-3 mt-2">
               <div>
-                <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center">
+                <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center">
                   <span data-i18n="kpi_cum_twr">Cumulative TWR</span>
                 </span>
-                <div id="pf-kpi-twr" class="text-xl font-extrabold text-on-surface tracking-tight num-ltr">--</div>
+                <div id="pf-kpi-twr" class="text-2xl xl:text-3xl font-extrabold text-on-surface tracking-tight num-ltr mt-0.5">--</div>
               </div>
               <div class="border-s border-outline-variant ps-3">
-                <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center">
+                <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center">
                   <span data-i18n="kpi_xirr_ann">XIRR (Ann.)</span>
                   <span class="info-tooltip" data-term="MWR / XIRR" tabindex="0">i</span>
                 </span>
-                <div id="pf-kpi-xirr" class="text-xl font-extrabold text-primary tracking-tight num-ltr">--</div>
+                <div id="pf-kpi-xirr" class="text-2xl xl:text-3xl font-extrabold text-primary tracking-tight num-ltr mt-0.5">--</div>
               </div>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
+          <div class="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-outline-variant text-xs sm:text-sm">
             <div>
-              <span class="text-on-surface-variant block" data-i18n="kpi_ann_twr">Annualized TWR</span>
-              <span id="pf-kpi-twr-ann" class="font-bold text-on-surface font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_ann_twr">Annualized TWR</span>
+              <span id="pf-kpi-twr-ann" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">--</span>
             </div>
             <div class="text-end">
-              <span class="text-on-surface-variant block" data-i18n="kpi_mod_dietz">Modified Dietz</span>
-              <span id="pf-kpi-dietz" class="font-bold text-on-surface font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_mod_dietz">Modified Dietz</span>
+              <span id="pf-kpi-dietz" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">--</span>
             </div>
           </div>
         </div>
 
         <!-- Card 4: Unrealized PnL (Gross & Net) + Realized YTD PnL -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="aq-card p-6 flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
-              <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_unr_ytd_pnl">Unrealized &amp; YTD PnL</span>
                 <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
               </span>
-              <span class="material-symbols-outlined text-primary text-[18px]">monitoring</span>
+              <span class="material-symbols-outlined text-primary text-[20px]">monitoring</span>
             </div>
-            <div id="pf-kpi-unr-gross" class="text-2xl font-extrabold text-on-surface mt-1.5 tracking-tight num-ltr">--</div>
-            <div class="flex items-center gap-1.5 mt-1 text-xs">
+            <div id="pf-kpi-unr-gross" class="text-2xl xl:text-3xl font-extrabold text-on-surface mt-2 tracking-tight num-ltr">--</div>
+            <div class="flex items-center gap-1.5 mt-1.5 text-xs sm:text-sm">
               <span class="text-on-surface-variant" data-i18n="kpi_net_unr_after_tax">Net Unrealized (After Tax):</span>
               <span id="pf-kpi-unr-net" class="font-bold text-on-surface font-mono num-ltr">--</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
+          <div class="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-outline-variant text-xs sm:text-sm">
             <div>
-              <span class="text-on-surface-variant block" data-i18n="kpi_real_ytd_pnl">Realized YTD PnL</span>
-              <span id="pf-kpi-real-ytd" class="font-bold text-on-surface font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_real_ytd_pnl">Realized YTD PnL</span>
+              <span id="pf-kpi-real-ytd" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">--</span>
             </div>
             <div class="text-end">
-              <span class="text-on-surface-variant block" data-i18n="kpi_est_liq_tax">Est. Liquidation Tax</span>
-              <span id="pf-kpi-est-tax" class="font-bold text-tertiary font-mono num-ltr">--</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_est_liq_tax">Est. Liquidation Tax</span>
+              <span id="pf-kpi-est-tax" class="font-bold text-tertiary font-mono num-ltr mt-0.5 block">--</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- 2. PRIMARY PERFORMANCE CHART PANEL (Standard TWR View) -->
-      <div id="pf-standard-chart-panel" class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+      <div id="pf-standard-chart-panel" class="aq-card p-6 space-y-4">
         <!-- Top Chart Toolbar: Window Selector + Date Inputs -->
         <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-outline-variant pb-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg" dir="ltr">
-              <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
-              <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
-              <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
-              <button onclick="setPortfolioWindow('YTD')" data-win="YTD" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">YTD</button>
-              <button onclick="setPortfolioWindow('1Y')" data-win="1Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1Y</button>
-              <button onclick="setPortfolioWindow('3Y')" data-win="3Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3Y</button>
-              <button onclick="setPortfolioWindow('5Y')" data-win="5Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5Y</button>
-              <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ALL</button>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="inline-flex flex-nowrap items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1" dir="ltr">
+              <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
+              <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
+              <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
+              <button onclick="setPortfolioWindow('YTD')" data-win="YTD" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">YTD</button>
+              <button onclick="setPortfolioWindow('1Y')" data-win="1Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">1Y</button>
+              <button onclick="setPortfolioWindow('3Y')" data-win="3Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">3Y</button>
+              <button onclick="setPortfolioWindow('5Y')" data-win="5Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">5Y</button>
+              <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary">ALL</button>
             </div>
             <div class="flex items-center gap-1.5 text-xs">
-              <input type="date" id="pf-start-date" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-start-date" class="bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <span class="text-on-surface-variant" data-i18n="lbl_to">to</span>
-              <input type="date" id="pf-end-date" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              <button onclick="applyCustomDateRange('std')" data-i18n="btn_apply" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
+              <input type="date" id="pf-end-date" class="bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <button onclick="applyCustomDateRange('std')" data-i18n="btn_apply" class="whitespace-nowrap px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
             </div>
           </div>
-          <div class="text-xs text-on-surface-variant font-medium flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-primary text-[16px]">show_chart</span>
+          <div class="text-xs sm:text-sm text-on-surface-variant font-medium flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-primary text-[18px]">show_chart</span>
             <span data-i18n="kpi_cum_twr">Cumulative Rebased TWR (%)</span>
             <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
           </div>
@@ -605,69 +626,69 @@ tailwind.config = {
         <!-- Benchmark Selector Bar -->
         <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
-            <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
-            <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
-            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
-            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
+            <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY" class="px-3 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
+            <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ" class="px-3 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
+            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH" class="px-3 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
+            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA" class="px-3 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
             <div id="custom-bench-chips" class="flex items-center gap-1.5 num-ltr"></div>
-            <div class="flex items-center gap-1 ms-1">
-              <input type="text" id="pf-custom-bench-input" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
-              <button onclick="addCustomBenchmark()" data-i18n="btn_add" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
+            <div class="flex items-center gap-1.5 ms-1">
+              <input type="text" id="pf-custom-bench-input" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-36 bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              <button onclick="addCustomBenchmark()" data-i18n="btn_add" class="whitespace-nowrap px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
             </div>
           </div>
-          <div id="pf-chart-subtitle" class="text-[11px] text-on-surface-variant font-mono num-ltr">Window: ALL</div>
+          <div id="pf-chart-subtitle" class="text-xs text-on-surface-variant font-mono num-ltr">Window: ALL</div>
         </div>
 
         <!-- Canvas Container -->
-        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-3" style="height: 340px;" dir="ltr">
+        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-4" style="height: 360px;" dir="ltr">
           <canvas id="portfolio-main-chart"></canvas>
         </div>
       </div>
 
       <!-- 3. FULL-WIDTH HOLDINGS TABLE & EXPANDABLE FIFO TAX LOTS -->
-      <div class="w-full bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
-        <div class="px-5 py-4 border-b border-outline-variant flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+      <div class="w-full aq-card overflow-hidden">
+        <div class="px-6 py-5 border-b border-outline-variant flex flex-col sm:flex-row justify-between sm:items-center gap-2">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[18px]">layers</span>
+              <span class="material-symbols-outlined text-primary text-[20px]">layers</span>
               <span data-i18n="holdings_title">Open Positions &amp; Expandable FIFO Tax Lots</span>
               <span class="info-tooltip" data-term="FIFO Tax Lots" tabindex="0">i</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="holdings_subtitle">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
+            <p class="text-xs sm:text-sm text-on-surface-variant mt-1" data-i18n="holdings_subtitle">Click any position row to inspect individual FIFO purchase lots, FX/CPI base indices, inflationary vs. real gain split, and Section 88 tax liability.</p>
           </div>
           <div class="flex items-center gap-3">
-            <span id="pf-positions-count" class="text-label-caps text-on-surface-variant">0 Open Positions</span>
+            <span id="pf-positions-count" class="text-xs uppercase tracking-wider font-bold text-on-surface-variant">0 Open Positions</span>
           </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-start border-collapse">
             <thead>
-              <tr class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-                <th class="px-4 py-3 text-start" data-i18n="th_ticker_sector">Ticker &amp; Sector</th>
-                <th class="px-3 py-3 text-center">
+              <tr class="bg-surface-container-low border-b border-outline-variant text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                <th class="py-3.5 px-4 text-start" data-i18n="th_ticker_sector">Ticker &amp; Sector</th>
+                <th class="py-3.5 px-4 text-center">
                   <span data-i18n="th_quant_score">Quant Score</span>
                   <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
                 </th>
-                <th class="px-3 py-3 text-center" data-i18n="th_native_ccy">Native CCY</th>
-                <th class="px-3 py-3 text-end" data-i18n="th_quantity">Quantity</th>
-                <th class="px-3 py-3 text-end">
+                <th class="py-3.5 px-4 text-center" data-i18n="th_native_ccy">Native CCY</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_quantity">Quantity</th>
+                <th class="py-3.5 px-4 text-end">
                   <span data-i18n="th_avg_cost">Avg Cost</span>
                   <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
                 </th>
-                <th class="px-3 py-3 text-end" data-i18n="th_curr_price">Current Price</th>
-                <th class="px-4 py-3 text-end" data-i18n="th_mkt_val">Market Value</th>
-                <th class="px-3 py-3 text-end" data-i18n="th_weight">Weight</th>
-                <th class="px-4 py-3 text-end" data-i18n="th_unr_gross">Unrealized Gross</th>
-                <th class="px-3 py-3 text-end">
+                <th class="py-3.5 px-4 text-end" data-i18n="th_curr_price">Current Price</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_mkt_val">Market Value</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_weight">Weight</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_unr_gross">Unrealized Gross</th>
+                <th class="py-3.5 px-4 text-end">
                   <span data-i18n="th_est_tax">Est. Tax (25% Real)</span>
                   <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
                 </th>
-                <th class="px-4 py-3 text-end" data-i18n="th_unr_net">Unrealized Net</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_unr_net">Unrealized Net</th>
               </tr>
             </thead>
             <tbody id="portfolio-holdings-body">
-              <tr><td colspan="11" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="loading_positions">Loading portfolio positions...</td></tr>
+              <tr><td colspan="11" class="px-4 py-10 text-center text-on-surface-variant text-sm" data-i18n="loading_positions">Loading portfolio positions...</td></tr>
             </tbody>
           </table>
         </div>
@@ -675,161 +696,162 @@ tailwind.config = {
     </div>
 
     <!-- =================================================================== -->
-    <!-- SLIDE-OVER TRANSACTION ENTRY & CSV DRAWER                           -->
+    <!-- CENTERED COMMAND MODAL FOR TRANSACTION ENTRY & CSV OPERATIONS       -->
     <!-- =================================================================== -->
-    <div id="pf-tx-drawer-backdrop" onclick="closeTxDrawer()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300"></div>
-    <aside id="pf-tx-drawer" class="fixed top-0 end-0 h-full w-full max-w-md bg-surface-container border-s border-outline-variant z-[55] shadow-2xl transform translate-x-full rtl:-translate-x-full transition-transform duration-300 flex flex-col">
-      <!-- Drawer Header -->
-      <div class="px-5 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
-        <div>
-          <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary text-[18px]">add_card</span>
-            <span data-i18n="tx_form_title">Record Transaction</span>
-          </h3>
-          <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_form_subtitle">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
-        </div>
-        <button type="button" onclick="closeTxDrawer()" class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
-          <span class="material-symbols-outlined text-[18px]">close</span>
-        </button>
-      </div>
-
-      <!-- Drawer Body -->
-      <div class="flex-1 overflow-y-auto p-5 space-y-5">
-        <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-3.5 text-xs">
-          <!-- Quick Action Shortcuts -->
-          <div class="flex flex-wrap items-center gap-1.5 pb-1">
-            <button type="button" onclick="quickSelectTxType('BUY')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Buy</button>
-            <button type="button" onclick="quickSelectTxType('SELL')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Sell</button>
-            <button type="button" onclick="quickSelectTxType('DIVIDEND')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Dividend</button>
-            <button type="button" onclick="quickSelectTxType('CASH_DEPOSIT')" class="px-2.5 py-1 rounded bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-[10px] font-bold text-on-surface transition-colors">Deposit</button>
-            <button type="button" onclick="quickSelectWithdrawal()" class="px-2.5 py-1 rounded bg-tertiary/15 hover:bg-tertiary/25 border border-tertiary/40 text-[10px] font-bold text-tertiary flex items-center gap-1 transition-colors">
-              <span class="material-symbols-outlined text-[13px]">payments</span>
-              <span data-i18n="btn_quick_withdraw">Withdraw Capital</span>
-            </button>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_date">Date</label>
-              <input type="date" id="tx-date" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_action_type">Action Type</label>
-              <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
-                <option value="DIVIDEND">DIVIDEND</option>
-                <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
-                <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_ticker_sym">Ticker Symbol</label>
-              <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_currency">Currency</label>
-              <select id="tx-currency" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary">
-                <option value="AUTO" data-i18n="opt_ccy_auto">Auto (.TA → ILS, else USD)</option>
-                <option value="USD">USD ($)</option>
-                <option value="ILS">ILS (₪)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="th_quantity">Quantity</label>
-              <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_unit_price">Unit Price</label>
-              <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-            </div>
-            <div>
-              <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_fee_comm">Fee / Comm.</label>
-              <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-            </div>
-          </div>
-
+    <div id="pf-tx-modal" class="fixed inset-0 z-[9950] hidden items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md opacity-0 transition-opacity duration-200" onclick="if(event.target===this) closeTxDrawer()">
+      <div id="pf-tx-dialog" class="aq-card w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-200">
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low/80">
           <div>
-            <label class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1" data-i18n="lbl_notes_opt">Notes (Optional)</label>
-            <input type="text" id="tx-notes" data-i18n-placeholder="ph_tx_notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container-low border border-outline-variant rounded-md px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary" />
+            <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary text-[20px]">add_card</span>
+              <span data-i18n="tx_form_title">Record Transaction</span>
+            </h3>
+            <p class="text-xs sm:text-sm text-on-surface-variant mt-0.5" data-i18n="tx_form_subtitle">Add equity trades, dividends, or cash movements to the persistent ledger.</p>
           </div>
-
-          <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-md"></div>
-
-          <button type="submit" id="tx-submit-btn" data-i18n="btn_commit_tx" class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold text-xs py-2.5 px-4 rounded-lg transition-all shadow-sm">
-            + Commit Transaction to Ledger
+          <button type="button" onclick="closeTxDrawer()" class="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[18px]">close</span>
           </button>
-        </form>
+        </div>
 
-        <!-- CSV Import / Export / Clear Controls -->
-        <div class="border-t border-outline-variant pt-4 space-y-2.5">
-          <span class="text-[10px] font-bold uppercase text-on-surface-variant block" data-i18n="lbl_batch_csv">Batch CSV Operations</span>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="exportPortfolioCsv()" class="px-3 py-2 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-all flex items-center justify-center gap-1.5">
-              <span class="material-symbols-outlined text-[14px]">download</span>
-              <span data-i18n="btn_export_csv">Export CSV</span>
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-5">
+          <form id="pf-tx-form" onsubmit="submitPortfolioTransaction(event)" class="space-y-4 text-xs sm:text-sm">
+            <!-- Quick Action Shortcuts -->
+            <div class="flex flex-wrap items-center gap-2 pb-1">
+              <button type="button" onclick="quickSelectTxType('BUY')" class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-colors">Buy</button>
+              <button type="button" onclick="quickSelectTxType('SELL')" class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-colors">Sell</button>
+              <button type="button" onclick="quickSelectTxType('DIVIDEND')" class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-colors">Dividend</button>
+              <button type="button" onclick="quickSelectTxType('CASH_DEPOSIT')" class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-on-surface transition-colors">Deposit</button>
+              <button type="button" onclick="quickSelectWithdrawal()" class="px-3 py-1.5 rounded-lg bg-tertiary/15 hover:bg-tertiary/25 border border-tertiary/40 text-xs font-bold text-tertiary flex items-center gap-1.5 transition-colors">
+                <span class="material-symbols-outlined text-[15px]">payments</span>
+                <span data-i18n="btn_quick_withdraw">Withdraw Capital</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_date">Date</label>
+                <input type="date" id="tx-date" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_action_type">Action Type</label>
+                <select id="tx-type" onchange="handleTxTypeChange()" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary">
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                  <option value="DIVIDEND">DIVIDEND</option>
+                  <option value="CASH_DEPOSIT">CASH_DEPOSIT</option>
+                  <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_ticker_sym">Ticker Symbol</label>
+                <input type="text" id="tx-ticker" placeholder="e.g. AAPL, LUMI.TA" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_currency">Currency</label>
+                <select id="tx-currency" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary">
+                  <option value="AUTO" data-i18n="opt_ccy_auto">Auto (.TA → ILS, else USD)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="ILS">ILS (₪)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="th_quantity">Quantity</label>
+                <input type="number" id="tx-qty" step="any" min="0.0001" placeholder="10" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_unit_price">Unit Price</label>
+                <input type="number" id="tx-price" step="any" min="0" placeholder="150.00" required class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+              <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_fee_comm">Fee / Comm.</label>
+                <input type="number" id="tx-fee" step="any" min="0" value="0" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5" data-i18n="lbl_notes_opt">Notes (Optional)</label>
+              <input type="text" id="tx-notes" data-i18n-placeholder="ph_tx_notes" placeholder="Strategy / tax lot memo" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary" />
+            </div>
+
+            <div id="tx-feedback" class="hidden text-xs px-3 py-2 rounded-xl"></div>
+
+            <button type="submit" id="tx-submit-btn" data-i18n="btn_commit_tx" class="aq-btn-primary w-full text-sm py-3 px-4 rounded-xl active:scale-[.99]">
+              + Commit Transaction to Ledger
             </button>
-            <label class="px-3 py-2 rounded-lg bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-              <span class="material-symbols-outlined text-[14px]">upload</span>
-              <span data-i18n="btn_import_csv">Import CSV</span>
-              <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
-            </label>
+          </form>
+
+          <!-- CSV Import / Export / Clear Controls -->
+          <div class="border-t border-outline-variant pt-5 space-y-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant block" data-i18n="lbl_batch_csv">Batch CSV Operations</span>
+            <div class="grid grid-cols-2 gap-3">
+              <button type="button" onclick="exportPortfolioCsv()" class="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs sm:text-sm font-semibold text-on-surface transition-all flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                <span data-i18n="btn_export_csv">Export CSV</span>
+              </button>
+              <label class="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs sm:text-sm font-semibold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">upload</span>
+                <span data-i18n="btn_import_csv">Import CSV</span>
+                <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
+              </label>
+            </div>
+            <button type="button" onclick="clearPortfolioLedger()" data-i18n="btn_clear_tx" class="w-full px-4 py-2.5 rounded-xl bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs sm:text-sm font-semibold text-tertiary transition-all">
+              Clear All Transactions
+            </button>
+            <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
+            <div id="pf-csv-diagnostic-panel" class="hidden rounded-xl border p-3.5 text-xs space-y-2"></div>
           </div>
-          <button type="button" onclick="clearPortfolioLedger()" data-i18n="btn_clear_tx" class="w-full px-3 py-2 rounded-lg bg-tertiary/10 hover:bg-tertiary/20 border border-tertiary/30 text-xs font-bold text-tertiary transition-all">
-            Clear All Transactions
-          </button>
-          <!-- CSV Import Diagnostic Banner / Skipped Rows Inspector -->
-          <div id="pf-csv-diagnostic-panel" class="hidden rounded-lg border p-3 text-xs space-y-2"></div>
         </div>
       </div>
-    </aside>
+    </div>
 
     <!-- =================================================================== -->
     <!-- SCREEN 2: ADVANCED QUANT & TAX LAB (Hidden by Default)              -->
     <!-- =================================================================== -->
     <div id="pf-view-advanced" class="hidden space-y-6">
       <!-- 1. DEEP-DIVE CHART & WHAT-IF OPPORTUNITY SIMULATOR PANEL -->
-      <div id="pf-adv-chart-panel" class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
+      <div id="pf-adv-chart-panel" class="aq-card p-6 space-y-4">
         <!-- Top Chart Toolbar: Window Selector + Date Inputs + Mode Switcher -->
-        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-3 border-b border-outline-variant pb-4">
+        <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-4 border-b border-outline-variant pb-4">
           <!-- Time-Slice Window Buttons + Custom Dates -->
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="flex bg-surface-container-low border border-outline-variant p-0.5 rounded-lg" dir="ltr">
-              <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
-              <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
-              <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
-              <button onclick="setPortfolioWindow('YTD')" data-win="YTD" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">YTD</button>
-              <button onclick="setPortfolioWindow('1Y')" data-win="1Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">1Y</button>
-              <button onclick="setPortfolioWindow('3Y')" data-win="3Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">3Y</button>
-              <button onclick="setPortfolioWindow('5Y')" data-win="5Y" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">5Y</button>
-              <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">ALL</button>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="inline-flex flex-nowrap items-center bg-surface-container-low border border-outline-variant p-1 rounded-xl gap-1" dir="ltr">
+              <button onclick="setPortfolioWindow('1M')" data-win="1M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">1M</button>
+              <button onclick="setPortfolioWindow('3M')" data-win="3M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">3M</button>
+              <button onclick="setPortfolioWindow('6M')" data-win="6M" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">6M</button>
+              <button onclick="setPortfolioWindow('YTD')" data-win="YTD" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">YTD</button>
+              <button onclick="setPortfolioWindow('1Y')" data-win="1Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">1Y</button>
+              <button onclick="setPortfolioWindow('3Y')" data-win="3Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">3Y</button>
+              <button onclick="setPortfolioWindow('5Y')" data-win="5Y" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">5Y</button>
+              <button onclick="setPortfolioWindow('ALL')" data-win="ALL" class="pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary">ALL</button>
             </div>
             <div class="flex items-center gap-1.5 text-xs">
-              <input type="date" id="pf-start-date-adv" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <input type="date" id="pf-start-date-adv" class="bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
               <span class="text-on-surface-variant" data-i18n="lbl_to">to</span>
-              <input type="date" id="pf-end-date-adv" class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
-              <button onclick="applyCustomDateRange('adv')" data-i18n="btn_apply" class="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
+              <input type="date" id="pf-end-date-adv" class="bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary num-ltr" />
+              <button onclick="applyCustomDateRange('adv')" data-i18n="btn_apply" class="whitespace-nowrap px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Apply</button>
             </div>
           </div>
 
-          <!-- Chart Mode Switcher -->
-          <div class="flex flex-wrap items-center bg-surface-container-low border border-outline-variant p-0.5 rounded-lg gap-0.5">
-            <div class="flex items-center">
-              <button id="pf-mode-TWR" onclick="setPortfolioChartMode('TWR')" data-i18n="mode_twr" class="px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary">Rebased TWR (%)</button>
+          <!-- Chart Mode Switcher (Single-Row Non-Wrapping Segmented Control) -->
+          <div class="inline-flex flex-nowrap items-center bg-surface-container-low p-1 rounded-xl border border-outline-variant gap-1 overflow-x-auto max-w-full">
+            <div class="inline-flex items-center flex-shrink-0">
+              <button id="pf-mode-TWR" onclick="setPortfolioChartMode('TWR')" data-i18n="mode_twr" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary">Rebased TWR (%)</button>
               <span class="info-tooltip me-1" data-term="TWR" tabindex="0">i</span>
             </div>
-            <div class="flex items-center">
-              <button id="pf-mode-WHAT_IF" onclick="setPortfolioChartMode('WHAT_IF')" data-i18n="mode_whatif" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">What-If Simulator (NAV)</button>
+            <div class="inline-flex items-center flex-shrink-0">
+              <button id="pf-mode-WHAT_IF" onclick="setPortfolioChartMode('WHAT_IF')" data-i18n="mode_whatif" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">What-If Simulator (NAV)</button>
               <span class="info-tooltip me-1" data-term="What-If Opportunity Simulator" tabindex="0">i</span>
             </div>
-            <div class="flex items-center">
-              <button id="pf-mode-DRAWDOWN" onclick="setPortfolioChartMode('DRAWDOWN')" data-i18n="mode_drawdown" class="px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">Underwater Drawdown (%)</button>
+            <div class="inline-flex items-center flex-shrink-0">
+              <button id="pf-mode-DRAWDOWN" onclick="setPortfolioChartMode('DRAWDOWN')" data-i18n="mode_drawdown" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface">Underwater Drawdown (%)</button>
               <span class="info-tooltip me-1" data-term="Underwater Drawdown" tabindex="0">i</span>
             </div>
           </div>
@@ -838,22 +860,22 @@ tailwind.config = {
         <!-- Benchmark Selector Bar -->
         <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-xs">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="text-label-caps text-on-surface-variant font-bold" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
-            <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY-adv" class="px-2.5 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
-            <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ-adv" class="px-2.5 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
-            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
-            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA-adv" class="px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant" data-i18n="lbl_benchmarks">Benchmarks (Max 3):</span>
+            <button onclick="toggleBenchmark('SPY')" id="bench-chip-SPY-adv" class="px-3 py-1 rounded-full border border-primary bg-primary/15 text-primary font-bold text-xs transition-all num-ltr">SPY ✓</button>
+            <button onclick="toggleBenchmark('QQQ')" id="bench-chip-QQQ-adv" class="px-3 py-1 rounded-full border border-secondary bg-secondary/15 text-secondary font-bold text-xs transition-all num-ltr">QQQ ✓</button>
+            <button onclick="toggleBenchmark('SMH')" id="bench-chip-SMH-adv" class="px-3 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">SMH</button>
+            <button onclick="toggleBenchmark('LUMI.TA')" id="bench-chip-LUMI.TA-adv" class="px-3 py-1 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant font-bold text-xs transition-all num-ltr">LUMI.TA</button>
             <div id="custom-bench-chips-adv" class="flex items-center gap-1.5 num-ltr"></div>
-            <div class="flex items-center gap-1 ms-1">
-              <input type="text" id="pf-custom-bench-input-adv" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-32 bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
-              <button onclick="addCustomBenchmark('adv')" data-i18n="btn_add" class="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
+            <div class="flex items-center gap-1.5 ms-1">
+              <input type="text" id="pf-custom-bench-input-adv" data-i18n-placeholder="ph_custom_bench" placeholder="+ Ticker (e.g. AAPL)" class="w-36 bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1 text-xs text-on-surface uppercase focus:outline-none focus:border-primary num-ltr" />
+              <button onclick="addCustomBenchmark('adv')" data-i18n="btn_add" class="whitespace-nowrap px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-xs font-bold text-primary transition-all">Add</button>
             </div>
           </div>
-          <div id="pf-adv-chart-subtitle" class="text-[11px] text-on-surface-variant font-mono num-ltr">Window: ALL</div>
+          <div id="pf-adv-chart-subtitle" class="text-xs text-on-surface-variant font-mono num-ltr">Window: ALL</div>
         </div>
 
         <!-- Canvas Container -->
-        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-3" style="height: 340px;" dir="ltr">
+        <div class="relative w-full bg-surface-container-low border border-outline-variant rounded-xl p-4" style="height: 360px;" dir="ltr">
           <canvas id="portfolio-adv-chart"></canvas>
         </div>
 
@@ -861,55 +883,55 @@ tailwind.config = {
         <div id="pf-whatif-banner" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 pt-1"></div>
 
         <!-- Slice Risk KPI Strip (7 Institutional Metrics — Revealed in Advanced Quant & Tax Lab) -->
-        <div id="pf-slice-risk-strip" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-outline-variant">
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+        <div id="pf-slice-risk-strip" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-3 border-t border-outline-variant">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_ann_twr">Annualized TWR</span>
               <span class="info-tooltip" data-term="TWR" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-ann-ret" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-ann-ret" class="text-sm sm:text-base font-bold text-on-surface font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_volatility">Volatility (Ann.)</span>
               <span class="info-tooltip" data-term="Annualized Volatility" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-vol" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-vol" class="text-sm sm:text-base font-bold text-on-surface font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_sharpe">Sharpe Ratio</span>
               <span class="info-tooltip" data-term="Sharpe Ratio" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-sharpe" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-sharpe" class="text-sm sm:text-base font-bold text-primary font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_sortino">Sortino Ratio</span>
               <span class="info-tooltip" data-term="Sortino Ratio" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-sortino" class="text-sm font-bold text-primary font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-sortino" class="text-sm sm:text-base font-bold text-primary font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_beta_bench">Beta vs Bench</span>
               <span class="info-tooltip" data-term="Beta" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-beta" class="text-sm font-bold text-on-surface font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-beta" class="text-sm sm:text-base font-bold text-on-surface font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_jensens_alpha">Jensen's Alpha</span>
               <span class="info-tooltip" data-term="Jensen's Alpha" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-alpha" class="text-sm font-bold text-secondary font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-alpha" class="text-sm sm:text-base font-bold text-secondary font-mono mt-1 block num-ltr">--</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-center">
-            <span class="text-[10px] text-on-surface-variant uppercase font-bold flex items-center justify-center">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 text-center">
+            <span class="text-xs text-on-surface-variant uppercase font-bold flex items-center justify-center">
               <span data-i18n="kpi_max_dd">Max Drawdown</span>
               <span class="info-tooltip" data-term="MDD" tabindex="0">i</span>
             </span>
-            <span id="pf-slice-maxdd" class="text-sm font-bold text-tertiary font-mono mt-0.5 block num-ltr">--</span>
+            <span id="pf-slice-maxdd" class="text-sm sm:text-base font-bold text-tertiary font-mono mt-1 block num-ltr">--</span>
           </div>
         </div>
       </div>
@@ -917,23 +939,23 @@ tailwind.config = {
       <!-- 2. STATUTORY ISRAELI TAX CARD & ILS RETURN ATTRIBUTION -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left 1 Col: Israeli Tax Summary Card (Always ILS Statutory Reporting) -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col justify-between">
+        <div class="aq-card p-6 flex flex-col justify-between">
           <div>
             <div class="flex justify-between items-center">
-              <span class="text-label-caps text-on-surface-variant font-bold flex items-center">
+              <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_il_tax_summary">Israeli Tax Summary (₪ ILS)</span>
                 <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span>
               </span>
-              <span class="material-symbols-outlined text-tertiary text-[18px]">gavel</span>
+              <span class="material-symbols-outlined text-tertiary text-[20px]">gavel</span>
             </div>
-            <div class="mt-2 flex items-baseline justify-between">
-              <span class="text-xs text-on-surface-variant flex items-center">
+            <div class="mt-2.5 flex items-baseline justify-between">
+              <span class="text-xs sm:text-sm text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_ytd_tax_due">YTD Realized Tax Due:</span>
                 <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span>
               </span>
-              <span id="pf-tax-realized" class="text-2xl font-extrabold text-tertiary font-mono num-ltr">₪0.00</span>
+              <span id="pf-tax-realized" class="text-2xl xl:text-3xl font-extrabold tracking-tight text-tertiary font-mono num-ltr">₪0.00</span>
             </div>
-            <div class="mt-1.5 flex items-baseline justify-between text-xs">
+            <div class="mt-2 flex items-baseline justify-between text-xs sm:text-sm">
               <span class="text-on-surface-variant flex items-center">
                 <span data-i18n="kpi_avail_tax_shield">Available Tax Shield:</span>
                 <span class="info-tooltip" data-term="YTD Tax Shield" tabindex="0">i</span>
@@ -941,26 +963,26 @@ tailwind.config = {
               <span id="pf-tax-shield" class="font-bold text-secondary font-mono num-ltr">₪0.00</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-outline-variant text-[11px]">
+          <div class="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-outline-variant text-xs sm:text-sm">
             <div>
-              <span class="text-on-surface-variant block" data-i18n="kpi_div_tax_paid">Dividend Tax Paid</span>
-              <span id="pf-tax-div" class="font-bold text-on-surface font-mono num-ltr">₪0.00</span>
+              <span class="text-on-surface-variant block text-xs" data-i18n="kpi_div_tax_paid">Dividend Tax Paid</span>
+              <span id="pf-tax-div" class="font-bold text-on-surface font-mono num-ltr mt-0.5 block">₪0.00</span>
             </div>
             <div class="text-end">
-              <span class="text-on-surface-variant flex items-center justify-end">
+              <span class="text-on-surface-variant flex items-center justify-end text-xs">
                 <span data-i18n="kpi_infl_exempt">Inflationary Exempt</span>
                 <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span>
               </span>
-              <span id="pf-tax-infl" class="font-bold text-primary font-mono num-ltr">₪0.00</span>
+              <span id="pf-tax-infl" class="font-bold text-primary font-mono num-ltr mt-0.5 block">₪0.00</span>
             </div>
           </div>
         </div>
 
         <!-- Right 2 Cols: ILS Return Attribution & TLH Strip -->
-        <div id="pf-attr-bar" class="lg:col-span-2 bg-surface-container border border-outline-variant rounded-xl px-5 py-4 flex flex-col justify-between gap-3 text-xs shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
-          <div class="flex flex-wrap items-center gap-5">
-            <span class="text-label-caps text-on-surface-variant font-bold flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[16px] text-primary">pie_chart</span>
+        <div id="pf-attr-bar" class="lg:col-span-2 aq-card p-6 flex flex-col justify-between gap-4 text-xs sm:text-sm">
+          <div class="flex flex-wrap items-center gap-6">
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[18px] text-primary">pie_chart</span>
               <span data-i18n="lbl_ils_attr">ILS Return Attribution:</span>
               <span class="info-tooltip" data-term="FX Attribution & Tax Drag" tabindex="0">i</span>
             </span>
@@ -969,8 +991,8 @@ tailwind.config = {
             <div><span class="text-on-surface-variant" data-i18n="lbl_tax_fee_drag">Tax &amp; Fee Drag:</span> <strong id="pf-attr-drag" class="font-mono text-tertiary num-ltr font-bold">--</strong></div>
             <div><span class="text-on-surface-variant" data-i18n="lbl_net_after_tax_twr">Net After-Tax TWR:</span> <strong id="pf-attr-net" class="font-mono text-secondary num-ltr font-bold">--</strong></div>
           </div>
-          <div id="pf-tlh-strip" class="flex items-center gap-2 text-[11px] text-on-surface-variant border-t border-outline-variant pt-2.5">
-            <span class="material-symbols-outlined text-[15px] text-secondary">tips_and_updates</span>
+          <div id="pf-tlh-strip" class="flex items-center gap-2 text-xs sm:text-sm text-on-surface-variant border-t border-outline-variant pt-3.5">
+            <span class="material-symbols-outlined text-[16px] text-secondary">tips_and_updates</span>
             <span data-i18n="tlh_none_detected">Tax-Loss Harvesting: No unrealized real-loss positions detected.</span>
           </div>
         </div>
@@ -979,22 +1001,22 @@ tailwind.config = {
       <!-- PHASE 6: PORTFOLIO FACTOR DNA RADAR & GICS SECTOR ATTRIBUTION -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Left Card: Portfolio Factor DNA Radar (C-FFI 16-Indicator Engine) -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-outline-variant pb-3">
+        <div class="aq-card p-6 flex flex-col justify-between space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-outline-variant pb-3.5">
             <div>
               <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-[18px]">radar</span>
+                <span class="material-symbols-outlined text-primary text-[20px]">radar</span>
                 <span data-i18n="dna_title">Portfolio Factor DNA (C-FFI Engine)</span>
                 <span class="info-tooltip" data-term="C-FFI Quant Score" tabindex="0">i</span>
               </h3>
-              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="dna_subtitle">Value-weighted 5-pillar &amp; 16-indicator profile vs. Market Universe Baseline.</p>
+              <p class="text-xs sm:text-sm text-on-surface-variant mt-0.5" data-i18n="dna_subtitle">Value-weighted 5-pillar &amp; 16-indicator profile vs. Market Universe Baseline.</p>
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center">
-                <span id="pf-dna-coverage-badge" class="px-2.5 py-1 rounded-md bg-surface-container-low border border-outline-variant text-[10px] font-mono text-on-surface-variant num-ltr">Factor Coverage: --%</span>
+                <span id="pf-dna-coverage-badge" class="px-3 py-1 rounded-lg bg-surface-container-low border border-outline-variant text-xs font-mono text-on-surface-variant num-ltr">Factor Coverage: --%</span>
                 <span class="info-tooltip" data-term="Factor Coverage %" tabindex="0">i</span>
               </span>
-              <span id="pf-dna-score-badge" class="px-2.5 py-1 rounded-md bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary num-ltr">Score: --</span>
+              <span id="pf-dna-score-badge" class="px-3 py-1 rounded-lg bg-primary/15 border border-primary/30 text-xs font-mono font-bold text-primary num-ltr">Score: --</span>
             </div>
           </div>
 
@@ -1004,29 +1026,29 @@ tailwind.config = {
           </div>
 
           <!-- 5 Pillar Summary Chips -->
-          <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2 text-center pt-1"></div>
+          <div id="pf-dna-pillar-strip" class="grid grid-cols-5 gap-2.5 text-center pt-1"></div>
 
           <!-- Expandable 16-Indicator Breakdown Drawer -->
-          <div class="border-t border-outline-variant pt-2.5">
-            <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs font-bold text-primary hover:text-on-surface transition-colors py-1">
+          <div class="border-t border-outline-variant pt-3">
+            <button type="button" onclick="toggleDna16Drawer()" class="w-full flex items-center justify-between text-xs sm:text-sm font-bold text-primary hover:text-on-surface transition-colors py-1">
               <span data-i18n="btn_inspect_16_dna">Inspect All 16 Normalized C-FFI Factor Exposures</span>
-              <span id="pf-dna-16-icon" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
+              <span id="pf-dna-16-icon" class="material-symbols-outlined text-[18px] transition-transform">expand_more</span>
             </button>
-            <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pe-1"></div>
+            <div id="pf-dna-16-drawer" class="hidden mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pe-1"></div>
           </div>
         </div>
 
         <!-- Right Card: GICS Sector Allocation & Return Attribution -->
-        <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col justify-between space-y-4">
-          <div class="flex justify-between items-center border-b border-outline-variant pb-3">
+        <div class="aq-card p-6 flex flex-col justify-between space-y-4">
+          <div class="flex justify-between items-center border-b border-outline-variant pb-3.5">
             <div>
               <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-                <span class="material-symbols-outlined text-secondary text-[18px]">donut_large</span>
+                <span class="material-symbols-outlined text-secondary text-[20px]">donut_large</span>
                 <span data-i18n="sector_title">GICS Sector Allocation &amp; Attribution</span>
               </h3>
-              <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="sector_subtitle">Portfolio weight concentration, unrealized PnL contribution, and sector quant health.</p>
+              <p class="text-xs sm:text-sm text-on-surface-variant mt-0.5" data-i18n="sector_subtitle">Portfolio weight concentration, unrealized PnL contribution, and sector quant health.</p>
             </div>
-            <span id="pf-sector-count-badge" class="text-label-caps text-on-surface-variant">0 Sectors</span>
+            <span id="pf-sector-count-badge" class="text-xs uppercase tracking-wider font-bold text-on-surface-variant">0 Sectors</span>
           </div>
 
           <!-- Horizontal Bar Chart Canvas -->
@@ -1035,19 +1057,19 @@ tailwind.config = {
           </div>
 
           <!-- Sector Breakdown Table -->
-          <div class="overflow-x-auto max-h-48 overflow-y-auto border border-outline-variant rounded-lg">
-            <table class="w-full text-start border-collapse text-xs">
-              <thead class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase text-on-surface-variant font-bold sticky top-0">
+          <div class="overflow-x-auto max-h-56 overflow-y-auto border border-outline-variant rounded-xl">
+            <table class="w-full text-start border-collapse text-sm">
+              <thead class="bg-surface-container-low border-b border-outline-variant text-xs font-bold uppercase tracking-wider text-on-surface-variant sticky top-0">
                 <tr>
-                  <th class="py-2 px-3 text-start" data-i18n="th_gics_sector">GICS Sector</th>
-                  <th class="py-2 px-2 text-end" data-i18n="th_weight">Weight</th>
-                  <th class="py-2 px-3 text-end" data-i18n="th_mkt_val">Market Value</th>
-                  <th class="py-2 px-3 text-end" data-i18n="th_unr_gross">Unrealized PnL</th>
-                  <th class="py-2 px-2 text-center" data-i18n="th_quant_health">Quant Health</th>
+                  <th class="py-3.5 px-4 text-start" data-i18n="th_gics_sector">GICS Sector</th>
+                  <th class="py-3.5 px-4 text-end" data-i18n="th_weight">Weight</th>
+                  <th class="py-3.5 px-4 text-end" data-i18n="th_mkt_val">Market Value</th>
+                  <th class="py-3.5 px-4 text-end" data-i18n="th_unr_gross">Unrealized PnL</th>
+                  <th class="py-3.5 px-4 text-center" data-i18n="th_quant_health">Quant Health</th>
                 </tr>
               </thead>
               <tbody id="pf-sector-table-body">
-                <tr><td colspan="5" class="py-4 text-center text-on-surface-variant text-xs" data-i18n="no_sector_data">No sector data available.</td></tr>
+                <tr><td colspan="5" class="py-6 text-center text-on-surface-variant text-sm" data-i18n="no_sector_data">No sector data available.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1055,93 +1077,93 @@ tailwind.config = {
       </div>
 
       <!-- PHASE 6: INTERACTIVE ISRAELI TAX-LOSS HARVESTING (TLH) SIMULATOR -->
-      <div class="bg-surface-container border border-outline-variant rounded-xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-4">
-        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-outline-variant pb-3">
+      <div class="aq-card p-6 space-y-5">
+        <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-outline-variant pb-3.5">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-secondary text-[18px]">savings</span>
+              <span class="material-symbols-outlined text-secondary text-[20px]">savings</span>
               <span data-i18n="tlh_title">Interactive Israeli Tax-Loss Harvesting (TLH) Simulator (Section 92)</span>
               <span class="info-tooltip" data-term="Tax-Loss Harvesting (TLH)" tabindex="0">i</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tlh_subtitle">Select open FIFO tax lots carrying a real ILS capital loss (real_loss_ils &lt; 0) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.</p>
+            <p class="text-xs sm:text-sm text-on-surface-variant mt-0.5" data-i18n="tlh_subtitle">Select open FIFO tax lots carrying a real ILS capital loss (real_loss_ils &lt; 0) to simulate immediate 25% Israeli tax shield generation and YTD liability offset.</p>
           </div>
-          <span id="pf-tlh-count-badge" class="px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-secondary text-label-caps">0 Harvestable Lots</span>
+          <span id="pf-tlh-count-badge" class="px-3 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-secondary text-xs font-bold uppercase tracking-wider">0 Harvestable Lots</span>
         </div>
 
         <!-- Simulated Tax Impact Ribbon -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-3">
-            <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_selected_loss">Selected Real Capital Loss</span>
-            <span id="tlh-sim-loss" class="text-lg font-extrabold text-tertiary font-mono mt-0.5 block num-ltr">₪0.00</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-4">
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant block" data-i18n="tlh_selected_loss">Selected Real Capital Loss</span>
+            <span id="tlh-sim-loss" class="text-xl xl:text-2xl font-extrabold text-tertiary font-mono mt-1 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container-low border border-secondary/30 rounded-lg p-3">
-            <span class="text-[10px] uppercase font-bold text-secondary flex items-center">
+          <div class="bg-surface-container-low border border-secondary/30 rounded-xl p-4">
+            <span class="text-xs uppercase tracking-wider font-bold text-secondary flex items-center">
               <span data-i18n="tlh_shield_gen">Immediate 25% Tax Shield Generated</span>
               <span class="info-tooltip" data-term="YTD Tax Shield" tabindex="0">i</span>
             </span>
-            <span id="tlh-sim-shield" class="text-lg font-extrabold text-secondary font-mono mt-0.5 block num-ltr">₪0.00</span>
+            <span id="tlh-sim-shield" class="text-xl xl:text-2xl font-extrabold text-secondary font-mono mt-1 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container-low border border-primary/30 rounded-lg p-3">
-            <span class="text-[10px] uppercase font-bold text-primary block" data-i18n="tlh_ytd_wiped">YTD Capital Gains Tax Wiped Out</span>
-            <span id="tlh-sim-ytd-wiped" class="text-lg font-extrabold text-primary font-mono mt-0.5 block num-ltr">₪0.00</span>
+          <div class="bg-surface-container-low border border-primary/30 rounded-xl p-4">
+            <span class="text-xs uppercase tracking-wider font-bold text-primary block" data-i18n="tlh_ytd_wiped">YTD Capital Gains Tax Wiped Out</span>
+            <span id="tlh-sim-ytd-wiped" class="text-xl xl:text-2xl font-extrabold text-primary font-mono mt-1 block num-ltr">₪0.00</span>
           </div>
-          <div class="bg-surface-container-low border border-outline-variant rounded-lg p-3">
-            <span class="text-[10px] uppercase font-bold text-on-surface-variant block" data-i18n="tlh_carry_forward">Carry-Forward Shield (Future Years)</span>
-            <span id="tlh-sim-carry" class="text-lg font-extrabold text-on-surface font-mono mt-0.5 block num-ltr">₪0.00</span>
+          <div class="bg-surface-container-low border border-outline-variant rounded-xl p-4">
+            <span class="text-xs uppercase tracking-wider font-bold text-on-surface-variant block" data-i18n="tlh_carry_forward">Carry-Forward Shield (Future Years)</span>
+            <span id="tlh-sim-carry" class="text-xl xl:text-2xl font-extrabold text-on-surface font-mono mt-1 block num-ltr">₪0.00</span>
           </div>
         </div>
 
         <!-- Harvestable FIFO Lots Table -->
         <div class="overflow-x-auto">
-          <table class="w-full text-start border-collapse text-xs">
+          <table class="w-full text-start border-collapse text-sm">
             <thead>
-              <tr class="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-                <th class="py-2.5 px-3 w-10 text-center" data-i18n="th_sim">Sim</th>
-                <th class="py-2.5 px-3 text-start" data-i18n="th_ticker_lot">Ticker &amp; Lot</th>
-                <th class="py-2.5 px-3 text-start" data-i18n="th_acq_date">Acquisition Date</th>
-                <th class="py-2.5 px-3 text-end" data-i18n="th_quantity">Quantity</th>
-                <th class="py-2.5 px-3 text-end" data-i18n="th_idx_cost">Indexed Cost (₪)</th>
-                <th class="py-2.5 px-3 text-end" data-i18n="th_curr_proceeds">Current Proceeds (₪)</th>
-                <th class="py-2.5 px-3 text-end" data-i18n="th_unr_real_loss">Unrealized Real Loss (₪)</th>
-                <th class="py-2.5 px-3 text-end" data-i18n="th_tax_shield_25">25% Tax Shield (₪)</th>
+              <tr class="bg-surface-container-low border-b border-outline-variant text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                <th class="py-3.5 px-4 w-12 text-center" data-i18n="th_sim">Sim</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="th_ticker_lot">Ticker &amp; Lot</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="th_acq_date">Acquisition Date</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_quantity">Quantity</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_idx_cost">Indexed Cost (₪)</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_curr_proceeds">Current Proceeds (₪)</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_unr_real_loss">Unrealized Real Loss (₪)</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_tax_shield_25">25% Tax Shield (₪)</th>
               </tr>
             </thead>
             <tbody id="portfolio-tlh-body">
-              <tr><td colspan="8" class="py-6 text-center text-on-surface-variant text-xs" data-i18n="tlh_empty_table">No open FIFO lots with an unrealized real ILS loss detected.</td></tr>
+              <tr><td colspan="8" class="py-8 text-center text-on-surface-variant text-sm" data-i18n="tlh_empty_table">No open FIFO lots with an unrealized real ILS loss detected.</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
       <!-- Full Chronological Transaction History Table -->
-      <div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.35)] flex flex-col">
-        <div class="px-5 py-4 border-b border-outline-variant flex justify-between items-center">
+      <div class="aq-card overflow-hidden flex flex-col">
+        <div class="px-6 py-5 border-b border-outline-variant flex justify-between items-center">
           <div>
             <h3 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[18px]">receipt_long</span>
+              <span class="material-symbols-outlined text-primary text-[20px]">receipt_long</span>
               <span data-i18n="tx_history_title">Transaction Ledger History</span>
             </h3>
-            <p class="text-xs text-on-surface-variant mt-0.5" data-i18n="tx_history_subtitle">Chronological audit trail of all trades, dividends, and cash flows.</p>
+            <p class="text-xs sm:text-sm text-on-surface-variant mt-0.5" data-i18n="tx_history_subtitle">Chronological audit trail of all trades, dividends, and cash flows.</p>
           </div>
-          <span id="pf-tx-count" class="text-label-caps text-on-surface-variant">0 Transactions</span>
+          <span id="pf-tx-count" class="text-xs uppercase tracking-wider font-bold text-on-surface-variant">0 Transactions</span>
         </div>
-        <div class="overflow-x-auto flex-1 max-h-[460px] overflow-y-auto">
+        <div class="overflow-x-auto flex-1 max-h-[480px] overflow-y-auto">
           <table class="w-full text-start border-collapse">
-            <thead class="sticky top-0 bg-surface-container-low border-b border-outline-variant text-[10px] uppercase tracking-wider text-on-surface-variant font-bold z-10">
+            <thead class="sticky top-0 bg-surface-container-low border-b border-outline-variant text-xs font-bold uppercase tracking-wider text-on-surface-variant z-10">
               <tr>
-                <th class="px-3 py-2.5 text-start" data-i18n="lbl_date">Date</th>
-                <th class="px-3 py-2.5 text-start" data-i18n="th_type">Type</th>
-                <th class="px-3 py-2.5 text-start" data-i18n="th_ticker">Ticker</th>
-                <th class="px-3 py-2.5 text-end" data-i18n="th_qty">Qty</th>
-                <th class="px-3 py-2.5 text-end" data-i18n="th_price">Price</th>
-                <th class="px-3 py-2.5 text-end" data-i18n="th_fee">Fee</th>
-                <th class="px-3 py-2.5 text-center" data-i18n="th_ccy">CCY</th>
-                <th class="px-3 py-2.5 text-start" data-i18n="th_notes">Notes</th>
-                <th class="px-3 py-2.5 text-center" data-i18n="th_action">Action</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="lbl_date">Date</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="th_type">Type</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="th_ticker">Ticker</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_qty">Qty</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_price">Price</th>
+                <th class="py-3.5 px-4 text-end" data-i18n="th_fee">Fee</th>
+                <th class="py-3.5 px-4 text-center" data-i18n="th_ccy">CCY</th>
+                <th class="py-3.5 px-4 text-start" data-i18n="th_notes">Notes</th>
+                <th class="py-3.5 px-4 text-center" data-i18n="th_action">Action</th>
               </tr>
             </thead>
             <tbody id="portfolio-tx-body">
-              <tr><td colspan="9" class="px-4 py-8 text-center text-on-surface-variant text-xs" data-i18n="no_tx_yet">No transactions recorded yet.</td></tr>
+              <tr><td colspan="9" class="px-4 py-10 text-center text-on-surface-variant text-sm" data-i18n="no_tx_yet">No transactions recorded yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1304,13 +1326,13 @@ function openConfirmModal({ title, desc, onConfirm, variant = 'danger' }) {
   if (descEl) descEl.textContent = desc || '';
 
   if (variant === 'primary') {
-    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0';
+    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0';
     if (iconEl) { iconEl.className = 'material-symbols-outlined text-primary text-[20px]'; iconEl.textContent = 'science'; }
-    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition-all shadow-sm';
+    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-xl aq-btn-primary text-xs sm:text-sm';
   } else {
-    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-lg bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0';
+    if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-xl bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0';
     if (iconEl) { iconEl.className = 'material-symbols-outlined text-tertiary text-[20px]'; iconEl.textContent = 'warning'; }
-    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-lg bg-tertiary hover:bg-tertiary-container text-on-surface text-xs font-bold transition-all shadow-sm';
+    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-surface text-xs sm:text-sm font-semibold transition-all shadow-sm';
   }
 
   pendingConfirmAction = onConfirm;
@@ -1344,26 +1366,41 @@ function closeConfirmModal() {
 }
 
 function openTxDrawer() {
-  const backdrop = document.getElementById('pf-tx-drawer-backdrop');
-  const drawer = document.getElementById('pf-tx-drawer');
-  if (!backdrop || !drawer) return;
-  backdrop.classList.remove('hidden');
+  const modal = document.getElementById('pf-tx-modal');
+  const dialog = document.getElementById('pf-tx-dialog');
+  if (!modal || !dialog) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
   requestAnimationFrame(() => {
-    backdrop.classList.remove('opacity-0');
-    drawer.classList.remove('translate-x-full', 'rtl:-translate-x-full');
+    modal.classList.remove('opacity-0');
+    dialog.classList.remove('scale-95');
   });
 }
 
 function closeTxDrawer() {
-  const backdrop = document.getElementById('pf-tx-drawer-backdrop');
-  const drawer = document.getElementById('pf-tx-drawer');
-  if (!backdrop || !drawer) return;
-  backdrop.classList.add('opacity-0');
-  drawer.classList.add('translate-x-full', 'rtl:-translate-x-full');
+  const modal = document.getElementById('pf-tx-modal');
+  const dialog = document.getElementById('pf-tx-dialog');
+  if (!modal || !dialog) return;
+  modal.classList.add('opacity-0');
+  dialog.classList.add('scale-95');
   setTimeout(() => {
-    backdrop.classList.add('hidden');
-  }, 300);
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 200);
 }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const txModal = document.getElementById('pf-tx-modal');
+    if (txModal && !txModal.classList.contains('hidden')) {
+      closeTxDrawer();
+    }
+    const confirmModal = document.getElementById('global-confirm-modal');
+    if (confirmModal && !confirmModal.classList.contains('hidden')) {
+      closeConfirmModal();
+    }
+  }
+});
 
 function renderTableSkeleton(tbodyId, cols, rows = 5) {
   const tbody = document.getElementById(tbodyId);
@@ -1373,7 +1410,7 @@ function renderTableSkeleton(tbodyId, cols, rows = 5) {
     let cells = '';
     for (let c = 0; c < cols; c++) {
       const widthCls = c === 0 ? 'w-24' : (c % 2 === 0 ? 'w-16 ms-auto' : 'w-20 ms-auto');
-      cells += `<td class="px-4 py-3.5"><div class="animate-pulse bg-surface-container-high/60 h-4 rounded ${widthCls}"></div></td>`;
+      cells += `<td class="py-3.5 px-4"><div class="animate-pulse bg-surface-container-high/60 h-4 rounded-md ${widthCls}"></div></td>`;
     }
     html += `<tr class="border-b border-outline-variant">${cells}</tr>`;
   }
@@ -1593,7 +1630,7 @@ function buildAccordion(item) {
     const c   = scoreColor(sc);
     const bg  = scoreBg(sc);
     return `
-      <div style="background:${bg};border:1px solid rgba(255,255,255,0.08)" class="p-2 rounded-lg flex flex-col gap-1">
+      <div style="background:${bg};border:1px solid rgba(255,255,255,0.08)" class="p-3 rounded-xl flex flex-col gap-1">
         <span style="font-size:10px;letter-spacing:.06em;font-weight:700;color:#94A3B8;text-transform:uppercase">${meta.label}</span>
         <div class="flex items-baseline justify-between mt-0.5">
           <span class="font-data-display text-data-display text-on-surface num-ltr" style="font-size:13px">${rawStr}</span>
@@ -1604,7 +1641,7 @@ function buildAccordion(item) {
         </div>
       </div>`;
   }).join('');
-  return `<div class="grid gap-2 p-4" style="grid-template-columns:repeat(4,1fr)">${cells}</div>`;
+  return `<div class="grid gap-2.5 p-4" style="grid-template-columns:repeat(4,1fr)">${cells}</div>`;
 }
 
 // ── Client-Side Pagination & Table Rendering ────────────────────────────────
@@ -1621,32 +1658,32 @@ function renderLeaderboard() {
 
   visibleResults.forEach((item, idx) => {
     const sc = parseFloat(item.score);
-    const rowBgClass = idx % 2 === 0 ? 'bg-surface-container' : 'bg-surface-container-low';
+    const rowBgClass = idx % 2 === 0 ? 'bg-surface-container/60' : 'bg-surface-container-low/60';
     const initial = (item.ticker || '?').charAt(0);
 
     // Parent row
     const tr = document.createElement('tr');
-    tr.className = `${rowBgClass} border-b border-outline-variant hover:bg-surface-container-high cursor-pointer transition-colors fade-in`;
+    tr.className = `${rowBgClass} border-b border-outline-variant hover:bg-surface-container-high cursor-pointer transition-colors fade-in text-sm`;
     tr.setAttribute('onclick', `toggleRow('acc-${idx}')`);
     tr.innerHTML = `
-      <td class="px-4 py-3 text-center text-data-display text-on-surface-variant tabular-nums num-ltr">${idx+1}</td>
-      <td class="px-4 py-3 text-start">
+      <td class="py-3.5 px-4 text-center text-data-display text-on-surface-variant tabular-nums num-ltr">${idx+1}</td>
+      <td class="py-3.5 px-4 text-start">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-md bg-surface-container-high flex items-center justify-center text-data-display text-primary font-bold flex-shrink-0">${escapeHTML(initial)}</div>
+          <div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-data-display text-primary font-bold flex-shrink-0">${escapeHTML(initial)}</div>
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2">
               <span class="font-bold text-on-surface text-[15px]">${escapeHTML(item.ticker)}</span>
-              ${item.sector ? `<span class="text-[10px] uppercase tracking-wider text-secondary font-semibold bg-secondary/10 px-1.5 py-0.5 rounded border border-secondary/20">${escapeHTML(item.sector)}</span>` : ''}
+              ${item.sector ? `<span class="text-[10px] uppercase tracking-wider text-secondary font-semibold bg-secondary/10 px-2 py-0.5 rounded-md border border-secondary/20">${escapeHTML(item.sector)}</span>` : ''}
               <span class="material-symbols-outlined text-on-surface-variant transition-transform duration-200" id="icon-acc-${idx}" style="font-size:16px">expand_more</span>
             </div>
-            <span class="text-xs text-on-surface-variant truncate max-w-[280px]" title="${escapeHTML(item.longName || '')}">${escapeHTML(item.longName || '—')}</span>
+            <span class="text-xs text-on-surface-variant truncate max-w-[320px]" title="${escapeHTML(item.longName || '')}">${escapeHTML(item.longName || '—')}</span>
           </div>
         </div>
       </td>
-      <td class="px-4 py-3 text-center">
-        <span class="text-label-caps px-2 py-0.5 rounded-full" style="color:${chipColor};background:${chipColor}22;border:1px solid ${chipColor}44">${profileLabel}</span>
+      <td class="py-3.5 px-4 text-center">
+        <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style="color:${chipColor};background:${chipColor}22;border:1px solid ${chipColor}44">${profileLabel}</span>
       </td>
-      <td class="px-4 py-3 text-end">
+      <td class="py-3.5 px-4 text-end">
         <span class="font-bold text-data-display tabular-nums num-ltr" style="color:${scoreColor(sc)};font-size:15px">${item.score}</span>
       </td>`;
     tbody.appendChild(tr);
@@ -1713,7 +1750,7 @@ function hideAllStocks() {
 // ── Calculate button ─────────────────────────────────────────────────────────
 document.getElementById('calculate-btn').addEventListener('click', async () => {
   const btn = document.getElementById('calculate-btn');
-  btn.innerHTML = `<span class="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_calculate_score'))}</span>`;
+  btn.innerHTML = `<span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_calculate_score'))}</span>`;
   btn.disabled = true;
   btn.classList.add('opacity-75');
 
@@ -1793,11 +1830,11 @@ function setBacktestWindow(win) {
   if (!btn3y || !btn5y) return;
   
   if (win === '3y') {
-    btn3y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10";
-    btn5y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
+    btn3y.className = "whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-primary bg-primary/10";
+    btn5y.className = "whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
   } else {
-    btn5y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-primary bg-primary/10";
-    btn3y.className = "px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
+    btn5y.className = "whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-primary bg-primary/10";
+    btn3y.className = "whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface";
   }
 
   if (currentResults && currentResults.length > 0) {
@@ -2542,8 +2579,8 @@ function setAppLanguage(lang) {
     const btn = document.getElementById(`lang-btn-${l}`);
     if (!btn) return;
     btn.className = (l === portfolioState.lang)
-      ? 'px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
-      : 'px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+      ? 'whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary shadow-sm'
+      : 'whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
   });
 
   applyLayoutDirection();
@@ -2578,11 +2615,11 @@ function setPortfolioViewTier(tier) {
   const btnAdv = document.getElementById('pf-tier-advanced');
   if (btnStd && btnAdv) {
     btnStd.className = !isAdv
-      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
-      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      ? 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5'
+      : 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
     btnAdv.className = isAdv
-      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
-      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      ? 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5'
+      : 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
   }
 
   const stdView = document.getElementById('pf-view-standard');
@@ -2619,11 +2656,11 @@ function setScreenerViewTier(tier) {
   const btnAdv = document.getElementById('scr-tier-advanced');
   if (btnStd && btnAdv) {
     btnStd.className = !isAdv
-      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
-      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      ? 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5'
+      : 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
     btnAdv.className = isAdv
-      ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1.5'
-      : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      ? 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5'
+      : 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
   }
   const btPanel = document.getElementById('backtest-panel');
   if (btPanel && isAdv) {
@@ -2765,11 +2802,11 @@ function switchWorkspace(mode) {
 
   if (tabScreener && tabPortfolio) {
     if (isScreener) {
-      tabScreener.className = 'px-3 py-1 rounded-md text-xs font-bold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5';
-      tabPortfolio.className = 'px-3 py-1 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      tabScreener.className = 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5';
+      tabPortfolio.className = 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
     } else {
-      tabPortfolio.className = 'px-3 py-1 rounded-md text-xs font-bold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5';
-      tabScreener.className = 'px-3 py-1 rounded-md text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
+      tabPortfolio.className = 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5';
+      tabScreener.className = 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
     }
   }
 
@@ -2789,8 +2826,8 @@ function setPortfolioCurrency(ccy) {
     const active = c === ccy;
     const btn1 = document.getElementById(`curr-btn-${c}`);
     const cls = active
-      ? 'px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
-      : 'px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+      ? 'whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary shadow-sm'
+      : 'whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
     if (btn1) btn1.className = cls;
   });
   refreshPortfolioWorkspace();
@@ -2812,8 +2849,8 @@ function setPortfolioWindow(win) {
   document.querySelectorAll('.pf-win-btn').forEach(btn => {
     const isAct = btn.getAttribute('data-win') === win;
     btn.className = isAct
-      ? 'pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary'
-      : 'pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+      ? 'pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm'
+      : 'pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface';
   });
 
   fetchPortfolioAnalytics();
@@ -2840,7 +2877,7 @@ function applyCustomDateRange(source) {
   portfolioState.startDate = s;
   portfolioState.endDate = e;
   document.querySelectorAll('.pf-win-btn').forEach(btn => {
-    btn.className = 'pf-win-btn px-2.5 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface';
+    btn.className = 'pf-win-btn whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface';
   });
   fetchPortfolioAnalytics();
 }
@@ -2851,8 +2888,8 @@ function setPortfolioChartMode(mode) {
     const btn = document.getElementById(`pf-mode-${m}`);
     if (!btn) return;
     btn.className = (m === mode)
-      ? 'px-3 py-1 rounded text-xs font-bold transition-all bg-primary text-on-primary flex items-center gap-1'
-      : 'px-3 py-1 rounded text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1';
+      ? 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all bg-primary text-on-primary shadow-sm flex items-center gap-1.5'
+      : 'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all text-on-surface-variant hover:text-on-surface flex items-center gap-1.5';
   });
   const whatIfBanner = document.getElementById('pf-whatif-banner');
   if (whatIfBanner) {
@@ -3000,7 +3037,7 @@ function renderPortfolioSummary(data) {
   if (unrGrossEl) {
     const pctStr = totals.unrealized_pnl_pct !== undefined ? ` (${fmtPct(totals.unrealized_pnl_pct, 2)})` : '';
     unrGrossEl.textContent = `${fmtSignedMoney(totals.unrealized_pnl, ccy)}${pctStr}`;
-    unrGrossEl.className = `text-xl font-extrabold mt-1.5 tracking-tight num-ltr ${colorClassForVal(totals.unrealized_pnl)}`;
+    unrGrossEl.className = `text-2xl xl:text-3xl font-extrabold mt-2 tracking-tight num-ltr ${colorClassForVal(totals.unrealized_pnl)}`;
   }
   const unrNetEl = document.getElementById('pf-kpi-unr-net');
   if (unrNetEl) {
@@ -3094,32 +3131,32 @@ function renderHoldingsTable(positions, allLots, ccy) {
     const sectorLabel = p.sector || 'Unclassified';
 
     html += `
-      <tr onclick="togglePositionLots('${p.ticker}')" class="border-b border-outline-variant hover:bg-surface-container-high/60 cursor-pointer transition-colors text-xs">
-        <td class="px-4 py-3 font-bold text-on-surface text-start">
+      <tr onclick="togglePositionLots('${p.ticker}')" class="border-b border-outline-variant hover:bg-surface-container-high/60 cursor-pointer transition-colors text-sm">
+        <td class="px-4 py-3.5 font-bold text-on-surface text-start">
           <div class="flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[15px] text-primary transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
+            <span class="material-symbols-outlined text-[16px] text-primary transition-transform ${isExpanded ? 'rotate-90' : ''}">chevron_right</span>
             <span class="num-ltr">${p.ticker}</span>
-            <span class="text-[10px] text-on-surface-variant font-normal num-ltr">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
+            <span class="text-xs text-on-surface-variant font-normal num-ltr">(${tickerLots.length} lot${tickerLots.length === 1 ? '' : 's'})</span>
           </div>
-          <span class="text-[10px] text-on-surface-variant font-normal ps-5 block truncate max-w-[160px]">${sectorLabel}</span>
+          <span class="text-xs text-on-surface-variant font-normal ps-5 block truncate max-w-[180px]">${sectorLabel}</span>
         </td>
-        <td class="px-3 py-3 text-center">
+        <td class="px-4 py-3.5 text-center">
           ${renderQuantScoreBadge(p.quant_score, p.quant_status)}
         </td>
-        <td class="px-3 py-3 text-center">
-          <span class="px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant text-[10px] font-mono num-ltr">${nativeCcy}</span>
+        <td class="px-4 py-3.5 text-center">
+          <span class="px-2.5 py-0.5 rounded-md bg-surface-container-low border border-outline-variant text-xs font-mono num-ltr">${nativeCcy}</span>
         </td>
-        <td class="px-3 py-3 text-end font-mono text-on-surface num-ltr">${Number(p.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-        <td class="px-3 py-3 text-end font-mono text-on-surface-variant num-ltr">${nativeSym}${Number(p.avg_cost_native).toFixed(2)}</td>
-        <td class="px-3 py-3 text-end font-mono text-on-surface num-ltr">${nativeSym}${Number(p.current_price_native).toFixed(2)}</td>
-        <td class="px-4 py-3 text-end font-mono font-bold text-on-surface num-ltr">${fmtMoney(p.market_value_view, ccy)}</td>
-        <td class="px-3 py-3 text-end font-mono text-on-surface-variant num-ltr">${Number(p.weight_pct || 0).toFixed(1)}%</td>
-        <td class="px-4 py-3 text-end font-mono font-bold num-ltr ${grossColor}">
+        <td class="px-4 py-3.5 text-end font-mono text-on-surface num-ltr">${Number(p.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+        <td class="px-4 py-3.5 text-end font-mono text-on-surface-variant num-ltr">${nativeSym}${Number(p.avg_cost_native).toFixed(2)}</td>
+        <td class="px-4 py-3.5 text-end font-mono text-on-surface num-ltr">${nativeSym}${Number(p.current_price_native).toFixed(2)}</td>
+        <td class="px-4 py-3.5 text-end font-mono font-bold text-on-surface num-ltr">${fmtMoney(p.market_value_view, ccy)}</td>
+        <td class="px-4 py-3.5 text-end font-mono text-on-surface-variant num-ltr">${Number(p.weight_pct || 0).toFixed(1)}%</td>
+        <td class="px-4 py-3.5 text-end font-mono font-bold num-ltr ${grossColor}">
           ${fmtSignedMoney(p.unrealized_pnl_view, ccy)}
-          <span class="text-[10px] block opacity-80 num-ltr">${fmtPct(p.unrealized_pnl_pct, 2)}</span>
+          <span class="text-xs block opacity-80 num-ltr">${fmtPct(p.unrealized_pnl_pct, 2)}</span>
         </td>
-        <td class="px-3 py-3 text-end font-mono text-tertiary num-ltr">${fmtMoney(p.est_tax_view || 0, ccy)}</td>
-        <td class="px-4 py-3 text-end font-mono font-bold num-ltr ${netColor}">${fmtSignedMoney(netVal, ccy)}</td>
+        <td class="px-4 py-3.5 text-end font-mono text-tertiary num-ltr">${fmtMoney(p.est_tax_view || 0, ccy)}</td>
+        <td class="px-4 py-3.5 text-end font-mono font-bold num-ltr ${netColor}">${fmtSignedMoney(netVal, ccy)}</td>
       </tr>
     `;
 
@@ -3131,38 +3168,38 @@ function renderHoldingsTable(positions, allLots, ccy) {
         const inflGain = Number(l.inflationary_gain_ils || 0);
         const realGain = Number(l.real_gain_ils || 0) - Number(l.real_loss_ils || 0);
         return `
-          <tr class="border-b border-outline-variant text-[11px] font-mono text-on-surface-variant">
-            <td class="py-1.5 px-3 text-start text-primary num-ltr">${l.lot_id}</td>
-            <td class="py-1.5 px-3 text-start num-ltr">${l.buy_date}</td>
-            <td class="py-1.5 px-3 text-end text-on-surface num-ltr">${Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-            <td class="py-1.5 px-3 text-end num-ltr">${nativeSym}${Number(l.buy_price).toFixed(2)}</td>
-            <td class="py-1.5 px-3 text-start text-[10px] num-ltr">${indexLabel} (${fmtPct((Number(l.inflationary_ratio || 1) - 1) * 100, 2)})</td>
-            <td class="py-1.5 px-3 text-end num-ltr">${fmtSignedMoney(inflGain, 'ILS')}</td>
-            <td class="py-1.5 px-3 text-end num-ltr ${colorClassForVal(realGain)}">${fmtSignedMoney(realGain, 'ILS')}</td>
-            <td class="py-1.5 px-3 text-end text-tertiary font-bold num-ltr">${fmtMoney(l.tax_ils || 0, 'ILS')}</td>
+          <tr class="border-b border-outline-variant text-xs font-mono text-on-surface-variant">
+            <td class="py-2 px-3 text-start text-primary num-ltr">${l.lot_id}</td>
+            <td class="py-2 px-3 text-start num-ltr">${l.buy_date}</td>
+            <td class="py-2 px-3 text-end text-on-surface num-ltr">${Number(l.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+            <td class="py-2 px-3 text-end num-ltr">${nativeSym}${Number(l.buy_price).toFixed(2)}</td>
+            <td class="py-2 px-3 text-start text-xs num-ltr">${indexLabel} (${fmtPct((Number(l.inflationary_ratio || 1) - 1) * 100, 2)})</td>
+            <td class="py-2 px-3 text-end num-ltr">${fmtSignedMoney(inflGain, 'ILS')}</td>
+            <td class="py-2 px-3 text-end num-ltr ${colorClassForVal(realGain)}">${fmtSignedMoney(realGain, 'ILS')}</td>
+            <td class="py-2 px-3 text-end text-tertiary font-bold num-ltr">${fmtMoney(l.tax_ils || 0, 'ILS')}</td>
           </tr>
         `;
       }).join('');
 
       html += `
         <tr class="bg-surface-container-low border-b border-outline-variant">
-          <td colspan="11" class="p-3">
-            <div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
-              <div class="px-3 py-1.5 bg-surface-container-high text-[10px] font-bold uppercase tracking-wider text-primary flex justify-between items-center">
+          <td colspan="11" class="p-4">
+            <div class="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+              <div class="px-4 py-2 bg-surface-container-high text-xs font-bold uppercase tracking-wider text-primary flex justify-between items-center">
                 <span>FIFO Tax Lot Breakdown — ${p.ticker} (Section 88 Inflationary vs. Real Split)</span>
                 <span class="text-on-surface-variant font-mono">Statutory Tax Computation in ILS (₪)</span>
               </div>
               <table class="w-full text-start border-collapse">
                 <thead>
-                  <tr class="border-b border-outline-variant text-[10px] uppercase text-on-surface-variant">
-                    <th class="py-1.5 px-3 text-start">Lot ID</th>
-                    <th class="py-1.5 px-3 text-start">Buy Date</th>
-                    <th class="py-1.5 px-3 text-end">Open Qty</th>
-                    <th class="py-1.5 px-3 text-end">Buy Price</th>
-                    <th class="py-1.5 px-3 text-start">Base Index Drift <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-end">Inflationary Gain (0%) <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-end">Real Gain / Loss (₪) <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span></th>
-                    <th class="py-1.5 px-3 text-end">Est. Real Tax (25%)</th>
+                  <tr class="border-b border-outline-variant text-xs uppercase text-on-surface-variant">
+                    <th class="py-2 px-3 text-start">Lot ID</th>
+                    <th class="py-2 px-3 text-start">Buy Date</th>
+                    <th class="py-2 px-3 text-end">Open Qty</th>
+                    <th class="py-2 px-3 text-end">Buy Price</th>
+                    <th class="py-2 px-3 text-start">Base Index Drift <span class="info-tooltip" data-term="Original vs. Adjusted Cost Basis" tabindex="0">i</span></th>
+                    <th class="py-2 px-3 text-end">Inflationary Gain (0%) <span class="info-tooltip" data-term="Inflationary Exempt Gain" tabindex="0">i</span></th>
+                    <th class="py-2 px-3 text-end">Real Gain / Loss (₪) <span class="info-tooltip" data-term="Real Taxable Gain" tabindex="0">i</span></th>
+                    <th class="py-2 px-3 text-end">Est. Real Tax (25%)</th>
                   </tr>
                 </thead>
                 <tbody>${lotsRows}</tbody>
@@ -3376,20 +3413,20 @@ function renderPortfolioQuantDNA(dna, ccy) {
         const pnlColor = colorClassForVal(s.unrealized_pnl_view);
         const qBadge = s.avg_quant_score !== null && s.avg_quant_score !== undefined
           ? renderQuantScoreBadge(s.avg_quant_score, s.avg_quant_score >= 70 ? 'STRONG' : (s.avg_quant_score >= 45 ? 'NEUTRAL' : 'WARNING'))
-          : `<span class="text-[10px] font-mono text-on-surface-variant num-ltr">ETF / TASE</span>`;
+          : `<span class="text-xs font-mono text-on-surface-variant num-ltr">ETF / TASE</span>`;
         return `
-          <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 font-mono text-[11px]">
-            <td class="py-2 px-3 text-start font-sans font-bold text-on-surface">
+          <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 font-mono text-sm">
+            <td class="py-3.5 px-4 text-start font-sans font-bold text-on-surface">
               ${s.sector}
-              <span class="text-[10px] text-on-surface-variant font-normal block num-ltr">${(s.tickers || []).join(', ')}</span>
+              <span class="text-xs text-on-surface-variant font-normal block num-ltr">${(s.tickers || []).join(', ')}</span>
             </td>
-            <td class="py-2 px-2 text-end font-bold text-on-surface num-ltr">${Number(s.weight_pct).toFixed(1)}%</td>
-            <td class="py-2 px-3 text-end text-on-surface num-ltr">${fmtMoney(s.market_value_view, ccy)}</td>
-            <td class="py-2 px-3 text-end font-bold num-ltr ${pnlColor}">
+            <td class="py-3.5 px-4 text-end font-bold text-on-surface num-ltr">${Number(s.weight_pct).toFixed(1)}%</td>
+            <td class="py-3.5 px-4 text-end text-on-surface num-ltr">${fmtMoney(s.market_value_view, ccy)}</td>
+            <td class="py-3.5 px-4 text-end font-bold num-ltr ${pnlColor}">
               ${fmtSignedMoney(s.unrealized_pnl_view, ccy)}
-              <span class="text-[9px] block opacity-80 num-ltr">(${fmtPct(s.sector_return_pct, 1)})</span>
+              <span class="text-xs block opacity-80 num-ltr">(${fmtPct(s.sector_return_pct, 1)})</span>
             </td>
-            <td class="py-2 px-2 text-center">${qBadge}</td>
+            <td class="py-3.5 px-4 text-center">${qBadge}</td>
           </tr>
         `;
       }).join('');
@@ -3421,17 +3458,17 @@ function renderTlhSimulator(tlhCandidates, taxSummary) {
         const checked = portfolioState.selectedTlhLots.has(lotId) ? 'checked' : '';
         const shield = Number(c.immediate_tax_shield_ils ?? c.potential_tax_shield_ils ?? (Math.abs(Number(c.real_loss_ils || 0)) * 0.25));
         return `
-          <tr class="border-b border-outline-variant hover:bg-surface-container-high/50 font-mono text-xs">
-            <td class="py-2.5 px-3 text-center">
+          <tr class="border-b border-outline-variant hover:bg-surface-container-high/50 font-mono text-sm">
+            <td class="py-3.5 px-4 text-center">
               <input type="checkbox" ${checked} onchange="toggleTlhLotSelection(${lotId})" class="accent-[#10B981] cursor-pointer" />
             </td>
-            <td class="py-2.5 px-3 text-start font-bold text-on-surface num-ltr">${c.ticker} <span class="text-[10px] text-primary">#${lotId}</span></td>
-            <td class="py-2.5 px-3 text-start text-on-surface-variant num-ltr">${c.buy_date}</td>
-            <td class="py-2.5 px-3 text-end text-on-surface num-ltr">${Number(c.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-            <td class="py-2.5 px-3 text-end text-on-surface-variant num-ltr">${fmtMoney(c.original_cost_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-end text-on-surface num-ltr">${fmtMoney(c.proceeds_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-end font-bold text-tertiary num-ltr">${fmtSignedMoney(c.real_loss_ils, 'ILS')}</td>
-            <td class="py-2.5 px-3 text-end font-bold text-secondary num-ltr">+${fmtMoney(shield, 'ILS')}</td>
+            <td class="py-3.5 px-4 text-start font-bold text-on-surface num-ltr">${c.ticker} <span class="text-xs text-primary">#${lotId}</span></td>
+            <td class="py-3.5 px-4 text-start text-on-surface-variant num-ltr">${c.buy_date}</td>
+            <td class="py-3.5 px-4 text-end text-on-surface num-ltr">${Number(c.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+            <td class="py-3.5 px-4 text-end text-on-surface-variant num-ltr">${fmtMoney(c.original_cost_ils, 'ILS')}</td>
+            <td class="py-3.5 px-4 text-end text-on-surface num-ltr">${fmtMoney(c.proceeds_ils, 'ILS')}</td>
+            <td class="py-3.5 px-4 text-end font-bold text-tertiary num-ltr">${fmtSignedMoney(c.real_loss_ils, 'ILS')}</td>
+            <td class="py-3.5 px-4 text-end font-bold text-secondary num-ltr">+${fmtMoney(shield, 'ILS')}</td>
           </tr>
         `;
       }).join('');
@@ -3532,12 +3569,12 @@ function renderPortfolioAnalyticsKPIs(data) {
   const twrEl = document.getElementById('pf-kpi-twr');
   if (twrEl) {
     twrEl.textContent = fmtPct(kpis.twr_total_pct, 2);
-    twrEl.className = `text-xl font-extrabold tracking-tight num-ltr ${colorClassForVal(kpis.twr_total_pct)}`;
+    twrEl.className = `text-2xl xl:text-3xl font-extrabold tracking-tight num-ltr mt-0.5 ${colorClassForVal(kpis.twr_total_pct)}`;
   }
   const xirrEl = document.getElementById('pf-kpi-xirr');
   if (xirrEl) {
     xirrEl.textContent = fmtPct(kpis.xirr_annualized_pct, 2);
-    xirrEl.className = `text-xl font-extrabold tracking-tight num-ltr ${colorClassForVal(kpis.xirr_annualized_pct)}`;
+    xirrEl.className = `text-2xl xl:text-3xl font-extrabold tracking-tight num-ltr mt-0.5 ${colorClassForVal(kpis.xirr_annualized_pct)}`;
   }
   const twrAnnEl = document.getElementById('pf-kpi-twr-ann');
   if (twrAnnEl) twrAnnEl.textContent = fmtPct(kpis.twr_annualized_pct, 2);
@@ -3837,20 +3874,20 @@ function renderTransactionsTable(txs) {
   tbody.innerHTML = txs.slice().reverse().map(tx => {
     const sym = tx.currency === 'ILS' ? '₪' : '$';
     return `
-      <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 text-xs font-mono">
-        <td class="px-3 py-2 text-start text-on-surface-variant num-ltr">${tx.date}</td>
-        <td class="px-3 py-2 text-start">
-          <span class="px-2 py-0.5 rounded border text-[10px] font-bold num-ltr ${badgeForType(tx.tx_type)}">${tx.tx_type}</span>
+      <tr class="border-b border-outline-variant hover:bg-surface-container-high/40 text-sm font-mono">
+        <td class="px-4 py-3.5 text-start text-on-surface-variant num-ltr">${tx.date}</td>
+        <td class="px-4 py-3.5 text-start">
+          <span class="px-2.5 py-0.5 rounded-md border text-xs font-bold num-ltr ${badgeForType(tx.tx_type)}">${tx.tx_type}</span>
         </td>
-        <td class="px-3 py-2 text-start font-bold text-on-surface num-ltr">${tx.ticker}</td>
-        <td class="px-3 py-2 text-end text-on-surface num-ltr">${Number(tx.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
-        <td class="px-3 py-2 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.price).toFixed(2)}</td>
-        <td class="px-3 py-2 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.fee || 0).toFixed(2)}</td>
-        <td class="px-3 py-2 text-center text-[10px] num-ltr">${tx.currency}</td>
-        <td class="px-3 py-2 text-start text-on-surface-variant font-sans truncate max-w-[160px]" title="${escapeHTML(tx.notes || '')}">${escapeHTML(tx.notes || '-')}</td>
-        <td class="px-3 py-2 text-center">
+        <td class="px-4 py-3.5 text-start font-bold text-on-surface num-ltr">${tx.ticker}</td>
+        <td class="px-4 py-3.5 text-end text-on-surface num-ltr">${Number(tx.quantity).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>
+        <td class="px-4 py-3.5 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.price).toFixed(2)}</td>
+        <td class="px-4 py-3.5 text-end text-on-surface-variant num-ltr">${sym}${Number(tx.fee || 0).toFixed(2)}</td>
+        <td class="px-4 py-3.5 text-center text-xs num-ltr">${tx.currency}</td>
+        <td class="px-4 py-3.5 text-start text-on-surface-variant font-sans truncate max-w-[180px]" title="${escapeHTML(tx.notes || '')}">${escapeHTML(tx.notes || '-')}</td>
+        <td class="px-4 py-3.5 text-center">
           <button onclick="deletePortfolioTransaction('${tx.tx_id}')" class="text-on-surface-variant hover:text-tertiary transition-colors" title="Delete transaction">
-            <span class="material-symbols-outlined text-[15px]">delete</span>
+            <span class="material-symbols-outlined text-[16px]">delete</span>
           </button>
         </td>
       </tr>
