@@ -9,13 +9,19 @@ import requests
 import pandas as pd
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-# Configure PyArrow to use the system memory allocator so temporary Parquet buffers
-# are returned immediately to the OS instead of retained in the Arrow jemalloc/mimalloc pool
+# Configure PyArrow to use the system memory allocator and single-threaded I/O
+# so temporary Parquet buffers are returned immediately to the OS instead of retained
+# across multi-thread arenas.
 try:
     if hasattr(pa, "set_memory_pool"):
         pa.set_memory_pool(pa.system_memory_pool())
+    if hasattr(pa, "set_cpu_count"):
+        pa.set_cpu_count(1)
+    if hasattr(pa, "set_io_thread_count"):
+        pa.set_io_thread_count(1)
 except Exception:
     pass
 
@@ -258,14 +264,188 @@ def _get_universe_ticker_whitelist(base_dir: str) -> list[str]:
     return sorted(tickers)
 
 
+def load_parquet_price_matrix(
+    parquet_path: str,
+    tickers: list[str] | None = None,
+    min_date: pd.Timestamp | None = None,
+    include_volume: bool = False,
+    tail_rows: int | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """
+    Build a (Date x Ticker) float32 price matrix (and optional volume matrix) directly
+    by streaming PyArrow Parquet row groups one at a time (~200k rows / ~3MB per batch).
+    Maps Ticker symbols to integer column indices purely in C++ via `pyarrow.compute.index_in`
+    without ever allocating millions of Python `str` objects or calling `DataFrame.pivot()`.
+    """
+    pf = pq.ParquetFile(parquet_path)
+    md = pf.metadata
+
+    if not tickers:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        tickers = _get_universe_ticker_whitelist(base_dir)
+    sorted_tickers = sorted(set(str(t).strip().upper() for t in (tickers or []) if t))
+    if not sorted_tickers:
+        return pd.DataFrame(), (pd.DataFrame() if include_volume else None)
+
+    n_tickers = len(sorted_tickers)
+    pa_tickers = pa.array(sorted_tickers, type=pa.string())
+
+    min_ts = pd.Timestamp(min_date).tz_localize(None) if min_date is not None else None
+    min_dt64 = min_ts.to_datetime64() if min_ts is not None else None
+
+    date_col_idx = None
+    if md.num_row_groups > 0:
+        rg0 = md.row_group(0)
+        for c in range(rg0.num_columns):
+            if rg0.column(c).path_in_schema == "Date":
+                date_col_idx = c
+                break
+
+    cols_to_read = ['Date', 'Ticker', 'Adj. Close', 'Close']
+    if include_volume:
+        cols_to_read.append('Volume')
+
+    date_blocks: list[np.ndarray] = []
+    p_blocks: list[np.ndarray] = []
+    v_blocks: list[np.ndarray] = []
+
+    for r in range(md.num_row_groups):
+        if min_ts is not None and date_col_idx is not None:
+            col_meta = md.row_group(r).column(date_col_idx)
+            if col_meta.statistics and col_meta.statistics.has_min_max:
+                rg_max = pd.Timestamp(col_meta.statistics.max).tz_localize(None)
+                if rg_max < min_ts:
+                    continue
+
+        tbl = pf.read_row_group(r, columns=cols_to_read)
+        if tbl.num_rows == 0:
+            del tbl
+            continue
+
+        col_idx_arr = pc.index_in(tbl['Ticker'], value_set=pa_tickers)
+        valid_mask = pc.is_valid(col_idx_arr)
+        tbl = tbl.filter(valid_mask)
+        col_idx_arr = col_idx_arr.filter(valid_mask)
+        del valid_mask
+
+        if tbl.num_rows == 0:
+            del tbl, col_idx_arr
+            continue
+
+        dates_np = tbl['Date'].to_numpy(zero_copy_only=False)
+        col_idx_np = col_idx_arr.to_numpy(zero_copy_only=False).astype(np.int32, copy=False)
+        adj_np = tbl['Adj. Close'].to_numpy(zero_copy_only=False).astype(np.float32, copy=False)
+        close_np = tbl['Close'].to_numpy(zero_copy_only=False).astype(np.float32, copy=False)
+        price_np = np.where(np.isnan(adj_np), close_np, adj_np)
+        if include_volume:
+            vol_np = np.nan_to_num(
+                tbl['Volume'].to_numpy(zero_copy_only=False).astype(np.float32, copy=False),
+                nan=0.0,
+            )
+        else:
+            vol_np = None
+
+        del tbl, col_idx_arr, adj_np, close_np
+
+        if min_dt64 is not None and len(dates_np) > 0 and dates_np[0] < min_dt64:
+            d_mask = dates_np >= min_dt64
+            if not d_mask.any():
+                del dates_np, col_idx_np, price_np, vol_np
+                continue
+            dates_np = dates_np[d_mask]
+            col_idx_np = col_idx_np[d_mask]
+            price_np = price_np[d_mask]
+            if include_volume and vol_np is not None:
+                vol_np = vol_np[d_mask]
+            del d_mask
+
+        rg_dates, inv_row = np.unique(dates_np, return_inverse=True)
+        rg_p_mat = np.full((len(rg_dates), n_tickers), np.nan, dtype=np.float32)
+        rg_p_mat[inv_row, col_idx_np] = price_np
+        if include_volume and vol_np is not None:
+            rg_v_mat = np.full((len(rg_dates), n_tickers), 0.0, dtype=np.float32)
+            rg_v_mat[inv_row, col_idx_np] = vol_np
+        else:
+            rg_v_mat = None
+
+        del dates_np, col_idx_np, price_np, vol_np, inv_row
+
+        if date_blocks and rg_dates[0] == date_blocks[-1][-1]:
+            valid_p = ~np.isnan(rg_p_mat[0])
+            p_blocks[-1][-1, valid_p] = rg_p_mat[0, valid_p]
+            if include_volume and rg_v_mat is not None:
+                valid_v = rg_v_mat[0] > 0.0
+                v_blocks[-1][-1, valid_v] = rg_v_mat[0, valid_v]
+            rg_dates = rg_dates[1:]
+            rg_p_mat = rg_p_mat[1:]
+            if include_volume and rg_v_mat is not None:
+                rg_v_mat = rg_v_mat[1:]
+
+        if len(rg_dates) > 0:
+            date_blocks.append(rg_dates)
+            p_blocks.append(rg_p_mat)
+            if include_volume and rg_v_mat is not None:
+                v_blocks.append(rg_v_mat)
+
+    del pf, md, pa_tickers
+    if not date_blocks:
+        _release_arrow_memory()
+        return pd.DataFrame(), (pd.DataFrame() if include_volume else None)
+
+    full_dates = pd.DatetimeIndex(np.concatenate(date_blocks)).tz_localize(None)
+    full_p_mat = np.vstack(p_blocks)
+    del date_blocks, p_blocks
+    if include_volume:
+        full_v_mat = np.vstack(v_blocks)
+        del v_blocks
+    else:
+        full_v_mat = None
+
+    if not full_dates.is_monotonic_increasing:
+        order = np.argsort(full_dates.values)
+        full_dates = full_dates[order]
+        full_p_mat = full_p_mat[order]
+        if full_v_mat is not None:
+            full_v_mat = full_v_mat[order]
+
+    if tail_rows is not None and len(full_dates) > tail_rows:
+        full_dates = full_dates[-tail_rows:]
+        full_p_mat = full_p_mat[-tail_rows:]
+        if full_v_mat is not None:
+            full_v_mat = full_v_mat[-tail_rows:]
+
+    valid_cols = ~np.isnan(full_p_mat).all(axis=0)
+    if not valid_cols.all():
+        active_tickers = [t for t, keep in zip(sorted_tickers, valid_cols) if keep]
+        full_p_mat = np.ascontiguousarray(full_p_mat[:, valid_cols], dtype=np.float32)
+        if full_v_mat is not None:
+            full_v_mat = np.ascontiguousarray(full_v_mat[:, valid_cols], dtype=np.float32)
+    else:
+        active_tickers = sorted_tickers
+
+    price_df = pd.DataFrame(full_p_mat, index=full_dates, columns=active_tickers, copy=False)
+    price_df.index.name = 'Date'
+    price_df.columns.name = 'Ticker'
+
+    if include_volume and full_v_mat is not None:
+        volume_df = pd.DataFrame(full_v_mat, index=full_dates, columns=active_tickers, copy=False)
+        volume_df.index.name = 'Date'
+        volume_df.columns.name = 'Ticker'
+    else:
+        volume_df = None
+
+    _release_arrow_memory()
+    return price_df, volume_df
+
+
 def ensure_tech_cache():
     """
     Hydrates _TECH_DATA_CACHE from us-shareprices-daily.parquet and spy_historical.csv if missing or expired (30m TTL).
     Strictly bounds memory (<512MB Render limit) by:
       1. Discovering the Parquet max date from footer statistics in O(1) memory (~0 MB).
-      2. Pushing down both Ticker whitelist and 370-day Date bounds into PyArrow.
+      2. Streaming matching row groups via `load_parquet_price_matrix` (zero Python string explosion, zero DataFrame.pivot).
       3. Pre-computing 1D Series (latest_prices, adtv_series) and tech_map immediately,
-         then freeing the 2D price/volume pivot matrices and releasing Arrow pool memory.
+         then freeing the 2D price/volume matrices and releasing Arrow pool memory.
     Returns tuple of (price_df, volume_df, spy_s).
     """
     global _TECH_DATA_CACHE
@@ -306,41 +486,16 @@ def ensure_tech_cache():
         min_date = effective_end - pd.Timedelta(days=370)
 
         ticker_whitelist = _get_universe_ticker_whitelist(base_dir)
-        parquet_filters = [('Date', '>=', min_date)]
-        if ticker_whitelist:
-            parquet_filters.insert(0, ('Ticker', 'in', ticker_whitelist))
-
-        raw_p = pd.read_parquet(
+        full_price_df, full_volume_df = load_parquet_price_matrix(
             simfin_parquet_path,
-            engine='pyarrow',
-            columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
-            filters=parquet_filters,
+            tickers=ticker_whitelist,
+            min_date=min_date,
+            include_volume=True,
+            tail_rows=260,
         )
-        if raw_p.empty and ticker_whitelist:
-            # Fallback without ticker filter if whitelist missed custom symbols
-            raw_p = pd.read_parquet(
-                simfin_parquet_path,
-                engine='pyarrow',
-                columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
-                filters=[('Date', '>=', min_date)],
-            )
-        if raw_p.empty:
+        if full_price_df.empty:
             _release_arrow_memory()
             return None, None, None
-
-        raw_p['Date'] = pd.to_datetime(raw_p['Date'])
-        raw_p['Ticker'] = raw_p['Ticker'].astype(str)
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-        if 'Volume' not in raw_p.columns:
-            raw_p['Volume'] = np.float32(0.0)
-        else:
-            raw_p['Volume'] = raw_p['Volume'].fillna(0.0).astype('float32')
-
-        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
-
-        full_price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
-        full_volume_df = raw_p.pivot(index='Date', columns='Ticker', values='Volume').sort_index().tail(260)
-        del raw_p
 
         # Load SPY benchmark history
         spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
@@ -402,19 +557,45 @@ def compute_vectorized_tech_series(price_df, spy_s, log_diag=False):
     """
     Pure vectorized technical indicator computation on a point-in-time price matrix `price_df`
     and aligned benchmark `spy_s` (strictly <= anchor date t_k).
+    Uses direct float32 NumPy array math for daily returns and Beta covariance to avoid
+    allocating multiple intermediate 2D Pandas DataFrames per rebalance anchor.
     Returns (rel_strength, price_vs_sma, rsi_14, beta_s, latest_px) as 1D Series indexed by Ticker.
     """
-    last_px = price_df.ffill(limit=5).iloc[-1]
-    first_px = price_df.bfill(limit=5).iloc[0].replace(0, float('nan'))
+    cols = price_df.columns
+    px_arr = price_df.to_numpy(dtype=np.float32, copy=False)
+    n_rows, n_cols = px_arr.shape
 
+    # Forward-fill up to 5 rows at the tail for latest_px, and backward-fill up to 5 rows at the head for first_px
+    tail_k = min(6, n_rows)
+    last_vals = px_arr[-1].copy()
+    for step in range(2, tail_k + 1):
+        nan_m = np.isnan(last_vals)
+        if not nan_m.any():
+            break
+        last_vals[nan_m] = px_arr[-step, nan_m]
+    last_px = pd.Series(last_vals, index=cols, dtype='float32')
+
+    head_k = min(6, n_rows)
+    first_vals = px_arr[0].copy()
+    for step in range(1, head_k):
+        nan_m = np.isnan(first_vals) | (first_vals == 0.0)
+        if not nan_m.any():
+            break
+        first_vals[nan_m] = px_arr[step, nan_m]
+    first_vals = np.where(first_vals == 0.0, np.nan, first_vals)
+
+    import warnings
     # 1. Vectorized 1-Year Relative Strength vs SPY (same time window as stocks)
     spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 and spy_s.iloc[0] != 0 else 0.0
-    stk_1y_ret = (last_px - first_px) / first_px
-    rel_strength = (stk_1y_ret - spy_1y_ret).astype('float32')
+    with warnings.catch_warnings(), np.errstate(divide='ignore', invalid='ignore'):
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        stk_1y_ret = (last_vals - first_vals) / first_vals
+        rel_strength = pd.Series((stk_1y_ret - spy_1y_ret).astype(np.float32), index=cols, dtype='float32')
 
-    # 2. Vectorized Price vs 200-day Simple Moving Average
-    sma_200 = price_df.tail(200).mean()
-    price_vs_sma = (last_px / sma_200.replace(0, float('nan'))).astype('float32')
+        # 2. Vectorized Price vs 200-day Simple Moving Average
+        sma_200 = np.nanmean(px_arr[-200:], axis=0)
+        sma_200 = np.where(sma_200 == 0.0, np.nan, sma_200)
+        price_vs_sma = pd.Series((last_vals / sma_200).astype(np.float32), index=cols, dtype='float32')
 
     if log_diag:
         valid_sma = price_vs_sma.dropna()
@@ -424,32 +605,42 @@ def compute_vectorized_tech_series(price_df, spy_s, log_diag=False):
         print(f"[DIAG] PriceVs200SMA statistics: Total tickers={len(price_vs_sma)}, > 0.0 count={pos_sma_c}, <= 0.0 / NaN count={zero_sma_c}, Sample={sample_sma}")
 
     # 3. Vectorized 14-day RSI
-    delta = price_df.tail(15).diff()
-    gain = delta.where(delta > 0, 0.0).tail(14).mean()
-    loss = (-delta.where(delta < 0, 0.0)).tail(14).mean()
-    rs = gain / (loss + 1e-6)
-    rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
+    tail_15 = px_arr[-15:]
+    if len(tail_15) >= 2:
+        with warnings.catch_warnings(), np.errstate(divide='ignore', invalid='ignore'):
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            delta = np.diff(tail_15, axis=0)[-14:]
+            gain = np.mean(np.where(delta > 0.0, delta, np.float32(0.0)), axis=0)
+            loss = np.mean(np.where(delta < 0.0, -delta, np.float32(0.0)), axis=0)
+            rs = gain / (loss + np.float32(1e-6))
+            rsi_vals = (100.0 - (100.0 / (1.0 + rs))).astype(np.float32)
+    else:
+        rsi_vals = np.full(n_cols, 50.0, dtype=np.float32)
+    rsi_14 = pd.Series(rsi_vals, index=cols, dtype='float32')
 
-    # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns via NumPy dot-product)
-    stk_returns = price_df.pct_change(fill_method=None)
+    # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns via NumPy dot-product, zero 2D DataFrame copies)
     spy_returns = spy_s.pct_change(fill_method=None).reindex(price_df.index)
-
     spy_valid = spy_returns.dropna()
     spy_var = float(spy_valid.var()) if len(spy_valid) > 1 else 0.0
 
-    if spy_var > 0.0:
-        spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).values
-        stk_dm = (stk_returns - stk_returns.mean()).fillna(0.0).values
+    if spy_var > 0.0 and n_rows >= 2:
+        spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).to_numpy(dtype=np.float32)
+        spy_dm = np.nan_to_num(spy_dm[1:], nan=0.0, posinf=0.0, neginf=0.0)
 
-        spy_dm = np.nan_to_num(spy_dm, nan=0.0, posinf=0.0, neginf=0.0)
-        stk_dm = np.nan_to_num(stk_dm, nan=0.0, posinf=0.0, neginf=0.0)
+        with warnings.catch_warnings(), np.errstate(divide='ignore', invalid='ignore'):
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            prev_px = np.where(px_arr[:-1] == 0.0, np.nan, px_arr[:-1])
+            stk_ret = (px_arr[1:] - px_arr[:-1]) / prev_px
+            stk_mean = np.nanmean(stk_ret, axis=0, keepdims=True)
+            stk_dm = np.nan_to_num(stk_ret - stk_mean, nan=0.0, posinf=0.0, neginf=0.0)
 
         n_obs = max(1, len(spy_returns) - 1)
         cov_vals = np.dot(stk_dm.T, spy_dm) / n_obs
-        cov_s = pd.Series(cov_vals, index=price_df.columns, dtype='float32')
+        cov_s = pd.Series(cov_vals, index=cols, dtype='float32')
         beta_s = (cov_s / spy_var).fillna(1.0)
+        del stk_ret, stk_dm
     else:
-        beta_s = pd.Series(1.0, index=price_df.columns, dtype='float32')
+        beta_s = pd.Series(1.0, index=cols, dtype='float32')
 
     return (
         rel_strength.fillna(0.0),
@@ -937,7 +1128,7 @@ def _vectorized_sigmoid(arr, median_val, mad_val, invert=False):
 OVERRIDE_COLUMNS = frozenset({'PayoutRatio', 'TrailingPE', 'NetDebt_EBITDA', 'EV_EBITDA'})
 
 
-def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None, use_live_tech_cache=True):
+def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None, use_live_tech_cache=True, return_df=False):
     """
     Apply dynamic filters, strategy knock-out filters, then normalize the surviving universe
     using vectorized piecewise Gaussian (Goldilocks) or robust Sigmoid Z-score curves.
@@ -950,14 +1141,15 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
         max_market_cap:  maximum market cap, or None.
         global_stocks_list: list of all raw CSV dicts (or DataFrame) for sector neutrality baseline.
         use_live_tech_cache: whether to apply live _TECH_DATA_CACHE Gatekeeper when LatestPrice is absent.
+        return_df:       if True, returns the normalized pandas DataFrame directly instead of list[dict].
     """
     if isinstance(stocks_list, pd.DataFrame):
         if stocks_list.empty:
-            return []
+            return pd.DataFrame() if return_df else []
         df_initial = stocks_list.copy()
     else:
         if not stocks_list:
-            return []
+            return pd.DataFrame() if return_df else []
         df_initial = pd.DataFrame(stocks_list)
 
     if 'Sector' not in df_initial.columns:
@@ -985,7 +1177,7 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
         )
         df_stocks = apply_derived_knockouts_vectorized(df_stocks, strategy)
         if df_stocks.empty:
-            return []
+            return pd.DataFrame() if return_df else []
 
     n = len(df_stocks)
     t0_norm = time.perf_counter()
@@ -1078,30 +1270,45 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
                     scores = np.where(col_arr < 0.0, 0.0, scores)
                 norm_matrix[:, j] = scores
 
-    # Step 5: Rebuild stock dicts with normalized values using vectorized DataFrame export
-    norm_df = pd.DataFrame(norm_matrix, columns=INDICATOR_COLUMNS)
+    # Step 5: Rebuild stock dicts (or return DataFrame directly) with normalized values
+    norm_df = pd.DataFrame(norm_matrix, columns=INDICATOR_COLUMNS, copy=False)
     norm_df.insert(0, 'Ticker', df_stocks['Ticker'].astype(str).values)
-    result = norm_df.to_dict(orient='records')
 
     t1_norm = time.perf_counter()
     print(f"[PROFILER] Normalization Math (Vectorized NumPy): {t1_norm - t0_norm:.3f}s")
 
-    return result
+    if return_df:
+        return norm_df
+    return norm_df.to_dict(orient='records')
 
 
 # ─── 4. Main FFI Entry Point ───────────────────────────────────────────────────
 
 def run_financial_engine(normalized_stocks, weights_list):
     """
-    Accepts pre-normalized stocks directly to bypass duplicate normalization.
+    Accepts pre-normalized stocks (either a pandas DataFrame or list[dict]) directly to bypass duplicate normalization.
     Packs contiguous 80-byte STOCK_STRUCT_DTYPE buffer → C dot-product → QuickSort.
     Strictly enforces 7-byte ASCII + null terminator ('\\0' at byte 7) for C `char ticker[8]`
     safety so `strcmp` in C never reads out-of-bounds, while restoring full ticker names on output.
     """
     t0_ffi = time.perf_counter()
-    num_stocks = len(normalized_stocks)
-    if num_stocks == 0:
-        return []
+    if isinstance(normalized_stocks, pd.DataFrame):
+        if normalized_stocks.empty:
+            return []
+        num_stocks = len(normalized_stocks)
+        ticker_seq = normalized_stocks['Ticker'].astype(str).tolist()
+        ind_mat = normalized_stocks[INDICATOR_COLUMNS].to_numpy(dtype='<f4', copy=False)
+        ind_mat = np.nan_to_num(ind_mat, nan=0.0, posinf=0.0, neginf=0.0)
+    else:
+        num_stocks = len(normalized_stocks)
+        if num_stocks == 0:
+            return []
+        ticker_seq = [str(s.get('Ticker', '')).strip() for s in normalized_stocks]
+        ind_mat = np.array(
+            [[_safe_float(s.get(col, 0.0), 0.0) for col in INDICATOR_COLUMNS] for s in normalized_stocks],
+            dtype='<f4',
+        )
+        ind_mat = np.nan_to_num(ind_mat, nan=0.0, posinf=0.0, neginf=0.0)
 
     # ── Step 1: Pack contiguous 80-byte Stock buffer via NumPy structured dtype ──
     c_buf = np.zeros(num_stocks, dtype=STOCK_STRUCT_DTYPE)
@@ -1109,8 +1316,7 @@ def run_financial_engine(normalized_stocks, weights_list):
 
     trunc_bytes_list = []
     full_ticker_lookup = {}
-    for s in normalized_stocks:
-        full_t = str(s.get('Ticker', '')).strip()
+    for full_t in ticker_seq:
         # Strictly encode as ASCII and truncate to 7 bytes max so byte 7 in S8 is guaranteed '\x00'
         b7 = full_t.encode('ascii', errors='ignore')[:7]
         trunc_bytes_list.append(b7)
@@ -1119,12 +1325,6 @@ def run_financial_engine(normalized_stocks, weights_list):
             full_ticker_lookup[t_key] = full_t
 
     c_buf['ticker'] = trunc_bytes_list
-
-    ind_mat = np.array(
-        [[_safe_float(s.get(col, 0.0), 0.0) for col in INDICATOR_COLUMNS] for s in normalized_stocks],
-        dtype='<f4',
-    )
-    ind_mat = np.nan_to_num(ind_mat, nan=0.0, posinf=0.0, neginf=0.0)
     c_buf['indicators'] = ind_mat
 
     clean_weights = [_safe_float(w, 0.0) for w in weights_list][:NUM_INDICATORS]

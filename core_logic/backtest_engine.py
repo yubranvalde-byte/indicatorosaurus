@@ -8,6 +8,7 @@ from financial_module import (
     run_financial_engine,
     compute_vectorized_tech_series,
     discover_parquet_max_date,
+    load_parquet_price_matrix,
     _release_arrow_memory,
     _safe_float,
     _scalar_float,
@@ -140,14 +141,11 @@ def _get_backtest_datasets():
             max_ds_date = discover_parquet_max_date(simfin_parquet_path)
             min_fund_dt = df['Quarter_End_Date'].min() if not df.empty else (max_ds_date - pd.DateOffset(years=5))
             min_parquet_date = min(min_fund_dt, max_ds_date - pd.DateOffset(years=6)) - pd.Timedelta(days=370)
-            raw_p = pd.read_parquet(
+            price_df, _ = load_parquet_price_matrix(
                 simfin_parquet_path,
-                engine='pyarrow',
-                columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
-                filters=[
-                    ('Ticker', 'in', universe_tickers),
-                    ('Date', '>=', min_parquet_date),
-                ],
+                tickers=universe_tickers,
+                min_date=min_parquet_date,
+                include_volume=False,
             )
         else:
             raw_p = pd.read_csv(
@@ -157,12 +155,11 @@ def _get_backtest_datasets():
                 dtype={'Close': 'float32', 'Adj. Close': 'float32'},
             )
             raw_p = raw_p[raw_p['Ticker'].isin(universe_tickers)]
-
-        raw_p['Date'] = pd.to_datetime(raw_p['Date']).dt.tz_localize(None)
-        raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
-        raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
-        price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().astype('float32')
-        del raw_p
+            raw_p['Date'] = pd.to_datetime(raw_p['Date']).dt.tz_localize(None)
+            raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
+            raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
+            price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().astype('float32')
+            del raw_p
         _release_arrow_memory()
 
         spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'], dtype={'SPY_Adj_Close': 'float32'})
@@ -293,10 +290,11 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 max_market_cap=max_market_cap,
                 global_stocks_list=snapshot_df,
                 use_live_tech_cache=False,
+                return_df=True,
             )
 
             # Max 2 attempts: if empty, fall back directly to baseline unfiltered snapshot
-            if not normalized_snapshot:
+            if normalized_snapshot.empty:
                 normalized_snapshot = normalize_stocks(
                     snapshot_df,
                     strategy=None,
@@ -305,16 +303,20 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                     max_market_cap=None,
                     global_stocks_list=snapshot_df,
                     use_live_tech_cache=False,
+                    return_df=True,
                 )
 
-            if not normalized_snapshot:
+            if normalized_snapshot.empty:
                 top_10 = []
             else:
                 scored_stocks = run_financial_engine(normalized_snapshot, weights)
                 top_10 = [s['Ticker'] for s in scored_stocks[:10]]
+                del scored_stocks
+            del normalized_snapshot
         except Exception as e:
             print(f"Error scoring portfolio at {t_k}: {e}")
             top_10 = []
+        del snapshot_df
 
         if top_10:
             p['tickers'] = top_10
