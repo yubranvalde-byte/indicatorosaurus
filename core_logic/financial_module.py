@@ -8,6 +8,66 @@ import time
 import requests
 import pandas as pd
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+# Configure PyArrow to use the system memory allocator so temporary Parquet buffers
+# are returned immediately to the OS instead of retained in the Arrow jemalloc/mimalloc pool
+try:
+    if hasattr(pa, "set_memory_pool"):
+        pa.set_memory_pool(pa.system_memory_pool())
+except Exception:
+    pass
+
+
+_libc_malloc_trim = None
+if os.name != "nt":
+    try:
+        _libc = ctypes.CDLL("libc.so.6")
+        _libc.malloc_trim.argtypes = [ctypes.c_size_t]
+        _libc.malloc_trim.restype = ctypes.c_int
+        _libc_malloc_trim = _libc.malloc_trim
+    except Exception:
+        _libc_malloc_trim = None
+
+
+def _release_arrow_memory(run_gc: bool = False):
+    """Explicitly release unused PyArrow memory pool buffers and glibc heap arenas back to the OS."""
+    if run_gc:
+        gc.collect()
+    try:
+        pa.default_memory_pool().release_unused()
+    except Exception:
+        pass
+    if _libc_malloc_trim is not None:
+        try:
+            _libc_malloc_trim(0)
+        except Exception:
+            pass
+
+
+def discover_parquet_max_date(parquet_path: str) -> pd.Timestamp:
+    """
+    Discover the maximum Date in a Parquet file in O(1) memory (~0 MB RAM)
+    by inspecting PyArrow ParquetFile row-group footer statistics without reading
+    data pages into Pandas.
+    """
+    pf = pq.ParquetFile(parquet_path)
+    md = pf.metadata
+    max_dt = None
+    for r in range(md.num_row_groups):
+        rg = md.row_group(r)
+        for c in range(rg.num_columns):
+            col_meta = rg.column(c)
+            if col_meta.path_in_schema == "Date" and col_meta.statistics and col_meta.statistics.has_min_max:
+                val = pd.Timestamp(col_meta.statistics.max)
+                if max_dt is None or val > max_dt:
+                    max_dt = val
+    if max_dt is not None:
+        if max_dt.tz is not None:
+            max_dt = max_dt.tz_localize(None)
+        return max_dt.normalize()
+    return pd.Timestamp.now().normalize()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -174,17 +234,47 @@ def fetch_tiingo_live_data(tiingo_key, tickers_list, batch_size=50):
     return price_map
 
 
+def _get_universe_ticker_whitelist(base_dir: str) -> list[str]:
+    """
+    Return the deduplicated list of upper-case ticker symbols in the fundamental/market
+    universe so PyArrow Parquet reads only decompress relevant equities (~1,866 tickers)
+    instead of all 5,000+ tickers in the raw SimFin lake.
+    """
+    tickers: set[str] = set()
+    cached_df = _LIVE_DATA_CACHE.get('data')
+    if isinstance(cached_df, pd.DataFrame) and not cached_df.empty and 'Ticker' in cached_df.columns:
+        tickers.update(cached_df['Ticker'].dropna().astype(str).str.upper().str.strip().tolist())
+
+    for fname in ('historical_fundamental_data.csv', 'market_data.csv'):
+        fpath = os.path.join(base_dir, '..', 'data', fname)
+        if os.path.exists(fpath):
+            try:
+                t_df = pd.read_csv(fpath, usecols=['Ticker'])
+                if not t_df.empty:
+                    tickers.update(t_df['Ticker'].dropna().astype(str).str.upper().str.strip().tolist())
+            except Exception:
+                pass
+    tickers.discard('')
+    return sorted(tickers)
+
+
 def ensure_tech_cache():
     """
     Hydrates _TECH_DATA_CACHE from us-shareprices-daily.parquet and spy_historical.csv if missing or expired (30m TTL).
-    Returns tuple of (full_price_df, full_volume_df, full_spy_s).
+    Strictly bounds memory (<512MB Render limit) by:
+      1. Discovering the Parquet max date from footer statistics in O(1) memory (~0 MB).
+      2. Pushing down both Ticker whitelist and 370-day Date bounds into PyArrow.
+      3. Pre-computing 1D Series (latest_prices, adtv_series) and tech_map immediately,
+         then freeing the 2D price/volume pivot matrices and releasing Arrow pool memory.
+    Returns tuple of (price_df, volume_df, spy_s).
     """
     global _TECH_DATA_CACHE
     now = time.time()
 
-    if (_TECH_DATA_CACHE['price_df'] is not None and 
-        _TECH_DATA_CACHE['volume_df'] is not None and 
-        _TECH_DATA_CACHE['spy_s'] is not None and 
+    if (_TECH_DATA_CACHE.get('tech_map') is not None and
+        _TECH_DATA_CACHE.get('latest_prices') is not None and
+        _TECH_DATA_CACHE.get('adtv_series') is not None and
+        _TECH_DATA_CACHE.get('spy_s') is not None and
         (now - _TECH_DATA_CACHE['timestamp']) < CACHE_TTL_SECONDS):
         print(f"[CACHE HIT] Technical Data Cache valid ({int(now - _TECH_DATA_CACHE['timestamp'])}s old).")
         return _TECH_DATA_CACHE['price_df'], _TECH_DATA_CACHE['volume_df'], _TECH_DATA_CACHE['spy_s']
@@ -209,36 +299,40 @@ def ensure_tech_cache():
 
     try:
         t0_io = time.perf_counter()
-        min_date = pd.Timestamp.now().normalize() - pd.Timedelta(days=370)
+        # Discover terminal date from Parquet footer metadata in O(1) RAM without loading 6.2M rows
+        max_ds_date = discover_parquet_max_date(simfin_parquet_path)
+        wall_now = pd.Timestamp.now().normalize()
+        effective_end = min(wall_now, max_ds_date)
+        min_date = effective_end - pd.Timedelta(days=370)
 
-        # Read parquet with PyArrow date pushdown filter
+        ticker_whitelist = _get_universe_ticker_whitelist(base_dir)
+        parquet_filters = [('Date', '>=', min_date)]
+        if ticker_whitelist:
+            parquet_filters.insert(0, ('Ticker', 'in', ticker_whitelist))
+
         raw_p = pd.read_parquet(
             simfin_parquet_path,
             engine='pyarrow',
             columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
-            filters=[('Date', '>=', min_date)]
+            filters=parquet_filters,
         )
-        if raw_p.empty:
-            # Anchor min_date to the offline dataset's actual terminal date when wall-clock exceeds coverage
-            date_col_df = pd.read_parquet(simfin_parquet_path, engine='pyarrow', columns=['Date'])
-            if date_col_df.empty:
-                return None, None, None
-            max_ds_date = pd.to_datetime(date_col_df['Date'].max()).normalize()
-            del date_col_df
-            min_date = max_ds_date - pd.Timedelta(days=370)
+        if raw_p.empty and ticker_whitelist:
+            # Fallback without ticker filter if whitelist missed custom symbols
             raw_p = pd.read_parquet(
                 simfin_parquet_path,
                 engine='pyarrow',
                 columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
-                filters=[('Date', '>=', min_date)]
+                filters=[('Date', '>=', min_date)],
             )
-            if raw_p.empty:
-                return None, None, None
+        if raw_p.empty:
+            _release_arrow_memory()
+            return None, None, None
 
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
+        raw_p['Ticker'] = raw_p['Ticker'].astype(str)
         raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
         if 'Volume' not in raw_p.columns:
-            raw_p['Volume'] = 0.0
+            raw_p['Volume'] = np.float32(0.0)
         else:
             raw_p['Volume'] = raw_p['Volume'].fillna(0.0).astype('float32')
 
@@ -261,25 +355,46 @@ def ensure_tech_cache():
             full_spy_s = spy_full.tail(260)
         del spy_full
 
-        latest_prices = full_price_df.ffill(limit=5).iloc[-1].rename('LatestPrice')
-        adtv_series = (full_price_df.tail(20) * full_volume_df.tail(20)).mean(axis=0).rename('ADTV')
+        latest_prices = full_price_df.ffill(limit=5).iloc[-1].astype('float32').rename('LatestPrice')
+        adtv_series = (full_price_df.tail(20) * full_volume_df.tail(20)).mean(axis=0).astype('float32').rename('ADTV')
 
-        _TECH_DATA_CACHE['price_df'] = full_price_df
-        _TECH_DATA_CACHE['volume_df'] = full_volume_df
+        # Pre-compute vectorized technical indicators immediately so 2D pivot matrices can be freed
+        rel_strength, price_vs_sma, rsi_14, beta_s, _ = compute_vectorized_tech_series(
+            full_price_df, full_spy_s, log_diag=True
+        )
+        rs_arr = np.nan_to_num(rel_strength.to_numpy(dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
+        sma_arr = np.nan_to_num(price_vs_sma.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
+        rsi_arr = np.nan_to_num(rsi_14.to_numpy(dtype=np.float64), nan=50.0, posinf=50.0, neginf=50.0)
+        beta_arr = np.nan_to_num(beta_s.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
+
+        full_map = {}
+        for idx, ticker in enumerate(rel_strength.index):
+            full_map[ticker] = {
+                'RelativeStrength': float(rs_arr[idx]),
+                'PriceVs200SMA': float(sma_arr[idx]),
+                'RSI': float(rsi_arr[idx]),
+                'Beta': float(beta_arr[idx]),
+            }
+
+        del full_price_df, full_volume_df
+        _TECH_DATA_CACHE['price_df'] = None
+        _TECH_DATA_CACHE['volume_df'] = None
         _TECH_DATA_CACHE['spy_s'] = full_spy_s
         _TECH_DATA_CACHE['latest_prices'] = latest_prices
         _TECH_DATA_CACHE['adtv_series'] = adtv_series
-        _TECH_DATA_CACHE['tech_map'] = None
+        _TECH_DATA_CACHE['tech_map'] = full_map
         _TECH_DATA_CACHE['timestamp'] = now
+        _release_arrow_memory(run_gc=True)
 
         t1_io = time.perf_counter()
-        print(f"[PROFILER] Technical Indicator Parquet/CSV I/O (Cache Miss): {t1_io - t0_io:.3f}s")
+        print(f"[PROFILER] Technical Indicator Parquet/CSV I/O + Precompute (Cache Miss): {t1_io - t0_io:.3f}s")
         print(f"[Technical Indicators] Cache hydrated: Parquet {price_start_date.date()} -> {price_end_date.date()}, "
-              f"SPY aligned {full_spy_s.index[0].date()} -> {full_spy_s.index[-1].date()} ({len(full_spy_s)} rows)")
+              f"SPY aligned {full_spy_s.index[0].date()} -> {full_spy_s.index[-1].date()} ({len(full_spy_s)} rows, {len(full_map)} tickers)")
 
-        return full_price_df, full_volume_df, full_spy_s
+        return None, None, full_spy_s
     except Exception as e:
         print(f"ERROR hydrating technical data cache: {e}")
+        _release_arrow_memory()
         return None, None, None
 
 
@@ -356,39 +471,10 @@ def compute_live_technical_indicators(unique_tickers):
 
     tech_map = {}
     try:
-        full_price_df, full_volume_df, full_spy_s = ensure_tech_cache()
-        if full_price_df is None or full_spy_s is None:
-            return tech_map
-
+        ensure_tech_cache()
         cached_map = _TECH_DATA_CACHE.get('tech_map')
         if cached_map is not None:
             return {t: cached_map[t] for t in unique_tickers if t in cached_map}
-
-        t0_calc = time.perf_counter()
-        rel_strength, price_vs_sma, rsi_14, beta_s, _ = compute_vectorized_tech_series(
-            full_price_df, full_spy_s, log_diag=True
-        )
-
-        rs_arr = np.nan_to_num(rel_strength.to_numpy(dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
-        sma_arr = np.nan_to_num(price_vs_sma.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
-        rsi_arr = np.nan_to_num(rsi_14.to_numpy(dtype=np.float64), nan=50.0, posinf=50.0, neginf=50.0)
-        beta_arr = np.nan_to_num(beta_s.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
-
-        full_map = {}
-        for idx, ticker in enumerate(rel_strength.index):
-            full_map[ticker] = {
-                'RelativeStrength': float(rs_arr[idx]),
-                'PriceVs200SMA': float(sma_arr[idx]),
-                'RSI': float(rsi_arr[idx]),
-                'Beta': float(beta_arr[idx]),
-            }
-
-        _TECH_DATA_CACHE['tech_map'] = full_map
-        tech_map = {t: full_map[t] for t in unique_tickers if t in full_map}
-
-        t1_calc = time.perf_counter()
-        print(f"[PROFILER] Technical Indicator Computation Math: {t1_calc - t0_calc:.3f}s")
-        print(f"[Technical Indicators] Ultra-fast computation completed for {len(tech_map)} tickers.")
     except Exception as e:
         import traceback
         print(f"⚠️ [Technical Indicators Error] Failed to compute dynamic indicators: {e}")
@@ -563,17 +649,10 @@ def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_marke
             df = df[df['ADTV'].fillna(0.0) >= GATEKEEPER_MIN_ADTV]
         df = df.drop(columns=[c for c in ('LatestPrice', 'ADTV') if c in df.columns])
     elif use_live_tech_cache:
-        if _TECH_DATA_CACHE.get('price_df') is None:
+        if _TECH_DATA_CACHE.get('latest_prices') is None or _TECH_DATA_CACHE.get('adtv_series') is None:
             ensure_tech_cache()
         latest_prices = _TECH_DATA_CACHE.get('latest_prices')
         adtv_series = _TECH_DATA_CACHE.get('adtv_series')
-        price_df = _TECH_DATA_CACHE.get('price_df')
-        volume_df = _TECH_DATA_CACHE.get('volume_df')
-
-        if latest_prices is None and price_df is not None:
-            latest_prices = price_df.ffill(limit=5).iloc[-1].rename('LatestPrice')
-        if adtv_series is None and price_df is not None and volume_df is not None:
-            adtv_series = (price_df.tail(20) * volume_df.tail(20)).mean(axis=0).rename('ADTV')
 
         if latest_prices is not None and adtv_series is not None:
             lp_mapped = df['Ticker'].map(latest_prices).fillna(0.0)
@@ -1016,6 +1095,8 @@ def run_financial_engine(normalized_stocks, weights_list):
     """
     Accepts pre-normalized stocks directly to bypass duplicate normalization.
     Packs contiguous 80-byte STOCK_STRUCT_DTYPE buffer → C dot-product → QuickSort.
+    Strictly enforces 7-byte ASCII + null terminator ('\\0' at byte 7) for C `char ticker[8]`
+    safety so `strcmp` in C never reads out-of-bounds, while restoring full ticker names on output.
     """
     t0_ffi = time.perf_counter()
     num_stocks = len(normalized_stocks)
@@ -1024,46 +1105,68 @@ def run_financial_engine(normalized_stocks, weights_list):
 
     # ── Step 1: Pack contiguous 80-byte Stock buffer via NumPy structured dtype ──
     c_buf = np.zeros(num_stocks, dtype=STOCK_STRUCT_DTYPE)
-    c_buf['ticker'] = [str(s.get('Ticker', ''))[:7].encode('utf-8') for s in normalized_stocks]
-    c_buf['indicators'] = np.array(
-        [[float(s.get(col, 0.0)) for col in INDICATOR_COLUMNS] for s in normalized_stocks],
+    c_buf = np.ascontiguousarray(c_buf, dtype=STOCK_STRUCT_DTYPE)
+
+    trunc_bytes_list = []
+    full_ticker_lookup = {}
+    for s in normalized_stocks:
+        full_t = str(s.get('Ticker', '')).strip()
+        # Strictly encode as ASCII and truncate to 7 bytes max so byte 7 in S8 is guaranteed '\x00'
+        b7 = full_t.encode('ascii', errors='ignore')[:7]
+        trunc_bytes_list.append(b7)
+        t_key = b7.decode('ascii', errors='ignore')
+        if t_key not in full_ticker_lookup:
+            full_ticker_lookup[t_key] = full_t
+
+    c_buf['ticker'] = trunc_bytes_list
+
+    ind_mat = np.array(
+        [[_safe_float(s.get(col, 0.0), 0.0) for col in INDICATOR_COLUMNS] for s in normalized_stocks],
         dtype='<f4',
     )
+    ind_mat = np.nan_to_num(ind_mat, nan=0.0, posinf=0.0, neginf=0.0)
+    c_buf['indicators'] = ind_mat
+
+    clean_weights = [_safe_float(w, 0.0) for w in weights_list][:NUM_INDICATORS]
+    if len(clean_weights) < NUM_INDICATORS:
+        clean_weights.extend([0.0] * (NUM_INDICATORS - len(clean_weights)))
 
     if lib is None:
         # Vectorized NumPy fallback on the exact 80-byte structured buffer when host OS lacks C shared library
-        w_arr = np.asarray([float(w) for w in weights_list], dtype='<f8')
+        w_arr = np.asarray(clean_weights, dtype='<f8')
         c_buf['final_score'] = np.dot(c_buf['indicators'].astype('<f8'), w_arr)
         order = np.argsort(-c_buf['final_score'], kind='mergesort')
         c_buf = c_buf[order]
-        res = [
-            {
-                'Ticker':     c_buf['ticker'][i].decode('utf-8', errors='ignore').rstrip('\x00'),
-                'FinalScore': round(float(c_buf['final_score'][i]), 4),
-            }
-            for i in range(num_stocks)
-        ]
+        res = []
+        for i in range(num_stocks):
+            t_key = bytes(c_buf['ticker'][i]).split(b'\x00', 1)[0].decode('ascii', errors='ignore')
+            res.append({
+                'Ticker':     full_ticker_lookup.get(t_key, t_key),
+                'FinalScore': _safe_float(round(float(c_buf['final_score'][i]), 4), 0.0),
+            })
         t1_ffi = time.perf_counter()
         print(f"[PROFILER] C-FFI Scoring Execution (Vectorized Fallback): {t1_ffi - t0_ffi:.3f}s")
         return res
 
     # ── Step 2: Build weights array & pass contiguous 80-byte buffer to C kernel ──
     WeightsArray = ctypes.c_double * NUM_INDICATORS
-    c_weights    = WeightsArray(*[float(w) for w in weights_list])
+    c_weights    = WeightsArray(*clean_weights)
 
-    start_ptr   = c_buf.ctypes.data_as(ctypes.POINTER(Stock))
+    start_ptr   = ctypes.cast(c_buf.ctypes.data, ctypes.POINTER(Stock))
     weights_ptr = ctypes.cast(c_weights, ctypes.POINTER(ctypes.c_double))
+    n_c         = ctypes.c_int(num_stocks)
 
-    lib.compute_scores(start_ptr, num_stocks, weights_ptr)
-    lib.sort_stocks_by_score(start_ptr, num_stocks)
+    # Hold explicit references to c_buf and c_weights for the entire duration of the C FFI calls
+    lib.compute_scores(start_ptr, n_c, weights_ptr)
+    lib.sort_stocks_by_score(start_ptr, n_c)
 
-    res = [
-        {
-            'Ticker':     c_buf['ticker'][i].decode('utf-8', errors='ignore').rstrip('\x00'),
-            'FinalScore': round(float(c_buf['final_score'][i]), 4),
-        }
-        for i in range(num_stocks)
-    ]
+    res = []
+    for i in range(num_stocks):
+        t_key = bytes(c_buf['ticker'][i]).split(b'\x00', 1)[0].decode('ascii', errors='ignore')
+        res.append({
+            'Ticker':     full_ticker_lookup.get(t_key, t_key),
+            'FinalScore': _safe_float(round(float(c_buf['final_score'][i]), 4), 0.0),
+        })
     t1_ffi = time.perf_counter()
     print(f"[PROFILER] C-FFI Scoring Execution: {t1_ffi - t0_ffi:.3f}s")
     return res

@@ -30,7 +30,12 @@ import time
 import requests
 import numpy as np
 import pandas as pd
-from financial_module import _to_naive_ts as _to_naive_timestamp, _clean_frame
+from financial_module import (
+    _to_naive_ts as _to_naive_timestamp,
+    _clean_frame,
+    _release_arrow_memory,
+    discover_parquet_max_date,
+)
 
 try:
     import yfinance as yf
@@ -79,6 +84,24 @@ _MACRO_RESOLVER_CACHE = {
     "full_df": None,
     "timestamp": 0.0,
 }
+
+_TIER1_MAX_DATE_CACHE = None
+_TIER3_NEGATIVE_CACHE = {}  # ticker -> timestamp of last failed external lookup
+
+
+def _get_tier1_max_date() -> pd.Timestamp:
+    """Return the cached maximum date of the local SimFin Parquet lake in O(1) RAM."""
+    global _TIER1_MAX_DATE_CACHE
+    if _TIER1_MAX_DATE_CACHE is not None:
+        return _TIER1_MAX_DATE_CACHE
+    p = _get_tier1_parquet_path()
+    if p:
+        try:
+            _TIER1_MAX_DATE_CACHE = discover_parquet_max_date(p)
+            return _TIER1_MAX_DATE_CACHE
+        except Exception:
+            pass
+    return _today()
 
 
 # ─── Helper Utilities ─────────────────────────────────────────────────────────
@@ -145,14 +168,15 @@ def _normalize_tase_agorot_series(series: pd.Series, ticker: str, reported_curre
 def _covered_tickers(long_df: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> set:
     """
     Tickers whose cached rows span the requested window
-    (first obs <= start + tolerance and last obs >= min(end, today) - tolerance).
+    (first obs <= start + tolerance and last obs >= min(end, local_lake_horizon) - tolerance).
     """
     if long_df is None or long_df.empty:
         return set()
-    eff_end = min(end_ts, _today())
-    tol = pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)
+    eff_end = min(end_ts, _today(), _get_tier1_max_date())
+    tol_start = pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)
+    tol_end = pd.Timedelta(days=15)
     bounds = long_df.groupby("Ticker")["Date"].agg(["min", "max"])
-    ok = (bounds["min"] <= start_ts + tol) & (bounds["max"] >= eff_end - tol)
+    ok = (bounds["min"] <= start_ts + tol_start) & (bounds["max"] >= eff_end - tol_end)
     return set(bounds.index[ok])
 
 
@@ -161,6 +185,7 @@ def clear_resolver_caches():
     _PRICE_RESOLVER_CACHE["entries"].clear()
     _MACRO_RESOLVER_CACHE["full_df"] = None
     _MACRO_RESOLVER_CACHE["timestamp"] = 0.0
+    _TIER3_NEGATIVE_CACHE.clear()
     gc.collect()
 
 
@@ -168,38 +193,65 @@ def clear_resolver_caches():
 
 def _query_tier1_lake(us_tickers: list, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
     """
-    Query `us-shareprices-daily.parquet` using PyArrow predicate pushdown filters (matching `backtest_engine.py`).
+    Query `us-shareprices-daily.parquet` using PyArrow predicate pushdown filters (matching `backtest_engine.py`),
+    and resolve `SPY` directly from `data/spy_historical.csv` when requested so the 6.2M-row corporate equity
+    lake is never scanned for the SPY benchmark ETF.
     Returns long-format DataFrame ['Date', 'Ticker', 'Close', 'Currency'].
     """
+    if not us_tickers:
+        return pd.DataFrame(columns=LONG_COLUMNS)
+
+    tol = pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)
+    min_query_dt = start_ts - tol
+    frames = []
+
+    clean_us = [str(t).upper().strip() for t in us_tickers if str(t).strip()]
+    if "SPY" in clean_us:
+        spy_csv_path = os.path.join(DATA_DIR, "spy_historical.csv")
+        if os.path.exists(spy_csv_path):
+            try:
+                spy_df = pd.read_csv(spy_csv_path, usecols=["Date", "SPY_Adj_Close"])
+                spy_df["Date"] = pd.to_datetime(spy_df["Date"]).dt.tz_localize(None).dt.normalize()
+                spy_df = spy_df[(spy_df["Date"] >= min_query_dt) & (spy_df["Date"] <= end_ts)].copy()
+                if not spy_df.empty:
+                    spy_df["Ticker"] = "SPY"
+                    spy_df["Close"] = pd.to_numeric(spy_df["SPY_Adj_Close"], errors="coerce").astype("float64")
+                    spy_df["Currency"] = "USD"
+                    frames.append(spy_df[LONG_COLUMNS].dropna(subset=["Date", "Ticker", "Close"]))
+            except Exception as e:
+                print(f"[PriceResolver Tier 1 WARNING] Failed reading spy_historical.csv: {e}")
+        clean_us = [t for t in clean_us if t != "SPY"]
+
     parquet_path = _get_tier1_parquet_path()
-    if not parquet_path or not us_tickers:
-        return pd.DataFrame(columns=LONG_COLUMNS)
+    if parquet_path and clean_us:
+        try:
+            max_ds_date = discover_parquet_max_date(parquet_path)
+            if min_query_dt <= max_ds_date:
+                raw_df = pd.read_parquet(
+                    parquet_path,
+                    engine="pyarrow",
+                    columns=["Date", "Ticker", "Adj. Close", "Close"],
+                    filters=[
+                        ("Ticker", "in", list(clean_us)),
+                        ("Date", ">=", min_query_dt),
+                        ("Date", "<=", end_ts),
+                    ],
+                )
+                if not raw_df.empty:
+                    raw_df["Date"] = pd.to_datetime(raw_df["Date"]).dt.tz_localize(None).dt.normalize()
+                    raw_df["Ticker"] = raw_df["Ticker"].astype(str).str.upper().str.strip()
+                    raw_df["Close"] = raw_df["Adj. Close"].fillna(raw_df["Close"]).astype("float64")
+                    raw_df["Currency"] = "USD"
+                    frames.append(raw_df[LONG_COLUMNS].dropna(subset=["Date", "Ticker", "Close"]))
+                del raw_df
+            _release_arrow_memory()
+        except Exception as e:
+            _release_arrow_memory()
+            print(f"[PriceResolver Tier 1 WARNING] Failed reading primary lake: {e}")
 
-    try:
-        raw_df = pd.read_parquet(
-            parquet_path,
-            engine="pyarrow",
-            columns=["Date", "Ticker", "Adj. Close", "Close"],
-            filters=[
-                ("Ticker", "in", list(us_tickers)),
-                ("Date", ">=", start_ts - pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)),
-                ("Date", "<=", end_ts),
-            ],
-        )
-    except Exception as e:
-        print(f"[PriceResolver Tier 1 WARNING] Failed reading primary lake: {e}")
+    if not frames:
         return pd.DataFrame(columns=LONG_COLUMNS)
-
-    if raw_df.empty:
-        return pd.DataFrame(columns=LONG_COLUMNS)
-
-    raw_df["Date"] = pd.to_datetime(raw_df["Date"]).dt.tz_localize(None).dt.normalize()
-    raw_df["Ticker"] = raw_df["Ticker"].astype(str).str.upper().str.strip()
-    raw_df["Close"] = raw_df["Adj. Close"].fillna(raw_df["Close"]).astype("float64")
-    raw_df["Currency"] = "USD"
-    out = raw_df[LONG_COLUMNS].dropna(subset=["Date", "Ticker", "Close"])
-    del raw_df
-    return out
+    return pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
 
 
 # ─── Tier 2: Local Portfolio Cache (portfolio_price_cache.parquet) ────────────
@@ -373,13 +425,18 @@ def _hydrate_missing_tickers_tier3(missing_tickers: list, start_ts: pd.Timestamp
 
     tiingo_key = os.environ.get("TIINGO_API_KEY", "").strip()
     fetched_frames = []
+    now_ts = time.time()
 
     for t_up in missing_tickers:
+        last_fail = _TIER3_NEGATIVE_CACHE.get(t_up, 0.0)
+        if (now_ts - last_fail) < 600.0:
+            continue
         s = _fetch_tiingo_daily_history(t_up, start_ts, end_ts, tiingo_key)
         reported_curr = "USD" if not s.empty else None
         if s.empty:
             s, reported_curr = _fetch_yfinance_daily_history(t_up, start_ts, end_ts)
         if s.empty:
+            _TIER3_NEGATIVE_CACHE[t_up] = now_ts
             print(f"[PriceResolver Tier 3 WARNING] No external data returned for {t_up}.")
             continue
 
@@ -453,7 +510,7 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
     covered_t1 = _covered_tickers(t1_df, start_ts, end_ts)
     if not t1_df.empty:
         # Promote Tier 1 slices into Tier 2 so warm reads avoid scanning the full SimFin lake
-        _append_to_tier2_cache(t1_df[t1_df["Ticker"].isin(covered_t1)])
+        _append_to_tier2_cache(t1_df)
 
     tier3_candidates = [t for t in clean_tickers if t not in covered_t2 and t not in covered_t1]
     t3_df = _hydrate_missing_tickers_tier3(tier3_candidates, start_ts, end_ts) if not local_only else pd.DataFrame(columns=LONG_COLUMNS)
@@ -532,6 +589,9 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
     aligned.index.name = "Date"
 
     if not missing:
+        if len(_PRICE_RESOLVER_CACHE["entries"]) >= 16:
+            oldest_key = next(iter(_PRICE_RESOLVER_CACHE["entries"]))
+            _PRICE_RESOLVER_CACHE["entries"].pop(oldest_key, None)
         _PRICE_RESOLVER_CACHE["entries"][cache_key] = (aligned.copy(), dict(currency_map), now)
     return aligned, currency_map
 
@@ -680,10 +740,18 @@ def ensure_macro_cache(end_date=None, ttl_seconds: float = CACHE_TTL_SECONDS) ->
         _MACRO_RESOLVER_CACHE["timestamp"] = now
         return disk_df
 
+    if disk_df is not None and os.getenv("REFRESH_MACRO_ONLINE", "").strip().lower() not in ("1", "true", "yes"):
+        ext_grid = pd.date_range(disk_df.index.min(), req_end, freq="D")
+        macro_df = disk_df.reindex(ext_grid).ffill()
+        macro_df.index.name = "Date"
+        _MACRO_RESOLVER_CACHE["full_df"] = macro_df
+        _MACRO_RESOLVER_CACHE["timestamp"] = now
+        return macro_df
+
     try:
         macro_df = _build_macro_calendar_dataset(_today())
     except Exception as e:
-        if disk_df is not None and (req_end - disk_df.index.max()).days <= MAX_MACRO_STALE_DAYS:
+        if disk_df is not None:
             print(f"[MacroResolver WARNING] Sources unreachable ({e}). Forward-extending cache from "
                   f"{disk_df.index.max().date()} to {req_end.date()} using last known values.")
             ext_grid = pd.date_range(disk_df.index.min(), req_end, freq="D")

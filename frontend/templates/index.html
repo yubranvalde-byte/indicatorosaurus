@@ -3112,11 +3112,9 @@ async function refreshPortfolioWorkspace() {
   if (btn) btn.classList.add('opacity-60');
   try {
     renderBenchmarkChips();
-    await Promise.all([
-      fetchPortfolioSummary(),
-      fetchPortfolioAnalytics(),
-      fetchPortfolioTransactions()
-    ]);
+    await fetchPortfolioTransactions();
+    await fetchPortfolioSummary();
+    await fetchPortfolioAnalytics();
   } finally {
     if (btn) btn.classList.remove('opacity-60');
   }

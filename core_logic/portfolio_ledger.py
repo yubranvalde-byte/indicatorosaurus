@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, asdict
 
 import numpy as np
 import pandas as pd
-from financial_module import _scalar_float, sanitize_for_json, _clean_frame, _to_naive_ts
+from financial_module import _scalar_float, sanitize_for_json, _clean_frame, _to_naive_ts, _release_arrow_memory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
@@ -912,16 +912,17 @@ class PortfolioLedger:
                         px_df, _ = self.price_provider(sec_tickers, min_dt, max_dt)
                     else:
                         from price_resolver import resolve_prices
-                        is_offline_test = self.macro_provider is not _default_macro_provider
                         px_df, _ = resolve_prices(
                             sec_tickers, min_dt, max_dt,
                             allow_partial=True,
-                            local_only=is_offline_test,
+                            local_only=True,
                         )
                 except Exception:
                     px_df = pd.DataFrame()
                 if px_df is not None and not px_df.empty:
                     align_pre_split_transactions(sec_items, px_df)
+                    del px_df
+                _release_arrow_memory()
 
         # Pass C: Pre-validate FIFO open lot quantities across base + candidates so >0.01 oversells are skipped gracefully
         open_shares = {}
@@ -1233,10 +1234,14 @@ class PortfolioLedger:
         need = [t for t in tickers if not prices[t] > 0.0]
         if need:
             if price_provider is None:
-                from price_resolver import resolve_prices as price_provider
-            px_df, _ = price_provider(need, as_of_ts - pd.Timedelta(days=10), as_of_ts)
+                from price_resolver import resolve_prices
+                px_df, _ = resolve_prices(need, as_of_ts - pd.Timedelta(days=10), as_of_ts, allow_partial=True)
+            else:
+                px_df, _ = price_provider(need, as_of_ts - pd.Timedelta(days=10), as_of_ts)
             for t in need:
                 prices[t] = _scalar_float(px_df[t].iloc[-1]) if t in px_df.columns else 0.0
+                if not prices[t] > 0.0 and state.open_lots.get(t):
+                    prices[t] = _scalar_float(state.open_lots[t][-1].price, 0.0)
             bad = [t for t in need if not prices[t] > 0.0]
             if bad:
                 raise RuntimeError(f"No market price available for {bad} as of {as_of_ts.date()}.")

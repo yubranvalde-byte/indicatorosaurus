@@ -36,6 +36,7 @@ from financial_module import (
     NUM_INDICATORS,
     _scalar_float,
     _clean_frame,
+    _release_arrow_memory,
     _to_naive_ts,
     compute_live_technical_indicators,
     ensure_tech_cache,
@@ -675,6 +676,8 @@ class PortfolioAnalytics:
         out.attrs["effective_cash_mode"] = effective_cash_mode
         self._last_holdings_matrix = holdings_matrix
         cleaned_out = _clean_frame(out)
+        if len(self._cached_daily_series) >= 4:
+            self._cached_daily_series.pop(next(iter(self._cached_daily_series)), None)
         self._cached_daily_series[cache_key] = cleaned_out.copy()
         return cleaned_out
 
@@ -986,6 +989,8 @@ class PortfolioAnalytics:
             "attribution": attribution,
             "what_if": what_if_results,
         }
+        if len(self._cached_slices) >= 8:
+            self._cached_slices.pop(next(iter(self._cached_slices)), None)
         self._cached_slices[slice_cache_key] = res_dict
         return res_dict
 
@@ -1160,6 +1165,8 @@ class PortfolioAnalytics:
             view_currency=view_cur,
             price_provider=self.price_provider,
         )
+        if len(self._cached_quant_dna) >= 4:
+            self._cached_quant_dna.pop(next(iter(self._cached_quant_dna)), None)
         self._cached_quant_dna[cache_key] = res
         return res
 
@@ -1281,7 +1288,7 @@ def _get_universe_quant_baseline(weights_16: list[float]) -> dict:
     )
 
     norm_by_ticker = {str(s["Ticker"]).upper(): s for s in normalized_stocks}
-    raw_by_ticker = {str(s["Ticker"]).upper(): s for s in stocks_data}
+    raw_by_ticker = {}
     meta_by_ticker = {
         str(s["Ticker"]).upper(): {
             "longName": str(s.get("LongName", "") or ""),
@@ -1310,6 +1317,9 @@ def _get_universe_quant_baseline(weights_16: list[float]) -> dict:
 
     scored = run_financial_engine(normalized_stocks, w_norm)
     scores_map = {str(s["Ticker"]).upper(): _scalar_float(s["FinalScore"]) for s in scored}
+
+    del stocks_df, stocks_data, normalized_stocks, norm_df
+    _release_arrow_memory()
 
     _UNIVERSE_DNA_CACHE["timestamp"] = now
     _UNIVERSE_DNA_CACHE["norm_by_ticker"] = norm_by_ticker
@@ -1353,6 +1363,33 @@ def compute_portfolio_quant_dna(
     if weights_16 is None or len(weights_16) != NUM_INDICATORS:
         weights_16 = [1.0 / NUM_INDICATORS] * NUM_INDICATORS
 
+    tx_df = ledger.transactions()
+    if tx_df.empty and not _UNIVERSE_DNA_CACHE.get("norm_by_ticker"):
+        w_arr = np.asarray(weights_16, dtype=np.float64)
+        w_sum = float(np.sum(w_arr))
+        w_norm = (w_arr / w_sum) if w_sum > 1e-9 else np.full(NUM_INDICATORS, 1.0 / NUM_INDICATORS)
+        baseline_indicators = {c: 50.0 for c in INDICATOR_COLUMNS}
+        baseline_pillars = {p: 50.0 for p in FACTOR_PILLARS}
+        return sanitize_for_json({
+            "as_of": as_of or pd.Timestamp.now().strftime("%Y-%m-%d"),
+            "view_currency": view_cur,
+            "portfolio_quant_score": 0.0,
+            "benchmark_quant_score": _scalar_float(float(np.dot(
+                np.array([baseline_indicators[c] for c in INDICATOR_COLUMNS], dtype=np.float64),
+                w_norm
+            ))),
+            "factor_coverage_pct": 0.0,
+            "covered_holdings_count": 0,
+            "total_holdings_count": 0,
+            "pillars": {p: 0.0 for p in FACTOR_PILLARS},
+            "benchmark_pillars": baseline_pillars,
+            "pillar_tilts": {p: 0.0 for p in FACTOR_PILLARS},
+            "indicators": {c: 0.0 for c in INDICATOR_COLUMNS},
+            "benchmark_indicators": baseline_indicators,
+            "holdings_dna": [],
+            "sector_attribution": [],
+        })
+
     uni = _get_universe_quant_baseline(weights_16)
     norm_by_ticker = uni["norm_by_ticker"]
     meta_by_ticker = uni["meta_by_ticker"]
@@ -1361,7 +1398,6 @@ def compute_portfolio_quant_dna(
     scores_map = uni["scores_map"]
     w_norm = np.asarray(uni["weights_normalized"], dtype=np.float64)
 
-    tx_df = ledger.transactions()
     if tx_df.empty:
         return sanitize_for_json({
             "as_of": as_of or pd.Timestamp.now().strftime("%Y-%m-%d"),

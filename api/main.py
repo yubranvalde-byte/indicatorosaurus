@@ -13,7 +13,7 @@ import numpy as np
 from financial_module import (
     run_financial_engine, normalize_stocks, apply_early_pruning_vectorized, apply_derived_knockouts_vectorized,
     compute_live_technical_indicators, ensure_tech_cache, INDICATOR_COLUMNS, VALID_STRATEGIES, _safe_float,
-    _scalar_float, load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
+    _scalar_float, _release_arrow_memory, load_latest_fundamental_snapshot, get_cached_fundamental_snapshot,
     fetch_tiingo_live_data, sanitize_for_json
 )
 from backtest_engine import run_backtest
@@ -263,7 +263,7 @@ def calculate():
             "results":       frontend_response,
         })
         del stocks_data, sorted_stocks, normalized_stocks, raw_by_ticker, norm_by_ticker, frontend_response
-        gc.collect()
+        _release_arrow_memory()
         return res_json
 
     except Exception as e:
@@ -324,6 +324,7 @@ def get_portfolio_runtime():
 def reset_portfolio_runtime():
     """Clear memoized portfolio instances (used across test suites or runtime resets)."""
     _portfolio_instances.clear()
+    _release_arrow_memory()
 
 
 @app.route('/api/portfolio/summary', methods=['GET'])

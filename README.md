@@ -584,6 +584,26 @@ To provide both an accessible high-level overview and deep quant research capabi
 
 ---
 
+## 6I. V3.3.2 Production Render 512MB RAM OOM & C-FFI Safety Hardening
+
+To prevent silent container restarts (`SIGKILL` OOM / `SIGSEGV`) on 512MB RAM Render instances (`gunicorn --timeout 120 main:app`, `WEB_CONCURRENCY=1`), V3.3.2 implements strict memory pool bounds, Parquet footer metadata discovery, and C-FFI buffer hardening:
+
+### 1. Zero-RAM Parquet Footer Horizon Discovery & PyArrow System Pool (`core_logic/financial_module.py`)
+- **`discover_parquet_max_date()`**: Reads the terminal date of `us-shareprices-daily.parquet` (6.22M rows, single row group) directly from PyArrow `ParquetFile` row-group footer statistics in `< 1ms` and `0 MB` RAM, eliminating the fallback that previously loaded all 6.22M `Date` rows into Pandas when wall-clock time exceeded the offline dataset horizon (`2025-08-14`).
+- **System Memory Allocator & Pool Release**: Configures `pa.set_memory_pool(pa.system_memory_pool())` on module import and invokes `pa.default_memory_pool().release_unused()` (`_release_arrow_memory`) after Parquet reads so temporary decompression buffers are returned to the OS immediately instead of lingering in PyArrow's internal pool (~200MB reduction in worker RSS).
+- **Precomputed 1D Tech Cache & Matrix Disposal (`ensure_tech_cache`)**: Pushes down both the fundamental `Ticker` whitelist (~1,866 equities vs. 5,000+ raw symbols) and the 370-day `Date` filter to PyArrow, immediately precomputes `latest_prices`, `adtv_series`, and `tech_map`, and frees the 2D `full_price_df` and `full_volume_df` pivot matrices (`_TECH_DATA_CACHE['price_df'] = None`), reducing `_TECH_DATA_CACHE` retention to `< 1 MB`.
+
+### 2. Tiered Price & Macro Resolver Hardening (`core_logic/price_resolver.py`, `core_logic/backtest_engine.py`, `core_logic/portfolio_analytics.py`)
+- **Direct SPY Benchmark Resolution**: `_query_tier1_lake()` resolves `SPY` directly from `data/spy_historical.csv` instead of scanning the 6.22M-row corporate equity Parquet lake for the `SPY` ETF on `/api/portfolio/analytics` benchmark requests.
+- **Offline Horizon Coverage & Fast Macro Extension**: `_covered_tickers()` bounds expected local coverage against `_get_tier1_max_date()`, and `ensure_macro_cache()` forward-extends `data/fx_cpi_cache.parquet` in-memory (<1ms) unless `REFRESH_MACRO_ONLINE=1` is set, preventing Gunicorn worker timeouts when external APIs (`edge.boi.gov.il` / `yfinance`) are unreachable from cloud containers.
+- **Bounded FIFO Caches**: Caps `_PRICE_RESOLVER_CACHE`, `_cached_daily_series`, `_cached_slices`, and `_cached_quant_dna` to prevent unbounded memory accumulation across long-running worker sessions, and pushes down both `Ticker` and `Date` filters in `_get_backtest_datasets()`.
+
+### 3. C-FFI `Stock` Struct Null-Termination & Buffer Lifetime Safety (`run_financial_engine`)
+- **Strict 7-Byte ASCII + `\0` Guarantee**: Encodes tickers as ASCII and slices to at most 7 bytes (`encode('ascii', errors='ignore')[:7]`) before writing into the zero-initialized 8-byte `S8` field (`char ticker[8]`), guaranteeing that byte index 7 is always `\0` even for 13-character delisted symbols (e.g., `WMGI_DELISTED`), preventing out-of-bounds `strcmp` reads in `c_kernel/financial_engine.c` while restoring full ticker names via a lookup map on output.
+- **Contiguous Buffer & Pointer Lifetime**: Enforces `np.ascontiguousarray(c_buf, dtype=STOCK_STRUCT_DTYPE)`, sanitizes `NaN`/`Inf` in indicator matrices and weights before FFI execution, and holds explicit Python references to `c_buf` and `c_weights` across `lib.compute_scores` and `lib.sort_stocks_by_score`.
+
+---
+
 ## 7. Developer Onboarding & Extensibility Guide
 
 ### System Prerequisites

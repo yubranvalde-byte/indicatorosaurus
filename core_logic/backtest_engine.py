@@ -7,6 +7,8 @@ from financial_module import (
     normalize_stocks,
     run_financial_engine,
     compute_vectorized_tech_series,
+    discover_parquet_max_date,
+    _release_arrow_memory,
     _safe_float,
     _scalar_float,
 )
@@ -135,11 +137,17 @@ def _get_backtest_datasets():
         t0_p2 = time.perf_counter()
         universe_tickers = df['Ticker'].unique().tolist()
         if simfin_parquet_path:
+            max_ds_date = discover_parquet_max_date(simfin_parquet_path)
+            min_fund_dt = df['Quarter_End_Date'].min() if not df.empty else (max_ds_date - pd.DateOffset(years=5))
+            min_parquet_date = min(min_fund_dt, max_ds_date - pd.DateOffset(years=6)) - pd.Timedelta(days=370)
             raw_p = pd.read_parquet(
                 simfin_parquet_path,
                 engine='pyarrow',
                 columns=['Date', 'Ticker', 'Adj. Close', 'Close'],
-                filters=[('Ticker', 'in', universe_tickers)],
+                filters=[
+                    ('Ticker', 'in', universe_tickers),
+                    ('Date', '>=', min_parquet_date),
+                ],
             )
         else:
             raw_p = pd.read_csv(
@@ -155,6 +163,7 @@ def _get_backtest_datasets():
         raw_p.drop(columns=['Adj. Close', 'Close'], inplace=True, errors='ignore')
         price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().astype('float32')
         del raw_p
+        _release_arrow_memory()
 
         spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'], dtype={'SPY_Adj_Close': 'float32'})
         spy_df['Date'] = pd.to_datetime(spy_df['Date']).dt.tz_localize(None)
@@ -451,6 +460,9 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
         {"date": d_s, "portfolio_return": float(p_v), "spy_return": float(s_v)}
         for d_s, p_v, s_v in zip(date_strs, p_vals, s_vals)
     ]
+
+    del close_data, daily_returns, sim_returns
+    _release_arrow_memory()
 
     return {
         "performance_series": performance_series,
