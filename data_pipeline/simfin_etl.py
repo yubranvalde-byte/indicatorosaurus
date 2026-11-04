@@ -23,7 +23,7 @@ OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "historical_
 
 # Expected schema (+ Ticker header match)
 FINAL_COLUMNS = [
-    "Ticker", "GICS_Sector", "Quarter_End_Date",
+    "Ticker", "GICS_Sector", "Quarter_End_Date", "Publish_Date",
     "TrailingPE", "EV_EBITDA", "FCFYield", "RevenueGrowth", "EPSGrowth",
     "GrossMargin", "OperatingMargin", "ROIC", "NetDebt_EBITDA", "ShareholderYield",
     "FiveYDivGrowth", "PayoutRatio", "Beta", "RSI", "PriceVs200SMA",
@@ -182,9 +182,9 @@ def build_fundamental_panel(income: pd.DataFrame, cashflow: pd.DataFrame, balanc
 
     merged["GICS_Sector"] = merged["Ticker"].map(sector_map).fillna("Other")
     
-    # Resolve Publish Date
+    # Resolve Publish Date (fallback to Report Date + 45 days if missing to prevent look-ahead bias)
     pub_col = [c for c in merged.columns if "Publish Date" in c][0]
-    merged["Effective_Publish_Date"] = merged[pub_col].fillna(merged["Report Date"])
+    merged["Effective_Publish_Date"] = merged[pub_col].fillna(merged["Report Date"] + pd.Timedelta(days=45))
 
     merged = merged.sort_values(["Ticker", "Report Date"]).reset_index(drop=True)
     return merged
@@ -238,6 +238,7 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
         int_exp_col = group["Interest Expense, Net"].fillna(0.0).abs().values if "Interest Expense, Net" in group.columns else np.zeros(len(group))
 
         dates = pd.to_datetime(group["Report Date"]).dt.strftime("%Y-%m-%d").values
+        pub_dates = pd.to_datetime(group["Effective_Publish_Date"]).dt.strftime("%Y-%m-%d").values
         sectors = group["GICS_Sector"].values
 
         rsi_vals = pd.Series(group["RSI"]).fillna(50.0).values
@@ -317,6 +318,7 @@ def calculate_all_indicators(merged: pd.DataFrame, df_prices: pd.DataFrame) -> p
                 "Ticker": ticker,
                 "GICS_Sector": sectors[i],
                 "Quarter_End_Date": dates[i],
+                "Publish_Date": pub_dates[i],
                 "TrailingPE": round(float(trailing_pe), 4),
                 "EV_EBITDA": round(float(ev_ebitda), 4),
                 "FCFYield": round(float(fcf_yield), 6),

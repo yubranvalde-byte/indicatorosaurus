@@ -13,18 +13,34 @@ tailwind.config = {
   darkMode:"class",
   theme:{ extend:{
     colors:{
-      "primary":"#60A5FA","primary-container":"#3B82F6","on-primary":"#06152D",
-      "secondary":"#10B981","on-secondary":"#022C22","secondary-container":"#059669",
-      "tertiary":"#F43F5E","tertiary-container":"#E11D48","on-tertiary":"#3F0514",
-      "surface":"#090B10","surface-dim":"#090B10","surface-bright":"#262D40",
-      "surface-container-lowest":"#06080C","surface-container-low":"#0E1117",
-      "surface-container":"#131722","surface-container-high":"#1C2130",
-      "surface-container-highest":"#262D40","surface-variant":"#1C2130",
-      "on-surface":"#F1F5F9","on-surface-variant":"#94A3B8",
-      "outline":"#64748B","outline-variant":"rgba(255, 255, 255, 0.08)",
-      "background":"#090B10","on-background":"#F1F5F9",
-      "inverse-surface":"#F1F5F9","inverse-on-surface":"#0E1117",
-      "error":"#F43F5E","error-container":"#3F0514"
+      "primary":"rgb(var(--aq-primary) / <alpha-value>)",
+      "primary-container":"rgb(var(--aq-primary-container) / <alpha-value>)",
+      "on-primary":"rgb(var(--aq-on-primary) / <alpha-value>)",
+      "secondary":"rgb(var(--aq-secondary) / <alpha-value>)",
+      "on-secondary":"rgb(var(--aq-on-secondary) / <alpha-value>)",
+      "secondary-container":"rgb(var(--aq-secondary-container) / <alpha-value>)",
+      "tertiary":"rgb(var(--aq-tertiary) / <alpha-value>)",
+      "tertiary-container":"rgb(var(--aq-tertiary-container) / <alpha-value>)",
+      "on-tertiary":"rgb(var(--aq-on-tertiary) / <alpha-value>)",
+      "surface":"rgb(var(--aq-surface) / <alpha-value>)",
+      "surface-dim":"rgb(var(--aq-surface-dim) / <alpha-value>)",
+      "surface-bright":"rgb(var(--aq-surface-bright) / <alpha-value>)",
+      "surface-container-lowest":"rgb(var(--aq-surface-container-lowest) / <alpha-value>)",
+      "surface-container-low":"rgb(var(--aq-surface-container-low) / <alpha-value>)",
+      "surface-container":"rgb(var(--aq-surface-container) / <alpha-value>)",
+      "surface-container-high":"rgb(var(--aq-surface-container-high) / <alpha-value>)",
+      "surface-container-highest":"rgb(var(--aq-surface-container-highest) / <alpha-value>)",
+      "surface-variant":"rgb(var(--aq-surface-container-high) / <alpha-value>)",
+      "on-surface":"rgb(var(--aq-on-surface) / <alpha-value>)",
+      "on-surface-variant":"rgb(var(--aq-on-surface-variant) / <alpha-value>)",
+      "outline":"rgb(var(--aq-outline) / <alpha-value>)",
+      "outline-variant":"var(--aq-outline-variant)",
+      "background":"rgb(var(--aq-bg-rgb) / <alpha-value>)",
+      "on-background":"rgb(var(--aq-on-surface) / <alpha-value>)",
+      "inverse-surface":"rgb(var(--aq-on-surface) / <alpha-value>)",
+      "inverse-on-surface":"rgb(var(--aq-surface-container-low) / <alpha-value>)",
+      "error":"rgb(var(--aq-tertiary) / <alpha-value>)",
+      "error-container":"rgb(var(--aq-on-tertiary) / <alpha-value>)"
     },
     fontFamily:{ "body-md":["Inter","Heebo","sans-serif"],"headline-lg":["Inter","Heebo","sans-serif"],"headline-md":["Inter","Heebo","sans-serif"],
       "headline-sm":["Inter","Heebo","sans-serif"],"body-lg":["Inter","Heebo","sans-serif"],"label-caps":["Inter","Heebo","sans-serif"],"data-display":["JetBrains Mono","monospace"] },
@@ -41,16 +57,76 @@ tailwind.config = {
 };
 </script>
 <style>
+  :root {
+    --aq-bg: #07090E;
+    --aq-bg-rgb: 9 11 16;
+    --aq-primary: 96 165 250;
+    --aq-primary-container: 59 130 246;
+    --aq-on-primary: 6 21 45;
+    --aq-secondary: 16 185 129;
+    --aq-on-secondary: 2 44 34;
+    --aq-secondary-container: 5 150 105;
+    --aq-tertiary: 244 63 94;
+    --aq-tertiary-container: 225 29 72;
+    --aq-on-tertiary: 63 5 20;
+    --aq-surface: 9 11 16;
+    --aq-surface-dim: 9 11 16;
+    --aq-surface-bright: 38 45 64;
+    --aq-surface-container-lowest: 6 8 12;
+    --aq-surface-container-low: 14 17 23;
+    --aq-surface-container: 19 23 34;
+    --aq-surface-container-high: 28 33 48;
+    --aq-surface-container-highest: 38 45 64;
+    --aq-on-surface: 241 245 249;
+    --aq-on-surface-variant: 148 163 184;
+    --aq-outline: 100 116 139;
+    --aq-outline-variant: rgba(255, 255, 255, 0.08);
+  }
+  html.light {
+    --aq-bg: #F8FAFC;
+    --aq-bg-rgb: 248 250 252;
+    --aq-primary: 37 99 235;
+    --aq-primary-container: 29 78 216;
+    --aq-on-primary: 255 255 255;
+    --aq-secondary: 5 150 105;
+    --aq-on-secondary: 255 255 255;
+    --aq-secondary-container: 4 120 87;
+    --aq-tertiary: 225 29 72;
+    --aq-tertiary-container: 190 18 60;
+    --aq-on-tertiary: 255 255 255;
+    --aq-surface: 255 255 255;
+    --aq-surface-dim: 241 245 249;
+    --aq-surface-bright: 203 213 225;
+    --aq-surface-container-lowest: 255 255 255;
+    --aq-surface-container-low: 241 245 249;
+    --aq-surface-container: 255 255 255;
+    --aq-surface-container-high: 226 232 240;
+    --aq-surface-container-highest: 203 213 225;
+    --aq-on-surface: 15 23 42;
+    --aq-on-surface-variant: 100 116 139;
+    --aq-outline: 148 163 184;
+    --aq-outline-variant: rgba(15, 23, 42, 0.08);
+  }
   body, #main-viewport {
-    background-color: #07090E;
+    background-color: var(--aq-bg);
     background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.14), transparent), radial-gradient(ellipse 60% 40% at 85% 20%, rgba(16,185,129,0.07), transparent);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  html.light body, html.light #main-viewport {
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.08), transparent), radial-gradient(ellipse 60% 40% at 85% 20%, rgba(16,185,129,0.05), transparent);
   }
   .aq-card {
     background: linear-gradient(180deg, rgba(22, 27, 41, 0.88) 0%, rgba(14, 17, 26, 0.96) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--aq-outline-variant);
     box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
     border-radius: 1rem;
     backdrop-filter: blur(16px);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  html.light .aq-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 4px 6px -2px rgba(15, 23, 42, 0.04), inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
   }
   .aq-btn-primary {
     background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
@@ -64,24 +140,25 @@ tailwind.config = {
     transform: translateY(-1px);
   }
   input[type=range]{-webkit-appearance:none;width:100%;background:transparent;direction:ltr}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#60A5FA;cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(96,165,250,0.2)}
-  input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#3B82F6 var(--pct,50%),#1C2130 var(--pct,50%));border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:rgb(var(--aq-primary));cursor:pointer;margin-top:-5px;box-shadow:0 0 0 3px rgba(59,130,246,0.2)}
+  input[type=range]::-webkit-slider-runnable-track{width:100%;height:4px;cursor:pointer;background:linear-gradient(to right,#3B82F6 var(--pct,50%),rgb(var(--aq-surface-container-high)) var(--pct,50%));border-radius:2px}
   input[type=range]:focus{outline:none}
-  .profile-btn{transition:all .2s;border:1px solid rgba(255,255,255,0.08);background:#0E1117;color:#94A3B8;font-size:12px;font-weight:700;letter-spacing:.05em;padding:7px 6px;border-radius:8px;cursor:pointer;text-align:center}
-  .profile-btn:hover,.profile-btn.active{border-color:#60A5FA;background:rgba(96,165,250,0.12);color:#60A5FA}
+  .profile-btn{transition:all .2s;border:1px solid var(--aq-outline-variant);background:rgb(var(--aq-surface-container-low));color:rgb(var(--aq-on-surface-variant));font-size:12px;font-weight:700;letter-spacing:.05em;padding:7px 6px;border-radius:8px;cursor:pointer;text-align:center}
+  .profile-btn:hover,.profile-btn.active{border-color:rgb(var(--aq-primary));background:rgb(var(--aq-primary) / 0.12);color:rgb(var(--aq-primary))}
   .tooltip-wrap{position:relative;display:inline-flex}
-  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:#1C2130;color:#94A3B8;font-size:11px;line-height:1.5;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.08);opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
+  .tooltip-wrap .tip{pointer-events:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);width:200px;background:rgb(var(--aq-surface-container-high));color:rgb(var(--aq-on-surface-variant));font-size:11px;line-height:1.5;border-radius:8px;padding:8px 10px;border:1px solid var(--aq-outline-variant);opacity:0;transition:opacity .2s;z-index:60;white-space:normal}
   .tooltip-wrap:hover .tip{opacity:1}
   /* Reusable Contextual Info (i) Badge */
-  .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);color:#60A5FA;font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
-  .info-tooltip:hover,.info-tooltip:focus{background:#60A5FA;color:#06152D;border-color:#60A5FA;box-shadow:0 0 10px rgba(96,165,250,0.45);outline:none}
-  #global-info-popover{position:fixed;z-index:9999;max-width:310px;background:#131722;color:#F1F5F9;border:1px solid #3B82F6;border-radius:10px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.65);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .15s ease}
+  .info-tooltip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:9999px;background:rgb(var(--aq-primary) / 0.12);border:1px solid rgb(var(--aq-primary) / 0.35);color:rgb(var(--aq-primary));font-family:'Inter',sans-serif;font-size:10px;font-weight:800;font-style:italic;line-height:1;cursor:help;user-select:none;margin-inline-start:4px;flex-shrink:0;transition:all .15s ease;direction:ltr}
+  .info-tooltip:hover,.info-tooltip:focus{background:rgb(var(--aq-primary));color:rgb(var(--aq-on-primary));border-color:rgb(var(--aq-primary));box-shadow:0 0 10px rgb(var(--aq-primary) / 0.45);outline:none}
+  #global-info-popover{position:fixed;z-index:9999;max-width:310px;background:rgb(var(--aq-surface-container));color:rgb(var(--aq-on-surface));border:1px solid rgb(var(--aq-primary));border-radius:10px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,0.35);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .15s ease}
+  html.light #global-info-popover{box-shadow:0 12px 32px rgba(15,23,42,0.14)}
   #global-info-popover.visible{opacity:1}
   /* Strict LTR numeric & financial figure isolation in RTL mode */
   .num-ltr,.font-mono,.tabular-nums,canvas,input[type="number"],input[type="date"]{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
   ::-webkit-scrollbar{width:5px;height:5px}
-  ::-webkit-scrollbar-track{background:#090B10}
-  ::-webkit-scrollbar-thumb{background:#262D40;border-radius:3px}
+  ::-webkit-scrollbar-track{background:rgb(var(--aq-surface))}
+  ::-webkit-scrollbar-thumb{background:rgb(var(--aq-surface-bright));border-radius:3px}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   .fade-in{animation:fadeIn .3s ease forwards}
   .accordion-row{transition:all .25s ease}
@@ -109,7 +186,7 @@ tailwind.config = {
     </div>
     <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-outline-variant">
       <button type="button" onclick="closeConfirmModal()" data-i18n="btn_cancel" class="px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-xs sm:text-sm font-semibold text-on-surface-variant hover:text-on-surface transition-all">Cancel</button>
-      <button type="button" id="global-confirm-action-btn" data-i18n="btn_confirm" class="px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-surface text-xs sm:text-sm font-semibold transition-all shadow-sm">Confirm</button>
+      <button type="button" id="global-confirm-action-btn" data-i18n="btn_confirm" class="px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-tertiary text-xs sm:text-sm font-semibold transition-all shadow-sm">Confirm</button>
     </div>
   </div>
 </div>
@@ -145,6 +222,10 @@ tailwind.config = {
       <button id="lang-btn-en" onclick="setAppLanguage('en')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all bg-primary text-on-primary">EN</button>
       <button id="lang-btn-he" onclick="setAppLanguage('he')" class="whitespace-nowrap px-3 py-1 rounded-lg text-xs font-bold transition-all text-on-surface-variant hover:text-on-surface">עב</button>
     </div>
+    <!-- Theme Toggle Button (Dark / Light) -->
+    <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" class="p-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center" title="Toggle Theme" aria-label="Toggle Theme">
+      <span id="theme-toggle-icon" class="material-symbols-outlined text-[18px]">light_mode</span>
+    </button>
     <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-surface-container-high border border-outline-variant text-label-caps text-on-surface-variant whitespace-nowrap">
       <span class="w-2 h-2 rounded-full bg-secondary animate-pulse inline-block"></span>
       <span data-i18n="live_data">Live Data</span>
@@ -1332,7 +1413,7 @@ function openConfirmModal({ title, desc, onConfirm, variant = 'danger' }) {
   } else {
     if (iconWrap) iconWrap.className = 'w-10 h-10 rounded-xl bg-tertiary/15 border border-tertiary/30 flex items-center justify-center flex-shrink-0';
     if (iconEl) { iconEl.className = 'material-symbols-outlined text-tertiary text-[20px]'; iconEl.textContent = 'warning'; }
-    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-surface text-xs sm:text-sm font-semibold transition-all shadow-sm';
+    if (actionBtn) actionBtn.className = 'px-4 py-2 rounded-xl bg-tertiary hover:bg-tertiary-container text-on-tertiary text-xs sm:text-sm font-semibold transition-all shadow-sm';
   }
 
   pendingConfirmAction = onConfirm;
@@ -1630,13 +1711,13 @@ function buildAccordion(item) {
     const c   = scoreColor(sc);
     const bg  = scoreBg(sc);
     return `
-      <div style="background:${bg};border:1px solid rgba(255,255,255,0.08)" class="p-3 rounded-xl flex flex-col gap-1">
-        <span style="font-size:10px;letter-spacing:.06em;font-weight:700;color:#94A3B8;text-transform:uppercase">${meta.label}</span>
+      <div style="background:${bg};border:1px solid var(--aq-outline-variant)" class="p-3 rounded-xl flex flex-col gap-1">
+        <span class="text-on-surface-variant" style="font-size:10px;letter-spacing:.06em;font-weight:700;text-transform:uppercase">${meta.label}</span>
         <div class="flex items-baseline justify-between mt-0.5">
           <span class="font-data-display text-data-display text-on-surface num-ltr" style="font-size:13px">${rawStr}</span>
           <span class="num-ltr" style="font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c}">${pct}/100</span>
         </div>
-        <div style="height:3px;border-radius:2px;background:#1C2130;margin-top:2px">
+        <div class="bg-surface-container-high" style="height:3px;border-radius:2px;margin-top:2px">
           <div style="height:100%;border-radius:2px;width:${pct}%;background:${c};transition:width .4s"></div>
         </div>
       </div>`;
@@ -1934,8 +2015,27 @@ async function runPortfolioBacktest() {
   }
 }
 
+let lastBacktestSeries = null;
+
+function getChartThemeColors() {
+  const isLight = document.documentElement.classList.contains('light');
+  return {
+    isLight,
+    textPrimary: isLight ? '#0F172A' : '#F1F5F9',
+    textSecondary: isLight ? '#64748B' : '#94A3B8',
+    tooltipBg: isLight ? '#FFFFFF' : '#131722',
+    tooltipBorder: isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.08)',
+    gridSubtle: isLight ? 'rgba(15, 23, 42, 0.05)' : 'rgba(255, 255, 255, 0.03)',
+    gridMain: isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.05)',
+    radarGrid: isLight ? 'rgba(15, 23, 42, 0.10)' : 'rgba(255, 255, 255, 0.08)'
+  };
+}
+
 function renderBacktestChart(series) {
+  if (!series || !series.length) return;
+  lastBacktestSeries = series;
   const ctx = document.getElementById('backtestchart').getContext('2d');
+  const tc = getChartThemeColors();
   
   const labels = series.map(d => d.date);
   const portfolioData = series.map(d => d.portfolio_return);
@@ -1963,7 +2063,7 @@ function renderBacktestChart(series) {
         {
           label: 'SPY Benchmark',
           data: spyData,
-          borderColor: '#60A5FA',
+          borderColor: '#3B82F6',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           pointRadius: 0,
@@ -1982,10 +2082,10 @@ function renderBacktestChart(series) {
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: '#131722',
-          titleColor: '#F1F5F9',
-          bodyColor: '#94A3B8',
-          borderColor: 'rgba(255, 255, 255, 0.08)',
+          backgroundColor: tc.tooltipBg,
+          titleColor: tc.textPrimary,
+          bodyColor: tc.textSecondary,
+          borderColor: tc.tooltipBorder,
           borderWidth: 1,
           callbacks: {
             label: function(context) {
@@ -2004,10 +2104,10 @@ function renderBacktestChart(series) {
       scales: {
         x: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.03)'
+            color: tc.gridSubtle
           },
           ticks: {
-            color: '#94A3B8',
+            color: tc.textSecondary,
             font: {
               size: 9
             },
@@ -2016,10 +2116,10 @@ function renderBacktestChart(series) {
         },
         y: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.05)'
+            color: tc.gridMain
           },
           ticks: {
-            color: '#94A3B8',
+            color: tc.textSecondary,
             font: {
               size: 10
             },
@@ -2206,7 +2306,10 @@ const I18N = {
     harvestable_lots_suffix: 'Harvestable Lots',
     transactions_suffix: 'Transactions',
     factor_coverage_prefix: 'Factor Coverage',
-    c_ffi_score_prefix: 'C-FFI Score'
+    c_ffi_score_prefix: 'C-FFI Score',
+    theme_light: 'Light Mode',
+    theme_dark: 'Dark Mode',
+    theme_toggle: 'Toggle Theme'
   },
   he: {
     app_title: 'לוח בקרה פיננסי ומודיעין השקעות',
@@ -2377,7 +2480,10 @@ const I18N = {
     harvestable_lots_suffix: 'שכבות לקיזוז',
     transactions_suffix: 'עסקאות',
     factor_coverage_prefix: 'כיסוי פקטורים',
-    c_ffi_score_prefix: 'ציון C-FFI'
+    c_ffi_score_prefix: 'ציון C-FFI',
+    theme_light: 'מצב בהיר',
+    theme_dark: 'מצב כהה',
+    theme_toggle: 'החלף ערכת נושא'
   }
 };
 
@@ -2499,6 +2605,7 @@ const TOOLTIPS = {
 const portfolioState = {
   workspace: 'screener',
   lang: localStorage.getItem('aq_lang') || 'en',
+  theme: localStorage.getItem('aq_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   viewTier: 'standard',     // 'standard' | 'advanced'
   screenerTier: 'standard', // 'standard' | 'advanced'
   viewCurrency: 'ILS',
@@ -2523,6 +2630,42 @@ function t(key) {
 function getTooltipText(term) {
   const dict = TOOLTIPS[portfolioState.lang] || TOOLTIPS.en;
   return dict[term] || TOOLTIPS.en[term] || '';
+}
+
+function setTheme(theme) {
+  const next = (theme === 'light') ? 'light' : 'dark';
+  portfolioState.theme = next;
+  try { localStorage.setItem('aq_theme', next); } catch (e) {}
+
+  const root = document.documentElement;
+  root.classList.toggle('light', next === 'light');
+  root.classList.toggle('dark', next !== 'light');
+
+  const iconEl = document.getElementById('theme-toggle-icon');
+  if (iconEl) {
+    iconEl.textContent = next === 'light' ? 'dark_mode' : 'light_mode';
+  }
+  const btnEl = document.getElementById('theme-toggle-btn');
+  if (btnEl) {
+    const label = next === 'light' ? t('theme_dark') : t('theme_light');
+    btnEl.setAttribute('title', label);
+    btnEl.setAttribute('aria-label', label);
+  }
+
+  // Re-render active Chart.js instances with updated theme palette
+  if (portfolioState.lastAnalytics) {
+    renderPortfolioChart(portfolioState.lastAnalytics);
+  }
+  if (portfolioState.lastSummary?.quant_dna) {
+    renderPortfolioQuantDNA(portfolioState.lastSummary.quant_dna, portfolioState.viewCurrency);
+  }
+  if (lastBacktestSeries) {
+    renderBacktestChart(lastBacktestSeries);
+  }
+}
+
+function toggleTheme() {
+  setTheme(portfolioState.theme === 'light' ? 'dark' : 'light');
 }
 
 function applyLayoutDirection() {
@@ -2598,6 +2741,13 @@ function setAppLanguage(lang) {
     const val = t(key);
     if (val) el.setAttribute('placeholder', val);
   });
+
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  if (themeBtn) {
+    const label = portfolioState.theme === 'light' ? t('theme_dark') : t('theme_light');
+    themeBtn.setAttribute('title', label);
+    themeBtn.setAttribute('aria-label', label);
+  }
 
   // Re-render dynamic views if loaded
   if (portfolioState.lastSummary) renderPortfolioSummary(portfolioState.lastSummary);
@@ -3095,7 +3245,7 @@ function renderQuantScoreBadge(score, status) {
     return `<span class="px-2 py-0.5 rounded bg-secondary/15 border border-secondary/40 text-secondary font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Strong</span>`;
   }
   if (s >= 45.0) {
-    return `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Neutral</span>`;
+    return `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-300 font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Neutral</span>`;
   }
   return `<span class="px-2 py-0.5 rounded bg-tertiary/15 border border-tertiary/40 text-tertiary font-mono font-bold text-xs num-ltr">${s.toFixed(1)} · Warn</span>`;
 }
@@ -3163,10 +3313,11 @@ function renderHoldingsTable(positions, allLots, ccy) {
     if (isExpanded) {
       const lotsRows = tickerLots.map(l => {
         const indexLabel = l.currency === 'USD'
-          ? `FX Buy: ₪${Number(l.fx_buy || 0).toFixed(3)} → ₪${Number(l.fx_eval || 0).toFixed(3)}`
-          : `CPI Buy: ${Number(l.cpi_buy || 0).toFixed(1)} → ${Number(l.cpi_eval || 0).toFixed(1)}`;
+          ? `FX Buy: ₪${Number(l.fx_buy || 0).toFixed(3)} → ₪${Number(l.fx_now ?? l.fx_eval ?? 0).toFixed(3)}`
+          : `CPI Buy: ${Number(l.cpi_buy || 0).toFixed(1)} → ${Number(l.cpi_now ?? l.cpi_eval ?? 0).toFixed(1)}`;
         const inflGain = Number(l.inflationary_gain_ils || 0);
-        const realGain = Number(l.real_gain_ils || 0) - Number(l.real_loss_ils || 0);
+        // real_loss_ils is already signed (<= 0), so add it to real_gain_ils
+        const realGain = Number(l.real_gain_ils || 0) + Number(l.real_loss_ils || 0);
         return `
           <tr class="border-b border-outline-variant text-xs font-mono text-on-surface-variant">
             <td class="py-2 px-3 text-start text-primary num-ltr">${l.lot_id}</td>
@@ -3241,6 +3392,7 @@ function renderPortfolioQuantDNA(dna, ccy) {
   const portPillarVals = pillarNames.map(p => Number(dna.pillars?.[p] || 0));
   const benchPillarVals = pillarNames.map(p => Number(dna.benchmark_pillars?.[p] || 50));
 
+  const tc = getChartThemeColors();
   const radarCanvas = document.getElementById('portfolio-dna-radar-chart');
   if (radarCanvas) {
     const rCtx = radarCanvas.getContext('2d');
@@ -3265,11 +3417,11 @@ function renderPortfolioQuantDNA(dna, ccy) {
           {
             label: 'Market Baseline',
             data: benchPillarVals,
-            borderColor: '#60A5FA',
-            backgroundColor: 'rgba(96, 165, 250, 0.10)',
+            borderColor: '#3B82F6',
+            backgroundColor: 'rgba(59, 130, 246, 0.10)',
             borderWidth: 1.5,
             borderDash: [4, 3],
-            pointBackgroundColor: '#60A5FA',
+            pointBackgroundColor: '#3B82F6',
             pointRadius: 2
           }
         ]
@@ -3281,16 +3433,16 @@ function renderPortfolioQuantDNA(dna, ccy) {
           legend: {
             display: true,
             position: 'top',
-            labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 }
+            labels: { color: tc.textSecondary, font: { size: 10 }, boxWidth: 10 }
           }
         },
         scales: {
           r: {
             min: 0,
             max: 100,
-            angleLines: { color: 'rgba(255,255,255,0.08)' },
-            grid: { color: 'rgba(255,255,255,0.08)' },
-            pointLabels: { color: '#F1F5F9', font: { size: 11, weight: 'bold' } },
+            angleLines: { color: tc.radarGrid },
+            grid: { color: tc.radarGrid },
+            pointLabels: { color: tc.textPrimary, font: { size: 11, weight: 'bold' } },
             ticks: { display: false, stepSize: 25 }
           }
         }
@@ -3378,10 +3530,10 @@ function renderPortfolioQuantDNA(dna, ccy) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#131722',
-            titleColor: '#F1F5F9',
-            bodyColor: '#94A3B8',
-            borderColor: 'rgba(255, 255, 255, 0.08)',
+            backgroundColor: tc.tooltipBg,
+            titleColor: tc.textPrimary,
+            bodyColor: tc.textSecondary,
+            borderColor: tc.tooltipBorder,
             borderWidth: 1,
             callbacks: {
               label: ctx => `Weight: ${Number(ctx.parsed.x || 0).toFixed(2)}%`
@@ -3392,12 +3544,12 @@ function renderPortfolioQuantDNA(dna, ccy) {
           x: {
             min: 0,
             max: 100,
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: '#94A3B8', font: { size: 9 }, callback: v => `${v}%` }
+            grid: { color: tc.gridSubtle },
+            ticks: { color: tc.textSecondary, font: { size: 9 }, callback: v => `${v}%` }
           },
           y: {
             grid: { display: false },
-            ticks: { color: '#F1F5F9', font: { size: 10, weight: 'bold' } }
+            ticks: { color: tc.textPrimary, font: { size: 10, weight: 'bold' } }
           }
         }
       }
@@ -3732,6 +3884,7 @@ function buildChartDatasets(curves, mode, ccy) {
 
 function createPortfolioChartObject(canvas, labels, datasets, mode, ccy) {
   const ctx = canvas.getContext('2d');
+  const tc = getChartThemeColors();
   return new Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
@@ -3742,13 +3895,13 @@ function createPortfolioChartObject(canvas, labels, datasets, mode, ccy) {
       plugins: {
         legend: {
           display: true,
-          labels: { color: '#94A3B8', font: { size: 11, family: 'Inter' }, boxWidth: 12 }
+          labels: { color: tc.textSecondary, font: { size: 11, family: 'Inter' }, boxWidth: 12 }
         },
         tooltip: {
-          backgroundColor: '#131722',
-          titleColor: '#F1F5F9',
-          bodyColor: '#94A3B8',
-          borderColor: 'rgba(255, 255, 255, 0.08)',
+          backgroundColor: tc.tooltipBg,
+          titleColor: tc.textPrimary,
+          bodyColor: tc.textSecondary,
+          borderColor: tc.tooltipBorder,
           borderWidth: 1,
           callbacks: {
             label: function(context) {
@@ -3765,13 +3918,13 @@ function createPortfolioChartObject(canvas, labels, datasets, mode, ccy) {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(255,255,255,0.03)' },
-          ticks: { color: '#94A3B8', font: { size: 10 }, maxTicksLimit: 9 }
+          grid: { color: tc.gridSubtle },
+          ticks: { color: tc.textSecondary, font: { size: 10 }, maxTicksLimit: 9 }
         },
         y: {
-          grid: { color: 'rgba(255,255,255,0.05)' },
+          grid: { color: tc.gridMain },
           ticks: {
-            color: '#94A3B8',
+            color: tc.textSecondary,
             font: { size: 10 },
             callback: function(value) {
               if (mode === 'WHAT_IF') {
@@ -4033,7 +4186,7 @@ function renderCsvImportDiagnostic(data) {
       return `
         <div class="bg-surface-container-low border border-outline-variant rounded px-2.5 py-1.5 font-mono text-[11px] flex flex-col gap-0.5">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-amber-300 num-ltr">Line ${lineNum} (${sym})</span>
+            <span class="font-bold text-amber-600 dark:text-amber-300 num-ltr">Line ${lineNum} (${sym})</span>
             <span class="text-[9px] uppercase px-1.5 py-0.2 rounded bg-tertiary/15 text-tertiary font-bold">Skipped</span>
           </div>
           <span class="text-on-surface-variant font-sans text-[11px]">${escapeHTML(reason)}</span>
@@ -4044,7 +4197,7 @@ function renderCsvImportDiagnostic(data) {
     panel.innerHTML = `
       <div class="flex justify-between items-start gap-2">
         <div>
-          <div class="flex items-center gap-1.5 font-bold text-amber-300">
+          <div class="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-300">
             <span class="material-symbols-outlined text-[16px]">warning</span>
             <span>Imported ${importedCount} of ${totalRows} rows (${skippedCount} skipped)</span>
           </div>
@@ -4122,7 +4275,8 @@ function seedDemoPortfolio() {
   });
 }
 
-// Initialize saved language preference (EN/HE) and RTL/LTR layout on load
+// Initialize saved theme (dark/light) and language preference (EN/HE) on load
+setTheme(portfolioState.theme || 'dark');
 setAppLanguage(portfolioState.lang || 'en');
 </script>
 </body>

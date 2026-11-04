@@ -521,9 +521,10 @@ Phase 6 bridges the personal multi-currency portfolio ledger with the 80-byte `S
 
 To make institutional-grade quantitative analytics and Israeli tax mechanics accessible without overwhelming the user, `frontend/templates/index.html` implements a single-file zero-build Obsidian Fintech design system:
 
-### 1. Obsidian Color, Glassmorphic `.aq-card` Depth & Surface Hierarchy (`tailwind.config` & CSS)
-- **Crisp Cool-Toned Surface Hierarchy & Ambient Glow**: Uses a dark Obsidian palette (`background` / `surface`: `#090B10`, `surface-container-low`: `#0E1117`, `surface-container`: `#131722`, `surface-container-high`: `#1C2130`, `surface-bright`: `#262D40`, `outline-variant`: `rgba(255, 255, 255, 0.08)`) over dual radial ambient glows (`#07090E`), paired with high-contrast semantic accents (`primary`: `#60A5FA`, `secondary` bullish/shield: `#10B981`, `tertiary`/`error` bearish/tax due: `#F43F5E`, `on-surface`: `#F1F5F9`, `on-surface-variant`: `#94A3B8`).
-- **Reusable `.aq-card` & `.aq-btn-primary` Utilities**: Every KPI card, chart panel, modal dialog, and table container uses `.aq-card` (`linear-gradient(180deg, rgba(22, 27, 41, 0.88) 0%, rgba(14, 17, 26, 0.96) 100%)`, `1px solid rgba(255, 255, 255, 0.08)`, inset top highlight + deep drop shadow, `border-radius: 1rem`, `backdrop-filter: blur(16px)`), while primary CTAs use `.aq-btn-primary` with gradient illumination and subtle hover elevation.
+### 1. Obsidian Dark & Institutional Light Mode Surface Hierarchy (`tailwind.config`, CSS Variables & `setTheme`)
+- **Dual-Theme CSS Variable Architecture**: Maps all Tailwind semantic tokens (`surface`, `surface-container-*`, `on-surface`, `on-surface-variant`, `primary`, `secondary`, `tertiary`, `outline-variant`) to RGB CSS custom properties (`:root` for Obsidian Dark `#07090E` / `#131722` and `html.light` for Institutional Light `#F8FAFC` / `#FFFFFF`) supporting native Tailwind alpha modifiers (`bg-surface/80`, `bg-primary/15`).
+- **Header Theme Switcher (`#theme-toggle-btn`, `toggleTheme`, `setTheme`)**: Persisted in `localStorage` (`aq_theme`) with `prefers-color-scheme` fallback. Toggling themes dynamically re-renders all active Chart.js instances (`getChartThemeColors()`) with theme-matched grid lines, tick labels, and tooltip cards.
+- **Reusable `.aq-card` & `.aq-btn-primary` Utilities**: Every KPI card, chart panel, modal dialog, and table container uses `.aq-card` (adapting between dark obsidian glassmorphism and crisp light-mode elevated slate surfaces), while primary CTAs use `.aq-btn-primary` with gradient illumination and subtle hover elevation.
 - **Expanded Viewport & Typography Scale**: Expands `#workspace-portfolio` to `max-w-[1560px]` and `#workspace-screener` to `max-w-[1360px]` inside an `overflow-x-hidden` viewport (`h-16` top header, `p-6 lg:p-8` main viewport), scaling main KPI figures to `text-2xl xl:text-3xl font-extrabold` and table cells to `py-3.5 px-4 text-sm`.
 - **Authoritative Top-Header Currency Toggle**: Centralizes the `USD $` / `ILS ₪` switcher inside `#top-header` (`#portfolio-header-controls`) alongside the live `USD/ILS` exchange rate badge (`#header-fx-badge`), eliminating duplicate workspace currency controls.
 
@@ -556,6 +557,30 @@ To provide both an accessible high-level overview and deep quant research capabi
   - **Destructive Action Confirmation Modal (`openConfirmModal`, `#global-confirm-modal`)**: Guards `clearPortfolioLedger()` and `seedDemoPortfolio()` behind an accessible confirmation dialog.
   - **Shimmer Skeleton Loaders (`renderTableSkeleton`) & Material Symbols**: Renders 5 animated shimmer skeleton rows (`animate-pulse bg-surface-container-high/60`) inside `#leaderboard-body` and `#portfolio-holdings-body` during async fetches, and uses `material-symbols-outlined` icons (`bolt`, `monitoring`, and CSS spinners) across action buttons.
 - **Dual Chart.js Lifecycle Management**: Dedicated chart instances (`portfolioChartInstance` and `portfolioAdvChartInstance`) synchronized via `renderPortfolioChart` with automatic `requestAnimationFrame` resizing upon view toggling, completely eliminating canvas layout thrashing and ghost rendering.
+
+---
+
+## 6H. V3.3.1 Audit Remediation: Performance, Point-in-Time Backtest & Portfolio Math
+
+### 1. Screener & C-FFI (`core_logic/financial_module.py`, `api/main.py`)
+- **Tech cache anchoring**: `ensure_tech_cache()` falls back to `max(Date) - 370d` when the wall clock is beyond the offline Parquet horizon, so `_TECH_DATA_CACHE` hydrates once (TTL 30m). It also precomputes `latest_prices`, `adtv_series` and the full `tech_map`; `compute_live_technical_indicators()` is an O(1) lookup after the first call. The Gatekeeper ($5 price / $5M ADTV) is no longer silently bypassed.
+- **No network in `/api/calculate`**: the synchronous Tiingo enrichment (whose output was never serialized) was removed (Pure Offline Mandate).
+- **Vectorized FFI packing**: `STOCK_STRUCT_DTYPE = [('ticker','S8'),('indicators','<f4',(16,)),('final_score','<f8')]` (asserted `itemsize == 80`) is passed to C via `ndarray.ctypes.data_as`. The loader tries `libsortbuslines.dll` (Windows) and `.so` (Linux/WSL); without a library a vectorized NumPy fallback on the same buffer is used. `c_kernel/` sources are untouched.
+- `normalize_stocks()` accepts DataFrames and builds each frame once; `_safe_float()` has a numeric fast path.
+
+### 2. Point-in-Time Backtester (`core_logic/backtest_engine.py`, `data_pipeline/simfin_etl.py`)
+- `simfin_etl.py` now persists `Publish_Date` (fallback `Report Date + 45d`). The backtester uses `Effective_Date = Publish_Date` (or the raw SimFin `Publish Date`, else `Quarter_End_Date + 45d`) so statements are only visible once published.
+- **Technicals are recomputed at each anchor t_k** from prices `<= t_k` (`compute_vectorized_tech_series`), so no post-t_k prices leak into RSI / SMA / RelativeStrength / Beta / gatekeeper price.
+- Anchors form a true calendar schedule every `freq_months` (3M / 6M) instead of every fiscal month-end. The window is anchored to `min(now, max price date, max SPY date)`, SPY is clipped to the price calendar, and holiday gaps are `ffill(limit=5)`-ed so the curve no longer flatlines. Windows `1y|3y|5y|10y` are supported; the start is clamped to the first date with >= 100 published filings.
+- Fundamentals + price matrix are cached in-memory (invalidated by file mtime); the daily loop is a per-period vectorized NumPy slice; the per-anchor `gc.collect()` is removed.
+
+### 3. Portfolio Ledger & Analytics (`core_logic/portfolio_ledger.py`, `core_logic/portfolio_analytics.py`)
+- **Cross-currency cash sweep** (`sweep_available_cash`): shared by `PortfolioLedger._replay` and `build_daily_series`. A BUY / WITHDRAWAL first consumes same-currency cash, then the other currency at `fx_t`, and only the remainder is external capital. This removes phantom inflows and NAV / invested-capital double counting.
+- **`cash_mode`**: `auto` -> `explicit` if any `CASH_DEPOSIT` / `CASH_WITHDRAWAL` exists, else `implicit`. `implicit` values the invested equity only; un-reinvested SELL proceeds and dividends are treated as immediate withdrawals. The resolved mode is returned as `cash_mode` and drives TWR, the What-If simulator, XIRR and Modified Dietz consistently (`mode_*` series).
+- **Constant-FX attribution** is slice-invariant (`_compute_const_fx_twr`): daily FX revaluation of the USD bucket is stripped, so it no longer depends on the ledger-inception FX.
+- **What-If** results now include `benchmark_xirr_pct` computed on the matched benchmark cash flows.
+- **Risk KPIs** use trading-day returns (weekend zero padding excluded) scaled by sqrt(252); Beta uses active-market days.
+- **UI**: FIFO lot table reads `fx_now` / `cpi_now` and no longer flips the sign of `real_loss_ils`.
 
 ---
 

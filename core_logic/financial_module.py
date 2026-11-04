@@ -99,6 +99,9 @@ _TECH_DATA_CACHE = {
     'price_df': None,
     'volume_df': None,
     'spy_s': None,
+    'latest_prices': None,
+    'adtv_series': None,
+    'tech_map': None,
     'timestamp': 0.0
 }
 CACHE_TTL_SECONDS = 1800.0  # 30 minutes TTL
@@ -216,7 +219,21 @@ def ensure_tech_cache():
             filters=[('Date', '>=', min_date)]
         )
         if raw_p.empty:
-            return None, None, None
+            # Anchor min_date to the offline dataset's actual terminal date when wall-clock exceeds coverage
+            date_col_df = pd.read_parquet(simfin_parquet_path, engine='pyarrow', columns=['Date'])
+            if date_col_df.empty:
+                return None, None, None
+            max_ds_date = pd.to_datetime(date_col_df['Date'].max()).normalize()
+            del date_col_df
+            min_date = max_ds_date - pd.Timedelta(days=370)
+            raw_p = pd.read_parquet(
+                simfin_parquet_path,
+                engine='pyarrow',
+                columns=['Date', 'Ticker', 'Adj. Close', 'Close', 'Volume'],
+                filters=[('Date', '>=', min_date)]
+            )
+            if raw_p.empty:
+                return None, None, None
 
         raw_p['Date'] = pd.to_datetime(raw_p['Date'])
         raw_p['Price'] = raw_p['Adj. Close'].fillna(raw_p['Close']).astype('float32')
@@ -230,14 +247,12 @@ def ensure_tech_cache():
         full_price_df = raw_p.pivot(index='Date', columns='Ticker', values='Price').sort_index().tail(260)
         full_volume_df = raw_p.pivot(index='Date', columns='Ticker', values='Volume').sort_index().tail(260)
         del raw_p
-        gc.collect()
 
         # Load SPY benchmark history
         spy_df = pd.read_csv(spy_path, usecols=['Date', 'SPY_Adj_Close'])
         spy_df['Date'] = pd.to_datetime(spy_df['Date'])
         spy_full = spy_df.set_index('Date')['SPY_Adj_Close'].astype('float32').sort_index()
         del spy_df
-        gc.collect()
 
         price_start_date = full_price_df.index[0]
         price_end_date = full_price_df.index[-1]
@@ -246,9 +261,15 @@ def ensure_tech_cache():
             full_spy_s = spy_full.tail(260)
         del spy_full
 
+        latest_prices = full_price_df.ffill(limit=5).iloc[-1].rename('LatestPrice')
+        adtv_series = (full_price_df.tail(20) * full_volume_df.tail(20)).mean(axis=0).rename('ADTV')
+
         _TECH_DATA_CACHE['price_df'] = full_price_df
         _TECH_DATA_CACHE['volume_df'] = full_volume_df
         _TECH_DATA_CACHE['spy_s'] = full_spy_s
+        _TECH_DATA_CACHE['latest_prices'] = latest_prices
+        _TECH_DATA_CACHE['adtv_series'] = adtv_series
+        _TECH_DATA_CACHE['tech_map'] = None
         _TECH_DATA_CACHE['timestamp'] = now
 
         t1_io = time.perf_counter()
@@ -262,97 +283,109 @@ def ensure_tech_cache():
         return None, None, None
 
 
-def compute_live_technical_indicators(unique_tickers):
+def compute_vectorized_tech_series(price_df, spy_s, log_diag=False):
     """
-    Dynamically calculates momentum & technical indicators (RelativeStrength, PriceVs200SMA, RSI, Beta)
-    from offline us-shareprices-daily.parquet and spy_historical.csv for the active stock universe.
-    Aggressively optimizes RAM lifecycle via date pre-filtering, 1D vectorization, and immediate matrix deletion.
+    Pure vectorized technical indicator computation on a point-in-time price matrix `price_df`
+    and aligned benchmark `spy_s` (strictly <= anchor date t_k).
+    Returns (rel_strength, price_vs_sma, rsi_14, beta_s, latest_px) as 1D Series indexed by Ticker.
     """
-    if not unique_tickers:
-        return {}
+    last_px = price_df.ffill(limit=5).iloc[-1]
+    first_px = price_df.bfill(limit=5).iloc[0].replace(0, float('nan'))
 
-    tech_map = {}
-    try:
-        t0_io = time.perf_counter()
-        full_price_df, full_volume_df, full_spy_s = ensure_tech_cache()
-        if full_price_df is None or full_spy_s is None:
-            return tech_map
-        t1_io = time.perf_counter()
+    # 1. Vectorized 1-Year Relative Strength vs SPY (same time window as stocks)
+    spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 and spy_s.iloc[0] != 0 else 0.0
+    stk_1y_ret = (last_px - first_px) / first_px
+    rel_strength = (stk_1y_ret - spy_1y_ret).astype('float32')
 
-        # Subset for the currently requested unique universe
-        t0_calc = time.perf_counter()
-        valid_tickers = [t for t in unique_tickers if t in full_price_df.columns]
-        if not valid_tickers:
-            return tech_map
-            
-        price_df = full_price_df[valid_tickers]
-        spy_s = full_spy_s
-        # 1. Vectorized 1-Year Relative Strength vs SPY (same time window as stocks)
-        spy_1y_ret = float((spy_s.iloc[-1] - spy_s.iloc[0]) / spy_s.iloc[0]) if len(spy_s) > 1 else 0.0
-        stk_1y_ret = (price_df.iloc[-1] - price_df.iloc[0]) / price_df.iloc[0].replace(0, float('nan'))
-        rel_strength = (stk_1y_ret - spy_1y_ret).astype('float32')
+    # 2. Vectorized Price vs 200-day Simple Moving Average
+    sma_200 = price_df.tail(200).mean()
+    price_vs_sma = (last_px / sma_200.replace(0, float('nan'))).astype('float32')
 
-        # 2. Vectorized Price vs 200-day Simple Moving Average
-        sma_200 = price_df.tail(200).mean()
-        price_vs_sma = (price_df.iloc[-1] / sma_200.replace(0, float('nan'))).astype('float32')
-
-        # Diagnostic log for PriceVs200SMA distribution
+    if log_diag:
         valid_sma = price_vs_sma.dropna()
         pos_sma_c = int((valid_sma > 0.0).sum())
         zero_sma_c = len(price_vs_sma) - pos_sma_c
         sample_sma = [round(float(v), 4) for v in valid_sma.iloc[:5]] if not valid_sma.empty else []
         print(f"[DIAG] PriceVs200SMA statistics: Total tickers={len(price_vs_sma)}, > 0.0 count={pos_sma_c}, <= 0.0 / NaN count={zero_sma_c}, Sample={sample_sma}")
 
-        # 3. Vectorized 14-day RSI
-        delta = price_df.diff()
-        gain = delta.where(delta > 0, 0.0).tail(14).mean()
-        loss = (-delta.where(delta < 0, 0.0)).tail(14).mean()
-        rs = gain / (loss + 1e-6)
-        rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
+    # 3. Vectorized 14-day RSI
+    delta = price_df.tail(15).diff()
+    gain = delta.where(delta > 0, 0.0).tail(14).mean()
+    loss = (-delta.where(delta < 0, 0.0)).tail(14).mean()
+    rs = gain / (loss + 1e-6)
+    rsi_14 = (100.0 - (100.0 / (1.0 + rs))).astype('float32')
 
-        # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns via NumPy dot-product)
-        stk_returns = price_df.pct_change()
-        spy_returns = spy_s.pct_change().reindex(price_df.index)
+    # 4. Vectorized 1-Year Beta vs SPY (aligned daily returns via NumPy dot-product)
+    stk_returns = price_df.pct_change(fill_method=None)
+    spy_returns = spy_s.pct_change(fill_method=None).reindex(price_df.index)
 
-        spy_valid = spy_returns.dropna()
-        spy_var = float(spy_valid.var()) if len(spy_valid) > 1 else 0.0
+    spy_valid = spy_returns.dropna()
+    spy_var = float(spy_valid.var()) if len(spy_valid) > 1 else 0.0
 
-        if spy_var > 0.0:
-            spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).values
-            stk_dm = (stk_returns - stk_returns.mean()).fillna(0.0).values
-            
-            # Explicitly sanitize arrays to prevent 'invalid value encountered in dot' RuntimeWarnings
-            spy_dm = np.nan_to_num(spy_dm, nan=0.0, posinf=0.0, neginf=0.0)
-            stk_dm = np.nan_to_num(stk_dm, nan=0.0, posinf=0.0, neginf=0.0)
-            
-            n_obs = max(1, len(spy_returns) - 1)
-            cov_vals = np.dot(stk_dm.T, spy_dm) / n_obs
-            cov_s = pd.Series(cov_vals, index=price_df.columns, dtype='float32')
-            beta_s = (cov_s / spy_var).fillna(1.0)
-        else:
-            cov_s = pd.Series(0.0, index=price_df.columns, dtype='float32')
-            beta_s = pd.Series(1.0, index=price_df.columns, dtype='float32')
+    if spy_var > 0.0:
+        spy_dm = (spy_returns - spy_returns.mean()).fillna(0.0).values
+        stk_dm = (stk_returns - stk_returns.mean()).fillna(0.0).values
 
-        # IMMEDIATELY ERASE ALL HEAVY 2D MATRICES AND FREE RAM BEFORE DICT GENERATION
-        del price_df, spy_s, delta, gain, loss, rs, stk_returns, spy_returns, cov_s
-        gc.collect()
+        spy_dm = np.nan_to_num(spy_dm, nan=0.0, posinf=0.0, neginf=0.0)
+        stk_dm = np.nan_to_num(stk_dm, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # Construct dictionary mapping strictly from 1D Series vectors
-        for ticker in rel_strength.index:
-            rs_v = float(rel_strength[ticker]) if not math.isnan(rel_strength[ticker]) else 0.0
-            sma_v = float(price_vs_sma[ticker]) if not math.isnan(price_vs_sma[ticker]) else 1.0
-            rsi_v = float(rsi_14[ticker]) if not math.isnan(rsi_14[ticker]) else 50.0
-            beta_v = float(beta_s[ticker]) if not math.isnan(beta_s[ticker]) else 1.0
+        n_obs = max(1, len(spy_returns) - 1)
+        cov_vals = np.dot(stk_dm.T, spy_dm) / n_obs
+        cov_s = pd.Series(cov_vals, index=price_df.columns, dtype='float32')
+        beta_s = (cov_s / spy_var).fillna(1.0)
+    else:
+        beta_s = pd.Series(1.0, index=price_df.columns, dtype='float32')
 
-            tech_map[ticker] = {
-                'RelativeStrength': _safe_float(rs_v),
-                'PriceVs200SMA': _safe_float(sma_v),
-                'RSI': _safe_float(rsi_v),
-                'Beta': _safe_float(beta_v)
+    return (
+        rel_strength.fillna(0.0),
+        price_vs_sma.fillna(1.0),
+        rsi_14.fillna(50.0),
+        beta_s.fillna(1.0),
+        last_px,
+    )
+
+
+def compute_live_technical_indicators(unique_tickers):
+    """
+    Dynamically calculates momentum & technical indicators (RelativeStrength, PriceVs200SMA, RSI, Beta)
+    from offline us-shareprices-daily.parquet and spy_historical.csv for the active stock universe.
+    Uses in-memory cached indicator map after initial hydration for O(1) sub-millisecond retrieval.
+    """
+    if not unique_tickers:
+        return {}
+
+    tech_map = {}
+    try:
+        full_price_df, full_volume_df, full_spy_s = ensure_tech_cache()
+        if full_price_df is None or full_spy_s is None:
+            return tech_map
+
+        cached_map = _TECH_DATA_CACHE.get('tech_map')
+        if cached_map is not None:
+            return {t: cached_map[t] for t in unique_tickers if t in cached_map}
+
+        t0_calc = time.perf_counter()
+        rel_strength, price_vs_sma, rsi_14, beta_s, _ = compute_vectorized_tech_series(
+            full_price_df, full_spy_s, log_diag=True
+        )
+
+        rs_arr = np.nan_to_num(rel_strength.to_numpy(dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
+        sma_arr = np.nan_to_num(price_vs_sma.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
+        rsi_arr = np.nan_to_num(rsi_14.to_numpy(dtype=np.float64), nan=50.0, posinf=50.0, neginf=50.0)
+        beta_arr = np.nan_to_num(beta_s.to_numpy(dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0)
+
+        full_map = {}
+        for idx, ticker in enumerate(rel_strength.index):
+            full_map[ticker] = {
+                'RelativeStrength': float(rs_arr[idx]),
+                'PriceVs200SMA': float(sma_arr[idx]),
+                'RSI': float(rsi_arr[idx]),
+                'Beta': float(beta_arr[idx]),
             }
 
-        del rel_strength, price_vs_sma, rsi_14, beta_s
-        gc.collect()
+        _TECH_DATA_CACHE['tech_map'] = full_map
+        tech_map = {t: full_map[t] for t in unique_tickers if t in full_map}
+
         t1_calc = time.perf_counter()
         print(f"[PROFILER] Technical Indicator Computation Math: {t1_calc - t0_calc:.3f}s")
         print(f"[Technical Indicators] Ultra-fast computation completed for {len(tech_map)} tickers.")
@@ -453,26 +486,44 @@ class Stock(ctypes.Structure):
 # Assert exact alignment and 80-byte size matching C struct (stock.h)
 assert ctypes.sizeof(Stock) == 80, f"Stock struct size mismatch: expected 80 bytes, got {ctypes.sizeof(Stock)}"
 
+# Vectorized NumPy structured dtype matching the exact 80-byte C Stock memory layout
+STOCK_STRUCT_DTYPE = np.dtype([
+    ('ticker', 'S8'),
+    ('indicators', '<f4', (NUM_INDICATORS,)),
+    ('final_score', '<f8'),
+])
+assert STOCK_STRUCT_DTYPE.itemsize == 80, f"STOCK_STRUCT_DTYPE size mismatch: expected 80 bytes, got {STOCK_STRUCT_DTYPE.itemsize}"
+
 
 # ─── 2. Library Loading & Function Signatures ──────────────────────────────────
 
-lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'c_kernel', 'libsortbuslines.so')
+_c_kernel_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'c_kernel')
+_lib_candidates = (
+    [os.path.join(_c_kernel_dir, 'libsortbuslines.dll'), os.path.join(_c_kernel_dir, 'libsortbuslines.so')]
+    if os.name == 'nt'
+    else [os.path.join(_c_kernel_dir, 'libsortbuslines.so'), os.path.join(_c_kernel_dir, 'libsortbuslines.dll')]
+)
+lib_path = next((p for p in _lib_candidates if os.path.exists(p)), _lib_candidates[0])
+lib = None
+for _cand_path in _lib_candidates:
+    if not os.path.exists(_cand_path):
+        continue
+    try:
+        lib = ctypes.CDLL(_cand_path)
+        lib_path = _cand_path
+        # void compute_scores(Stock* stocks, int num_stocks, const double* weights);
+        lib.compute_scores.argtypes = [ctypes.POINTER(Stock), ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
+        lib.compute_scores.restype  = None
 
-try:
-    lib = ctypes.CDLL(lib_path)
-    # void compute_scores(Stock* stocks, int num_stocks, const double* weights);
-    lib.compute_scores.argtypes = [ctypes.POINTER(Stock), ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
-    lib.compute_scores.restype  = None
-
-    # void sort_stocks_by_score(Stock* stocks, int num_stocks);
-    lib.sort_stocks_by_score.argtypes = [ctypes.POINTER(Stock), ctypes.c_int]
-    lib.sort_stocks_by_score.restype  = None
-except OSError as e:
-    print(f"Warning: Could not load C-library at {lib_path}. Execution will require WSL/Linux environment.")
-    lib = None
+        # void sort_stocks_by_score(Stock* stocks, int num_stocks);
+        lib.sort_stocks_by_score.argtypes = [ctypes.POINTER(Stock), ctypes.c_int]
+        lib.sort_stocks_by_score.restype  = None
+        break
+    except OSError:
+        lib = None
 
 
-def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_market_cap=None, max_market_cap=None, specific_tickers=None):
+def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_market_cap=None, max_market_cap=None, specific_tickers=None, use_live_tech_cache=True):
     """
     Vectorized early pruning of the DataFrame universe.
     Applies Intrinsic strategy knockouts, sector/demographic bounds, and the Gatekeeper matrix.
@@ -505,23 +556,29 @@ def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_marke
     if max_market_cap is not None:
         df = df[df['MarketCap'].fillna(0.0) <= max_market_cap]
 
-    # Price and ADTV from tech cache
-    price_df = _TECH_DATA_CACHE.get('price_df')
-    volume_df = _TECH_DATA_CACHE.get('volume_df')
-    if price_df is not None and volume_df is not None:
-        latest_prices = price_df.iloc[-1].rename('LatestPrice')
-        
-        tail_price = price_df.tail(20)
-        tail_volume = volume_df.tail(20)
-        adtv_series = (tail_price * tail_volume).mean(axis=0).rename('ADTV')
-
-        df = df.merge(latest_prices, left_on='Ticker', right_index=True, how='left')
-        df = df.merge(adtv_series, left_on='Ticker', right_index=True, how='left')
-
+    # Point-in-Time vs Live Price and ADTV Gatekeeper
+    if 'LatestPrice' in df.columns:
         df = df[df['LatestPrice'].fillna(0.0) > GATEKEEPER_MIN_PRICE]
-        df = df[df['ADTV'].fillna(0.0) >= GATEKEEPER_MIN_ADTV]
+        if 'ADTV' in df.columns:
+            df = df[df['ADTV'].fillna(0.0) >= GATEKEEPER_MIN_ADTV]
+        df = df.drop(columns=[c for c in ('LatestPrice', 'ADTV') if c in df.columns])
+    elif use_live_tech_cache:
+        if _TECH_DATA_CACHE.get('price_df') is None:
+            ensure_tech_cache()
+        latest_prices = _TECH_DATA_CACHE.get('latest_prices')
+        adtv_series = _TECH_DATA_CACHE.get('adtv_series')
+        price_df = _TECH_DATA_CACHE.get('price_df')
+        volume_df = _TECH_DATA_CACHE.get('volume_df')
 
-        df = df.drop(columns=['LatestPrice', 'ADTV'])
+        if latest_prices is None and price_df is not None:
+            latest_prices = price_df.ffill(limit=5).iloc[-1].rename('LatestPrice')
+        if adtv_series is None and price_df is not None and volume_df is not None:
+            adtv_series = (price_df.tail(20) * volume_df.tail(20)).mean(axis=0).rename('ADTV')
+
+        if latest_prices is not None and adtv_series is not None:
+            lp_mapped = df['Ticker'].map(latest_prices).fillna(0.0)
+            adtv_mapped = df['Ticker'].map(adtv_series).fillna(0.0)
+            df = df[(lp_mapped > GATEKEEPER_MIN_PRICE) & (adtv_mapped >= GATEKEEPER_MIN_ADTV)]
 
     # Insolvency rule
     if 'NetDebt_EBITDA' in df.columns:
@@ -580,6 +637,9 @@ def _safe_float(val, default=0.0):
     """Coerce a scalar/cell value to float, treating 'nan'/empty/None/inf as default."""
     if val is None:
         return default
+    if isinstance(val, (int, float, np.number)):
+        f = float(val)
+        return default if (math.isnan(f) or math.isinf(f)) else f
     if hasattr(val, "squeeze"):
         val = val.squeeze()
     if hasattr(val, "item"):
@@ -590,6 +650,9 @@ def _safe_float(val, default=0.0):
                 val = val.iloc[0]
     elif hasattr(val, "iloc"):
         val = val.iloc[0]
+    if isinstance(val, (int, float, np.number)):
+        f = float(val)
+        return default if (math.isnan(f) or math.isinf(f)) else f
     s = str(val).strip().lower()
     if s in ('nan', '', 'inf', '-inf', 'none'):
         return default
@@ -795,50 +858,81 @@ def _vectorized_sigmoid(arr, median_val, mad_val, invert=False):
 OVERRIDE_COLUMNS = frozenset({'PayoutRatio', 'TrailingPE', 'NetDebt_EBITDA', 'EV_EBITDA'})
 
 
-def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None):
+def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_market_cap=None, max_market_cap=None, global_stocks_list=None, use_live_tech_cache=True):
     """
     Apply dynamic filters, strategy knock-out filters, then normalize the surviving universe
     using vectorized piecewise Gaussian (Goldilocks) or robust Sigmoid Z-score curves.
 
     Args:
-        stocks_list:     list of raw CSV dicts.
+        stocks_list:     list of raw CSV dicts (or a pandas DataFrame).
         strategy:        one of VALID_STRATEGIES, or None for no filtering.
         allowed_sectors: list of allowed sector names, or None.
         min_market_cap:  minimum market cap, or None.
         max_market_cap:  maximum market cap, or None.
-        global_stocks_list: list of all raw CSV dicts (global baseline for sector neutrality).
+        global_stocks_list: list of all raw CSV dicts (or DataFrame) for sector neutrality baseline.
+        use_live_tech_cache: whether to apply live _TECH_DATA_CACHE Gatekeeper when LatestPrice is absent.
     """
-    if not stocks_list:
-        return []
+    if isinstance(stocks_list, pd.DataFrame):
+        if stocks_list.empty:
+            return []
+        df_initial = stocks_list.copy()
+    else:
+        if not stocks_list:
+            return []
+        df_initial = pd.DataFrame(stocks_list)
+
+    if 'Sector' not in df_initial.columns:
+        df_initial['Sector'] = df_initial['GICS_Sector'] if 'GICS_Sector' in df_initial.columns else ''
 
     # Sector-Neutral Baseline Stabilization: Use the entire global population prior to filtering
-    baseline_list = global_stocks_list if global_stocks_list is not None else list(stocks_list)
+    if global_stocks_list is None or (global_stocks_list is stocks_list):
+        df_base = df_initial
+    elif isinstance(global_stocks_list, pd.DataFrame):
+        df_base = global_stocks_list
+    else:
+        df_base = pd.DataFrame(global_stocks_list)
+        if 'Sector' not in df_base.columns:
+            df_base['Sector'] = df_base['GICS_Sector'] if 'GICS_Sector' in df_base.columns else ''
 
-    if strategy or allowed_sectors or min_market_cap or max_market_cap:
-        df = pd.DataFrame(stocks_list)
-        df = apply_early_pruning_vectorized(df, strategy, allowed_sectors, min_market_cap, max_market_cap)
-        df = apply_derived_knockouts_vectorized(df, strategy)
-        if df.empty:
+    df_stocks = df_initial
+    if strategy or allowed_sectors or min_market_cap or max_market_cap or ('LatestPrice' in df_stocks.columns):
+        df_stocks = apply_early_pruning_vectorized(
+            df_stocks,
+            strategy,
+            allowed_sectors,
+            min_market_cap,
+            max_market_cap,
+            use_live_tech_cache=use_live_tech_cache,
+        )
+        df_stocks = apply_derived_knockouts_vectorized(df_stocks, strategy)
+        if df_stocks.empty:
             return []
-        stocks_list = df.to_dict(orient='records')
 
-    n = len(stocks_list)
+    n = len(df_stocks)
     t0_norm = time.perf_counter()
 
     # Step 3: Vectorized extraction of raw indicator float matrix (N x 16)
-    df_stocks = pd.DataFrame(stocks_list)
     for col in INDICATOR_COLUMNS:
         if col not in df_stocks.columns:
             df_stocks[col] = 0.0
+        elif not pd.api.types.is_numeric_dtype(df_stocks[col]):
+            df_stocks[col] = pd.to_numeric(df_stocks[col], errors='coerce')
 
-    raw_matrix = df_stocks[INDICATOR_COLUMNS].apply(pd.to_numeric, errors='coerce').fillna(0.0).to_numpy(dtype=np.float32)
+    raw_matrix = df_stocks[INDICATOR_COLUMNS].fillna(0.0).to_numpy(dtype=np.float32)
     raw_matrix = np.nan_to_num(raw_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
     norm_matrix = np.zeros((n, len(INDICATOR_COLUMNS)), dtype=np.float32)
 
-    # Pre-extract sector array for baseline and current stocks_list for sector-neutral metrics
-    base_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in baseline_list])
-    stock_sects = np.array([str(s.get('Sector', '')).strip().lower() for s in stocks_list])
+    # Pre-extract sector array for baseline and current df_stocks for sector-neutral metrics
+    base_sects = df_base['Sector'].fillna('').astype(str).str.strip().str.lower().to_numpy()
+    stock_sects = df_stocks['Sector'].fillna('').astype(str).str.strip().str.lower().to_numpy()
+    unique_base_sects = np.unique(base_sects)
+
+    if 'EBITDA' in df_stocks.columns:
+        ebitda_s = df_stocks['EBITDA'] if pd.api.types.is_numeric_dtype(df_stocks['EBITDA']) else pd.to_numeric(df_stocks['EBITDA'], errors='coerce')
+        ebitda_arr = np.nan_to_num(ebitda_s.fillna(0.0).to_numpy(dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    else:
+        ebitda_arr = np.zeros(n, dtype=np.float32)
 
     # Step 4: Normalize each column dynamically using vectorized math
     for j, col in enumerate(INDICATOR_COLUMNS):
@@ -846,7 +940,6 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
 
         if col == 'EV_EBITDA':
             params = GOLDILOCKS_PARAMS[col]
-            ebitda_arr = np.array([_safe_float(s.get('EBITDA', 0.0)) for s in stocks_list], dtype=np.float32)
             scores = _vectorized_goldilocks(col_arr, params)
             scores = np.where((ebitda_arr <= 0.0) | (col_arr < 0.0), 0.0, scores)
             norm_matrix[:, j] = scores
@@ -867,12 +960,15 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
         else:
             invert = LOWER_IS_BETTER.get(col, False)
             if col in ('RevenueGrowth', 'EPSGrowth'):
-                df_base = pd.DataFrame(baseline_list)
-                base_col_vals = pd.to_numeric(df_base.get(col, pd.Series(0, index=df_base.index)), errors='coerce').fillna(0.0).to_numpy(dtype=np.float32)
-                base_col_vals = np.nan_to_num(base_col_vals, nan=0.0, posinf=0.0, neginf=0.0)
+                if col in df_base.columns:
+                    b_s = df_base[col] if pd.api.types.is_numeric_dtype(df_base[col]) else pd.to_numeric(df_base[col], errors='coerce')
+                    base_col_vals = np.nan_to_num(b_s.fillna(0.0).to_numpy(dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+                else:
+                    base_col_vals = np.zeros(len(df_base), dtype=np.float32)
 
-                sector_stats = {}
-                for sect in np.unique(base_sects):
+                meds = np.zeros(n, dtype=np.float32)
+                mads = np.zeros(n, dtype=np.float32)
+                for sect in unique_base_sects:
                     mask = (base_sects == sect)
                     s_vals = base_col_vals[mask]
                     if len(s_vals) > 0:
@@ -880,11 +976,6 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
                         mad = float(np.median(np.abs(s_vals - med)))
                     else:
                         med, mad = 0.0, 0.0
-                    sector_stats[sect] = (med, mad)
-
-                meds = np.zeros(n, dtype=np.float32)
-                mads = np.zeros(n, dtype=np.float32)
-                for sect, (med, mad) in sector_stats.items():
                     s_mask = (stock_sects == sect)
                     meds[s_mask] = med
                     mads[s_mask] = mad
@@ -910,8 +1001,7 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
 
     # Step 5: Rebuild stock dicts with normalized values using vectorized DataFrame export
     norm_df = pd.DataFrame(norm_matrix, columns=INDICATOR_COLUMNS)
-    tickers = [s.get('Ticker', '') for s in stocks_list]
-    norm_df.insert(0, 'Ticker', tickers)
+    norm_df.insert(0, 'Ticker', df_stocks['Ticker'].astype(str).values)
     result = norm_df.to_dict(orient='records')
 
     t1_norm = time.perf_counter()
@@ -924,56 +1014,53 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
 
 def run_financial_engine(normalized_stocks, weights_list):
     """
-    Surgical Patch: Accepts pre-normalized stocks directly to bypass duplicate normalization.
-    Populates ctypes array → C dot-product → QuickSort.
+    Accepts pre-normalized stocks directly to bypass duplicate normalization.
+    Packs contiguous 80-byte STOCK_STRUCT_DTYPE buffer → C dot-product → QuickSort.
     """
     t0_ffi = time.perf_counter()
     num_stocks = len(normalized_stocks)
     if num_stocks == 0:
         return []
 
+    # ── Step 1: Pack contiguous 80-byte Stock buffer via NumPy structured dtype ──
+    c_buf = np.zeros(num_stocks, dtype=STOCK_STRUCT_DTYPE)
+    c_buf['ticker'] = [str(s.get('Ticker', ''))[:7].encode('utf-8') for s in normalized_stocks]
+    c_buf['indicators'] = np.array(
+        [[float(s.get(col, 0.0)) for col in INDICATOR_COLUMNS] for s in normalized_stocks],
+        dtype='<f4',
+    )
+
     if lib is None:
-        # Fallback scoring for host OS without compiled C library
-        results = []
-        tot_w = sum(float(w) for w in weights_list)
-        for stock_data in normalized_stocks:
-            score = sum(float(stock_data.get(col, 0.0)) * float(w) for col, w in zip(INDICATOR_COLUMNS, weights_list))
-            results.append({'Ticker': stock_data['Ticker'], 'FinalScore': round(score, 4)})
-        results.sort(key=lambda x: x['FinalScore'], reverse=True)
+        # Vectorized NumPy fallback on the exact 80-byte structured buffer when host OS lacks C shared library
+        w_arr = np.asarray([float(w) for w in weights_list], dtype='<f8')
+        c_buf['final_score'] = np.dot(c_buf['indicators'].astype('<f8'), w_arr)
+        order = np.argsort(-c_buf['final_score'], kind='mergesort')
+        c_buf = c_buf[order]
+        res = [
+            {
+                'Ticker':     c_buf['ticker'][i].decode('utf-8', errors='ignore').rstrip('\x00'),
+                'FinalScore': round(float(c_buf['final_score'][i]), 4),
+            }
+            for i in range(num_stocks)
+        ]
         t1_ffi = time.perf_counter()
-        print(f"[PROFILER] C-FFI Scoring Execution (Python Fallback): {t1_ffi - t0_ffi:.3f}s")
-        return results
+        print(f"[PROFILER] C-FFI Scoring Execution (Vectorized Fallback): {t1_ffi - t0_ffi:.3f}s")
+        return res
 
-    # ── Step 1: Populate ctypes Stock array ──────────────────────────────────
-    StockArray = Stock * num_stocks
-    c_stocks   = StockArray()
-
-    for i, stock_data in enumerate(normalized_stocks):
-        # Encode ticker: max 7 meaningful chars + null terminator fits in char[8]
-        encoded = stock_data['Ticker'].encode('utf-8')[:7]
-        c_stocks[i].ticker = encoded
-
-        # Map 16 normalized indicator values sequentially into indicators[]
-        for j, col in enumerate(INDICATOR_COLUMNS):
-            c_stocks[i].indicators[j] = float(stock_data.get(col, 0.0))
-
-        c_stocks[i].final_score = 0.0
-
-    # ── Step 2: Build weights array ──────────────────────────────────────────
+    # ── Step 2: Build weights array & pass contiguous 80-byte buffer to C kernel ──
     WeightsArray = ctypes.c_double * NUM_INDICATORS
     c_weights    = WeightsArray(*[float(w) for w in weights_list])
 
-    # ── Step 3: Fire C engine (dot product + QuickSort) ──────────────────────
-    start_ptr   = ctypes.cast(c_stocks,   ctypes.POINTER(Stock))
-    weights_ptr = ctypes.cast(c_weights,  ctypes.POINTER(ctypes.c_double))
+    start_ptr   = c_buf.ctypes.data_as(ctypes.POINTER(Stock))
+    weights_ptr = ctypes.cast(c_weights, ctypes.POINTER(ctypes.c_double))
 
     lib.compute_scores(start_ptr, num_stocks, weights_ptr)
     lib.sort_stocks_by_score(start_ptr, num_stocks)
 
     res = [
         {
-            'Ticker':     c_stocks[i].ticker.decode('utf-8'),
-            'FinalScore': round(c_stocks[i].final_score, 4),
+            'Ticker':     c_buf['ticker'][i].decode('utf-8', errors='ignore').rstrip('\x00'),
+            'FinalScore': round(float(c_buf['final_score'][i]), 4),
         }
         for i in range(num_stocks)
     ]

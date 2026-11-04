@@ -230,8 +230,77 @@ def run_all_verifications() -> None:
         test_3_dual_currency_rebasing_and_attribution(tmp_dir)
         test_4_what_if_simulator_slicing_and_real_cache_integration(tmp_dir)
         test_5_pre_split_nvda_twr_invariance_and_otc_anchoring(tmp_dir)
+        test_6_cash_sweep_parity_cash_modes_and_const_fx_slicing(tmp_dir)
     print("---------------------------------------------------------------------------------")
     print("[SUCCESS] All Phase 3 Portfolio Analytics assertions passed!")
+
+
+def test_6_cash_sweep_parity_cash_modes_and_const_fx_slicing(tmp_dir: str) -> None:
+    """
+    Test 6: Cross-Currency Cash Sweep Parity, cash_mode Semantics, Benchmark XIRR & Slice-Invariant Constant-FX.
+      A) Deposit 36,000 ILS (FX=3.60) then BUY $10,000 AAPL: the BUY must be funded by sweeping ILS cash
+         (zero phantom external inflow), identically in PortfolioLedger._replay and build_daily_series.
+      B) Implicit mode: BUY 10 @ $100, SELL all @ $110 on day 10, idle 20 days, re-BUY 10 @ $110 on day 30, then
+         price -> $121. Invested-equity TWR = 1.10 * 1.10 - 1 = 21.00% (idle cash must NOT dilute TWR),
+         and auto mode must resolve to 'implicit' (no CASH_* rows) while 'explicit' gives 21.00% * cash drag-free too
+         only when the idle window has 0% asset move (here asset is flat during idle, so explicit is also 21%).
+      C) Benchmark XIRR must be returned and non-zero for a rising benchmark.
+      D) Constant-FX pure-asset return on a sub-slice must equal the native USD asset return of that slice.
+    """
+    def mock_macro(s, e):
+        g = pd.date_range(pd.Timestamp(s).normalize(), pd.Timestamp(e).normalize(), freq="D")
+        fx = pd.Series(np.linspace(3.60, 3.96, len(g)), index=g, dtype="float64")
+        return pd.DataFrame({"USD_ILS": fx, "IL_CPI": 100.0}, index=g)
+
+    def mock_flat_macro(s, e):
+        g = pd.date_range(pd.Timestamp(s).normalize(), pd.Timestamp(e).normalize(), freq="D")
+        return pd.DataFrame({"USD_ILS": 3.60, "IL_CPI": 100.0}, index=g)
+
+    def mock_prices(tickers, s, e):
+        g = pd.date_range(pd.Timestamp(s).normalize(), pd.Timestamp(e).normalize(), freq="D")
+        px = pd.Series(100.0, index=g, dtype="float64")
+        px.loc[g >= pd.Timestamp("2024-01-11")] = 110.0
+        px.loc[g >= pd.Timestamp("2024-02-15")] = 121.0
+        return pd.DataFrame({t: px for t in tickers}, index=g), {t: "USD" for t in tickers}
+
+    # A) Cross-currency sweep parity
+    led_a = PortfolioLedger(path=os.path.join(tmp_dir, "t6a.parquet"), macro_provider=mock_flat_macro)
+    led_a.add_transaction("2024-01-01", "CASH", "CASH_DEPOSIT", quantity=36000.0, currency="ILS")
+    led_a.add_transaction("2024-01-02", "AAPL", "BUY", quantity=100.0, price=100.0, fee=0.0, currency="USD")
+    buckets = led_a.capital_buckets()
+    _assert_close(buckets["total_invested_capital"]["USD"], 0.0, "Ledger: no phantom USD invested capital after ILS sweep")
+    _assert_close(buckets["available_cash"]["ILS"], 0.0, "Ledger: ILS cash fully swept into USD BUY")
+    an_a = PortfolioAnalytics(led_a, price_provider=mock_prices, macro_provider=mock_flat_macro)
+    d_a = an_a.build_daily_series(end_date="2024-01-05")
+    _assert_close(float(d_a["external_inflow_ils"].sum()), 36000.0, "Analytics: only the real 36,000 ILS deposit is an external inflow")
+    _assert_close(float(d_a.loc[pd.Timestamp("2024-01-05"), "cash_balance_ils"]), 0.0, "Analytics: ILS cash swept (parity with ledger)")
+    _assert_close(float(d_a.loc[pd.Timestamp("2024-01-05"), "nav_ils"]), 36000.0, "Analytics: NAV not double counted")
+
+    # B) Implicit invested-equity TWR ignores idle SELL proceeds
+    led_b = PortfolioLedger(path=os.path.join(tmp_dir, "t6b.parquet"), macro_provider=mock_flat_macro)
+    led_b.add_transaction("2024-01-01", "AAPL", "BUY", quantity=10.0, price=100.0, fee=0.0, currency="USD")
+    led_b.add_transaction("2024-01-11", "AAPL", "SELL", quantity=10.0, price=110.0, fee=0.0, currency="USD")
+    led_b.add_transaction("2024-01-31", "AAPL", "BUY", quantity=10.0, price=110.0, fee=0.0, currency="USD")
+    an_b = PortfolioAnalytics(led_b, price_provider=mock_prices, macro_provider=mock_flat_macro, )
+    res_b = an_b.analyze_slice(window="ALL", end_date="2024-02-20", view_currency="USD", benchmarks=["QQQ"], cash_mode="auto")
+    assert res_b["cash_mode"] == "implicit", f"auto must resolve to implicit, got {res_b['cash_mode']}"
+    _assert_close(res_b["kpis"]["twr_total_pct"], 21.0, "Implicit invested-equity TWR")
+    wi = res_b["what_if"]["QQQ"]
+    assert "benchmark_xirr_pct" in wi and wi["benchmark_xirr_pct"] > 0.0, f"Benchmark XIRR missing/zero: {wi}"
+    # Matched flows: benchmark bought $1,000 on day 0, sold $1,100 on day 10, bought $1,100 on day 30 -> ends at $1,210
+    _assert_close(wi["terminal_benchmark_nav"], 1210.0, "Implicit What-If terminal benchmark NAV (cash-flow matched)", tol=1e-4)
+    _assert_close(wi["terminal_portfolio_nav"], 1210.0, "Implicit What-If terminal portfolio (equity) NAV", tol=1e-4)
+
+    # D) Slice-invariant constant-FX attribution on a sub-window (asset +10% from 2024-02-14 -> 2024-02-15 in USD)
+    led_d = PortfolioLedger(path=os.path.join(tmp_dir, "t6d.parquet"), macro_provider=mock_macro)
+    led_d.add_transaction("2024-01-01", "AAPL", "BUY", quantity=10.0, price=100.0, fee=0.0, currency="USD")
+    an_d = PortfolioAnalytics(led_d, price_provider=mock_prices, macro_provider=mock_macro)
+    sub = an_d.analyze_slice(start_date="2024-01-20", end_date="2024-02-20", view_currency="ILS")
+    _assert_close(sub["attribution"]["pure_asset_return_pct"], 10.0, "Sub-slice pure asset return (constant-FX, slice-invariant)", tol=1e-4)
+    print(
+        "[PASS] Test 6: Cross-currency sweep parity, implicit cash_mode TWR=21.00%, benchmark XIRR "
+        f"({wi['benchmark_xirr_pct']:.2f}%), and slice-invariant constant-FX attribution verified."
+    )
 
 
 def test_5_pre_split_nvda_twr_invariance_and_otc_anchoring(tmp_dir: str) -> None:

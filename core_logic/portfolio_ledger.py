@@ -478,6 +478,34 @@ class LedgerState:
     warnings: list = field(default_factory=list)
 
 
+def sweep_available_cash(avail_cash: dict, cur: str, amount: float, fx: float) -> float:
+    """
+    Deduct `amount` (in currency `cur`) from `avail_cash[cur]` first, then sweep any
+    remaining requirement from `avail_cash[other_cur]` converted at `fx` (USD_ILS).
+    Returns the uncovered external capital shortfall in `cur` (>= 0.0).
+    """
+    if amount <= 0.0:
+        return 0.0
+    used_same = min(avail_cash.get(cur, 0.0), amount)
+    avail_cash[cur] = max(0.0, avail_cash.get(cur, 0.0) - used_same)
+    rem = max(0.0, amount - used_same)
+    if rem > 1e-9 and fx > 0.0:
+        other_cur = "ILS" if cur == "USD" else "USD"
+        avail_other = avail_cash.get(other_cur, 0.0)
+        if avail_other > 1e-9:
+            if cur == "USD":
+                needed_other = rem * fx
+                used_other = min(avail_other, needed_other)
+                avail_cash[other_cur] = max(0.0, avail_other - used_other)
+                rem = max(0.0, rem - (used_other / fx))
+            else:
+                needed_other = rem / fx
+                used_other = min(avail_other, needed_other)
+                avail_cash[other_cur] = max(0.0, avail_other - used_other)
+                rem = max(0.0, rem - (used_other * fx))
+    return rem if rem > 1e-9 else 0.0
+
+
 # ─── Israeli Lot Tax Math ─────────────────────────────────────────────────────
 
 def compute_israeli_lot_tax(quantity, buy_price, buy_fee, sell_price, sell_fee, currency,
@@ -1040,15 +1068,13 @@ class PortfolioLedger:
                 state.total_invested_capital[cur] += net_dep
             elif r.tx_type == "CASH_WITHDRAWAL":
                 amt = q + fee
-                state.available_cash[cur] = max(0.0, state.available_cash[cur] - amt)
+                sweep_available_cash(state.available_cash, cur, amt, fx)
                 state.withdrawn_capital[cur] += amt
             elif r.tx_type == "BUY":
                 state.open_lots.setdefault(r.ticker, deque()).append(
                     TaxLot(int(r.tx_id), r.ticker, cur, r.date, q, q, p, fee, fx, cpi))
                 cost = q * p + fee
-                used = min(state.available_cash[cur], cost)
-                state.available_cash[cur] = max(0.0, state.available_cash[cur] - used)
-                shortfall = max(0.0, cost - used)
+                shortfall = sweep_available_cash(state.available_cash, cur, cost, fx)
                 state.total_invested_capital[cur] += shortfall
             elif r.tx_type == "SELL":
                 actual_sell_qty = self._consume_fifo(state, r, fx, cpi)
@@ -1067,8 +1093,9 @@ class PortfolioLedger:
                 })
                 state.available_cash[cur] += max(0.0, net_native)
 
-            # Ensure cash balance reflects non-negative available cash
-            state.cash[cur] = max(0.0, state.available_cash[cur])
+            # Ensure cash balance reflects non-negative available cash across both currency buckets
+            state.cash["USD"] = max(0.0, state.available_cash["USD"])
+            state.cash["ILS"] = max(0.0, state.available_cash["ILS"])
 
         for w in state.warnings:
             warnings.warn(w)

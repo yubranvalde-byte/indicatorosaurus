@@ -51,6 +51,7 @@ from portfolio_ledger import (
     PortfolioLedger,
     TX_TYPE_PRIORITY,
     align_pre_split_dataframe,
+    sweep_available_cash,
 )
 
 RISK_FREE_ANNUAL = 0.04
@@ -389,9 +390,19 @@ class PortfolioAnalytics:
             holdings_val_usd = np.zeros(n_days, dtype=np.float64)
             holdings_val_ils = np.zeros(n_days, dtype=np.float64)
             holdings_val_const_fx_ils = np.zeros(n_days, dtype=np.float64)
+            usd_tickers_val_usd = np.zeros(n_days, dtype=np.float64)
             fx0 = float(fx_vec[0])
 
         # 3. Chronological 3-Bucket Capital Engine Replay
+        mode_clean = str(cash_mode or "auto").strip().lower()
+        has_explicit_cash_tx = bool(tx_in_range["tx_type"].isin(CASH_TX_TYPES).any())
+        if mode_clean == "auto":
+            effective_cash_mode = "explicit" if has_explicit_cash_tx else "implicit"
+        elif mode_clean in ("explicit", "implicit"):
+            effective_cash_mode = mode_clean
+        else:
+            effective_cash_mode = "explicit" if has_explicit_cash_tx else "implicit"
+
         tx_in_range["tx_date"] = pd.to_datetime(tx_in_range["date"]).dt.normalize()
         tx_in_range["priority"] = tx_in_range["tx_type"].map(lambda t: TX_TYPE_PRIORITY.get(t, 9))
         tx_sorted = tx_in_range.sort_values(["tx_date", "priority", "tx_id"], kind="mergesort")
@@ -416,6 +427,20 @@ class PortfolioAnalytics:
         withdrawal_ils = np.zeros(n_days, dtype=np.float64)
         withdrawal_const_fx_ils = np.zeros(n_days, dtype=np.float64)
 
+        eq_cf_usd = np.zeros(n_days, dtype=np.float64)
+        eq_cf_ils = np.zeros(n_days, dtype=np.float64)
+        eq_cf_const_fx_ils = np.zeros(n_days, dtype=np.float64)
+        eq_inflow_usd = np.zeros(n_days, dtype=np.float64)
+        eq_inflow_ils = np.zeros(n_days, dtype=np.float64)
+        eq_inflow_const_fx_ils = np.zeros(n_days, dtype=np.float64)
+        eq_wdr_usd = np.zeros(n_days, dtype=np.float64)
+        eq_wdr_ils = np.zeros(n_days, dtype=np.float64)
+
+        # USD-denominated bucket tracking for slice-invariant constant-FX (pure asset) attribution
+        usd_cash_eod = np.zeros(n_days, dtype=np.float64)
+        usd_flow_explicit = np.zeros(n_days, dtype=np.float64)
+        usd_flow_implicit = np.zeros(n_days, dtype=np.float64)
+
         cum_div_usd = np.zeros(n_days, dtype=np.float64)
         cum_div_ils = np.zeros(n_days, dtype=np.float64)
         cum_div_const_fx_ils = np.zeros(n_days, dtype=np.float64)
@@ -434,6 +459,14 @@ class PortfolioAnalytics:
             day_inflow_ils = 0.0
             day_wdr_usd = 0.0
             day_wdr_ils = 0.0
+
+            day_eq_buy_usd = 0.0
+            day_eq_buy_ils = 0.0
+            day_eq_sell_usd = 0.0
+            day_eq_sell_ils = 0.0
+            day_div_usd = 0.0
+            day_div_ils = 0.0
+            usd_cash_start = avail_cash["USD"]
 
             for r in day_txs:
                 cur = r.currency
@@ -455,7 +488,7 @@ class PortfolioAnalytics:
 
                 elif tt == "CASH_WITHDRAWAL":
                     amt = q + fee
-                    avail_cash[cur] = max(0.0, avail_cash[cur] - amt)
+                    sweep_available_cash(avail_cash, cur, amt, fx_t)
                     cum_withdrawn[cur] += amt
                     if cur == "USD":
                         day_wdr_usd += amt
@@ -465,25 +498,33 @@ class PortfolioAnalytics:
                 elif tt == "SELL":
                     net_proceeds = max(0.0, q * p - fee)
                     avail_cash[cur] += net_proceeds
+                    if cur == "USD":
+                        day_eq_sell_usd += net_proceeds
+                    else:
+                        day_eq_sell_ils += net_proceeds
 
                 elif tt == "DIVIDEND":
                     gross_native = q * p
                     net_div = max(0.0, gross_native * (1.0 - DIVIDEND_WITHHOLDING_RATE) - fee)
                     avail_cash[cur] += net_div
                     if cur == "USD":
+                        day_div_usd += net_div
                         tot_div_usd += net_div
                         tot_div_ils += net_div * fx_t
                         tot_div_const_fx_ils += net_div * fx0
                     else:
+                        day_div_ils += net_div
                         tot_div_usd += net_div / fx_t
                         tot_div_ils += net_div
                         tot_div_const_fx_ils += net_div
 
                 elif tt == "BUY":
                     cost = q * p + fee
-                    used = min(avail_cash[cur], cost)
-                    avail_cash[cur] -= used
-                    shortfall = cost - used
+                    if cur == "USD":
+                        day_eq_buy_usd += cost
+                    else:
+                        day_eq_buy_ils += cost
+                    shortfall = sweep_available_cash(avail_cash, cur, cost, fx_t)
                     if shortfall > 1e-9:
                         cum_invested[cur] += shortfall
                         if cur == "USD":
@@ -503,6 +544,28 @@ class PortfolioAnalytics:
             withdrawal_usd[day_idx] = day_wdr_usd + (day_wdr_ils / fx_t)
             withdrawal_ils[day_idx] = (day_wdr_usd * fx_t) + day_wdr_ils
             withdrawal_const_fx_ils[day_idx] = (day_wdr_usd * fx0) + day_wdr_ils
+
+            net_eq_trade_usd = (day_eq_buy_usd - day_eq_sell_usd) + ((day_eq_buy_ils - day_eq_sell_ils) / fx_t)
+            net_eq_trade_ils = ((day_eq_buy_usd - day_eq_sell_usd) * fx_t) + (day_eq_buy_ils - day_eq_sell_ils)
+            net_eq_trade_const_fx = ((day_eq_buy_usd - day_eq_sell_usd) * fx0) + (day_eq_buy_ils - day_eq_sell_ils)
+
+            div_tot_day_usd = day_div_usd + (day_div_ils / fx_t)
+            div_tot_day_ils = (day_div_usd * fx_t) + day_div_ils
+            div_tot_day_const_fx = (day_div_usd * fx0) + day_div_ils
+
+            eq_cf_usd[day_idx] = net_eq_trade_usd - div_tot_day_usd
+            eq_cf_ils[day_idx] = net_eq_trade_ils - div_tot_day_ils
+            eq_cf_const_fx_ils[day_idx] = net_eq_trade_const_fx - div_tot_day_const_fx
+
+            eq_inflow_usd[day_idx] = max(0.0, net_eq_trade_usd)
+            eq_inflow_ils[day_idx] = max(0.0, net_eq_trade_ils)
+            eq_inflow_const_fx_ils[day_idx] = max(0.0, net_eq_trade_const_fx)
+            eq_wdr_usd[day_idx] = max(0.0, -net_eq_trade_usd) + div_tot_day_usd
+            eq_wdr_ils[day_idx] = max(0.0, -net_eq_trade_ils) + div_tot_day_ils
+
+            usd_cash_eod[day_idx] = avail_cash["USD"]
+            usd_flow_implicit[day_idx] = day_eq_buy_usd - day_eq_sell_usd - day_div_usd
+            usd_flow_explicit[day_idx] = (avail_cash["USD"] - usd_cash_start) + usd_flow_implicit[day_idx]
 
             cum_div_usd[day_idx] = tot_div_usd
             cum_div_ils[day_idx] = tot_div_ils
@@ -524,9 +587,28 @@ class PortfolioAnalytics:
         wealth_created_ils = (nav_ils + withdrawn_cap_ils) - invested_cap_ils
 
         # 4. Vectorized Time-Weighted Return (TWR) Calculation
-        twr_daily_usd, twr_cum_usd = self._compute_vectorized_twr(nav_usd, ext_cf_usd, ext_inflow_usd)
-        twr_daily_ils, twr_cum_ils = self._compute_vectorized_twr(nav_ils, ext_cf_ils, ext_inflow_ils)
-        twr_daily_const_fx, twr_cum_const_fx = self._compute_vectorized_twr(nav_const_fx_ils, ext_cf_const_fx_ils, ext_inflow_const_fx_ils)
+        if effective_cash_mode == "implicit":
+            # Invested-equity TWR: un-reinvested SELL proceeds (and dividends) are treated as immediate capital withdrawals
+            mode_nav_usd, mode_nav_ils = holdings_val_usd, holdings_val_ils
+            mode_inflow_usd, mode_inflow_ils = eq_inflow_usd, eq_inflow_ils
+            mode_wdr_usd, mode_wdr_ils = eq_wdr_usd, eq_wdr_ils
+            mode_cf_usd, mode_cf_ils = eq_cf_usd, eq_cf_ils
+            usd_bucket_native = usd_tickers_val_usd
+            usd_bucket_flow = usd_flow_implicit
+        else:
+            mode_nav_usd, mode_nav_ils = nav_usd, nav_ils
+            mode_inflow_usd, mode_inflow_ils = ext_inflow_usd, ext_inflow_ils
+            mode_wdr_usd, mode_wdr_ils = withdrawal_usd, withdrawal_ils
+            mode_cf_usd, mode_cf_ils = ext_cf_usd, ext_cf_ils
+            usd_bucket_native = usd_tickers_val_usd + usd_cash_eod
+            usd_bucket_flow = usd_flow_explicit
+
+        twr_daily_usd, twr_cum_usd = self._compute_vectorized_twr(mode_nav_usd, mode_cf_usd, mode_inflow_usd)
+        twr_daily_ils, twr_cum_ils = self._compute_vectorized_twr(mode_nav_ils, mode_cf_ils, mode_inflow_ils)
+        # Slice-invariant pure-asset (constant-FX) TWR: strip daily FX revaluation of the USD-denominated bucket
+        twr_daily_const_fx, twr_cum_const_fx = self._compute_const_fx_twr(
+            mode_nav_ils, mode_cf_ils, mode_inflow_ils, usd_bucket_native, usd_bucket_flow, fx_vec
+        )
 
         # 5. Cumulative Fees & Realized Israeli Capital Gains Tax Series
         cum_fees_ils = np.cumsum(fee_day_ils)
@@ -576,12 +658,21 @@ class PortfolioAnalytics:
                 "twr_cum_const_fx": twr_cum_const_fx,
                 "cumulative_fees_ils": cum_fees_ils,
                 "cumulative_realized_tax_ils": daily_realized_tax,
+                "mode_nav_usd": mode_nav_usd,
+                "mode_nav_ils": mode_nav_ils,
+                "mode_inflow_usd": mode_inflow_usd,
+                "mode_inflow_ils": mode_inflow_ils,
+                "mode_withdrawal_usd": mode_wdr_usd,
+                "mode_withdrawal_ils": mode_wdr_ils,
+                "mode_cf_usd": mode_cf_usd,
+                "mode_cf_ils": mode_cf_ils,
                 "usd_ils": fx_vec,
                 "il_cpi": cpi_vec,
             },
             index=daily_grid,
         )
         out.index.name = "Date"
+        out.attrs["effective_cash_mode"] = effective_cash_mode
         self._last_holdings_matrix = holdings_matrix
         cleaned_out = _clean_frame(out)
         self._cached_daily_series[cache_key] = cleaned_out.copy()
@@ -615,6 +706,43 @@ class PortfolioAnalytics:
         cum_growth = np.cumprod(1.0 + r_daily)
         twr_cum = cum_growth - 1.0
         return r_daily, twr_cum
+
+    @staticmethod
+    def _compute_const_fx_twr(
+        nav_ils: np.ndarray,
+        cf_ils: np.ndarray,
+        inflow_ils: np.ndarray,
+        usd_bucket_native: np.ndarray,
+        usd_bucket_flow: np.ndarray,
+        fx_vec: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Slice-invariant pure-asset (local-currency) daily TWR in the ILS view:
+          FXEffect_t = (U_t - F_t) * (FX_t - FX_{t-1})
+          r_t^local  = (V_t - V_{t-1} - CF_t - FXEffect_t) / (V_{t-1} + inflow_t)
+        where U_t is the end-of-day USD-denominated bucket (native USD) and F_t its same-day
+        transactional flow (native USD), so only exposure carried overnight is revalued.
+        Because r_t^local is independent of any base FX date, rebasing at any slice t0 is exact.
+        """
+        n = len(nav_ils)
+        if n == 0:
+            return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
+
+        v_prev = np.zeros(n, dtype=np.float64)
+        fx_prev = np.empty(n, dtype=np.float64)
+        fx_prev[0] = fx_vec[0]
+        if n > 1:
+            v_prev[1:] = nav_ils[:-1]
+            fx_prev[1:] = fx_vec[:-1]
+
+        fx_effect = (usd_bucket_native - usd_bucket_flow) * (fx_vec - fx_prev)
+        denom = v_prev + inflow_ils
+        numer = nav_ils - v_prev - cf_ils - fx_effect
+
+        r_daily = np.where(denom > 1e-9, numer / np.where(denom > 1e-9, denom, 1.0), 0.0)
+        r_daily = np.nan_to_num(r_daily, nan=0.0, posinf=0.0, neginf=0.0)
+        r_daily = np.clip(r_daily, -0.9999, 100.0)
+        return r_daily, np.cumprod(1.0 + r_daily) - 1.0
 
     # ── Slicing, Rebasing, Attribution & Multi-Benchmark Engine ──────────────
 
@@ -655,6 +783,7 @@ class PortfolioAnalytics:
         cur_lower = view_cur.lower()
 
         nav_col = f"nav_{cur_lower}"
+        mode_nav_col = f"mode_nav_{cur_lower}"
         cf_col = f"external_cf_{cur_lower}"
         twr_daily_col = f"twr_daily_{cur_lower}"
         twr_cum_col = f"twr_cum_{cur_lower}"
@@ -741,16 +870,18 @@ class PortfolioAnalytics:
                     n_years_slice = max((t1 - t0).days / CALENDAR_DAYS_PER_YEAR, 1.0 / CALENDAR_DAYS_PER_YEAR)
                     primary_bench_ann_ret = float((1.0 + max(-0.9999, primary_bench_total_ret)) ** (1.0 / n_years_slice) - 1.0)
 
-                # What-If Opportunity Simulator:
-                # Benchmark units purchased ONLY on new external capital entering total_invested_capital (external_inflow > 0).
-                # Benchmark units sold ONLY on explicit CASH_WITHDRAWAL (withdrawal > 0).
-                # Internal stock SELLs leave benchmark units completely untouched!
-                inflow_vec = slice_df[f"external_inflow_{cur_lower}"].to_numpy(dtype=np.float64).copy()
-                wdr_vec = slice_df[f"withdrawal_{cur_lower}"].to_numpy(dtype=np.float64).copy()
+                # What-If Opportunity Simulator (cash-mode consistent):
+                #   explicit: benchmark units bought on external capital entering the account and sold on CASH_WITHDRAWAL;
+                #             internal stock SELL/BUY reallocations leave benchmark units untouched.
+                #   implicit: benchmark units bought on net capital deployed into equities and sold on un-reinvested
+                #             SELL proceeds / distributed dividends (same flows that drive invested-equity TWR).
+                inflow_vec = slice_df[f"mode_inflow_{cur_lower}"].to_numpy(dtype=np.float64).copy()
+                wdr_vec = slice_df[f"mode_withdrawal_{cur_lower}"].to_numpy(dtype=np.float64).copy()
 
                 if t0 > inception_ts:
-                    v_before_t0 = float(daily_df.loc[: t0 - pd.Timedelta(days=1), nav_col].iloc[-1])
-                    inflow_vec[0] += v_before_t0
+                    # Rebase: seed benchmark with the portfolio's (mode) value carried into t0
+                    v_before_t0 = float(daily_df.loc[: t0 - pd.Timedelta(days=1), mode_nav_col].iloc[-1])
+                    inflow_vec[0] += max(0.0, v_before_t0)
 
                 n_pts = len(b_view_px)
                 cum_shares = np.zeros(n_pts, dtype=np.float64)
@@ -769,8 +900,17 @@ class PortfolioAnalytics:
                 what_if_nav = cum_shares * b_view_px
                 out_series[f"what_if_{b_sym}_nav"] = what_if_nav
 
-                term_port_nav = float(slice_df[nav_col].iloc[-1])
+                term_port_nav = float(slice_df[mode_nav_col].iloc[-1])
                 term_bench_nav = float(what_if_nav[-1]) if len(what_if_nav) else 0.0
+
+                bench_dated_cfs: list[tuple[pd.Timestamp, float]] = []
+                for i in range(n_pts):
+                    net_b_cf = float(inflow_vec[i] - wdr_vec[i])
+                    if abs(net_b_cf) > 1e-9:
+                        bench_dated_cfs.append((slice_grid[i], -net_b_cf))
+                bench_dated_cfs.append((t1, term_bench_nav))
+                bench_xirr_ann = compute_xirr(bench_dated_cfs)
+
                 what_if_results[b_sym] = {
                     "benchmark": b_sym,
                     "currency": view_cur,
@@ -778,19 +918,21 @@ class PortfolioAnalytics:
                     "terminal_portfolio_nav": _scalar_float(term_port_nav),
                     "excess_value_created": _scalar_float(term_port_nav - term_bench_nav),
                     "benchmark_twr_pct": _scalar_float(b_rebased_ret[-1] * 100.0) if len(b_rebased_ret) else 0.0,
+                    "benchmark_xirr_pct": _scalar_float(bench_xirr_ann * 100.0),
+                    "xirr_pct": _scalar_float(bench_xirr_ann * 100.0),
                 }
 
-        # ── MWR (XIRR & Modified Dietz) on the Slice ─────────────────────────
+        # ── MWR (XIRR & Modified Dietz) on the Slice (cash-mode consistent flows) ──
         dated_cfs: list[tuple[pd.Timestamp, float]] = []
         if t0 > inception_ts:
-            v_start = float(daily_df.loc[: t0 - pd.Timedelta(days=1), nav_col].iloc[-1])
+            v_start = float(daily_df.loc[: t0 - pd.Timedelta(days=1), mode_nav_col].iloc[-1])
             if v_start > 0.0:
                 dated_cfs.append((t0, -v_start))
         else:
             v_start = 0.0
 
-        inflow_s = slice_df[f"external_inflow_{cur_lower}"]
-        wdr_s = slice_df[f"withdrawal_{cur_lower}"]
+        inflow_s = slice_df[f"mode_inflow_{cur_lower}"]
+        wdr_s = slice_df[f"mode_withdrawal_{cur_lower}"]
 
         for dt in slice_grid:
             inf = float(inflow_s.loc[dt])
@@ -799,11 +941,11 @@ class PortfolioAnalytics:
             if abs(net_ext) > 1e-9:
                 dated_cfs.append((dt, -net_ext))
 
-        v_end = float(slice_df[nav_col].iloc[-1])
+        v_end = float(slice_df[mode_nav_col].iloc[-1])
         dated_cfs.append((t1, v_end))
 
         xirr_annual = compute_xirr(dated_cfs)
-        cf_series = slice_df[cf_col]
+        cf_series = slice_df[f"mode_cf_{cur_lower}"]
         mwr_dietz = compute_modified_dietz_return(v_start, v_end, cf_series, t0, t1)
 
         # ── Institutional Risk & Return KPIs ─────────────────────────────────
@@ -826,11 +968,18 @@ class PortfolioAnalytics:
         attribution = self._compute_ils_attribution(daily_df, slice_df, t0, t1)
 
         cleaned_series = _clean_frame(out_series)
+        mode_req = str(cash_mode or "auto").strip().lower()
+        if mode_req in ("explicit", "implicit"):
+            eff_mode = mode_req
+        else:
+            tx_all = self.ledger.transactions()
+            eff_mode = "explicit" if (not tx_all.empty and tx_all["tx_type"].isin(CASH_TX_TYPES).any()) else "implicit"
         res_dict = {
             "window": window,
             "start_date": t0.strftime("%Y-%m-%d"),
             "end_date": t1.strftime("%Y-%m-%d"),
             "view_currency": view_cur,
+            "cash_mode": eff_mode,
             "series": cleaned_series,
             "series_clean": sanitize_for_json(cleaned_series),
             "kpis": kpis,
@@ -863,30 +1012,37 @@ class PortfolioAnalytics:
         years = max(n_cal_days / CALENDAR_DAYS_PER_YEAR, 1.0 / CALENDAR_DAYS_PER_YEAR)
         ann_twr = float((1.0 + max(-0.9999, total_twr)) ** (1.0 / years) - 1.0) if n_cal_days >= 1 else total_twr
 
-        # Exclude day-0 (rebase anchor) when measuring daily return volatility
+        # Exclude day-0 (rebase anchor) and zero-return weekend padding when measuring daily risk metrics
         r_daily = slice_df[twr_daily_col].to_numpy(dtype=np.float64)
         r_active = r_daily[1:] if len(r_daily) > 1 else r_daily
-        # Restrict volatility calculation to active market days or full calendar grid scaled appropriately
-        ann_factor = math.sqrt(CALENDAR_DAYS_PER_YEAR)
-        vol_ann = float(np.std(r_active, ddof=1) * ann_factor) if len(r_active) > 1 else 0.0
+        active_idx = slice_df.index[1:] if len(slice_df.index) > 1 else slice_df.index
+        is_weekday = np.isin(active_idx.dayofweek, [0, 1, 2, 3, 4])
+        mkt_mask = is_weekday | (np.abs(r_active) > 1e-12)
+        r_mkt = r_active[mkt_mask] if np.sum(mkt_mask) >= 2 else r_active
+
+        ann_factor = math.sqrt(TRADING_DAYS_PER_YEAR)
+        vol_ann = float(np.std(r_mkt, ddof=1) * ann_factor) if len(r_mkt) > 1 else 0.0
 
         sharpe = (ann_twr - RISK_FREE_ANNUAL) / vol_ann if vol_ann > 1e-9 else 0.0
 
-        daily_rf = RISK_FREE_ANNUAL / CALENDAR_DAYS_PER_YEAR
-        downside_diff = np.minimum(0.0, r_active - daily_rf)
-        downside_dev = float(math.sqrt(np.mean(downside_diff ** 2)) * ann_factor) if len(r_active) > 0 else 0.0
+        daily_rf = RISK_FREE_ANNUAL / TRADING_DAYS_PER_YEAR
+        downside_diff = np.minimum(0.0, r_mkt - daily_rf)
+        downside_dev = float(math.sqrt(np.mean(downside_diff ** 2)) * ann_factor) if len(r_mkt) > 0 else 0.0
         sortino = (ann_twr - RISK_FREE_ANNUAL) / downside_dev if downside_dev > 1e-9 else 0.0
 
         max_dd = float(np.min(drawdown_series)) if len(drawdown_series) else 0.0
 
-        # Beta & Alpha vs. primary benchmark
+        # Beta & Alpha vs. primary benchmark (evaluated across active trading days)
         beta = 0.0
         alpha = 0.0
         if primary_bench_daily_ret is not None and len(primary_bench_daily_ret) == len(r_daily) and len(r_active) > 1:
             b_active = primary_bench_daily_ret[1:]
-            b_var = float(np.var(b_active, ddof=1))
+            b_mask = (np.abs(b_active) > 1e-12) | (np.abs(r_active) > 1e-12)
+            r_b = r_active[b_mask] if np.sum(b_mask) >= 2 else r_active
+            b_b = b_active[b_mask] if np.sum(b_mask) >= 2 else b_active
+            b_var = float(np.var(b_b, ddof=1)) if len(b_b) > 1 else 0.0
             if b_var > 1e-12:
-                cov = float(np.cov(r_active, b_active, ddof=1)[0, 1])
+                cov = float(np.cov(r_b, b_b, ddof=1)[0, 1])
                 beta = cov / b_var
             alpha = ann_twr - (RISK_FREE_ANNUAL + beta * (primary_bench_ann_ret - RISK_FREE_ANNUAL))
 

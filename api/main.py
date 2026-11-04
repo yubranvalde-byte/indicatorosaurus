@@ -158,16 +158,6 @@ def calculate():
                 "results": [],
             })
 
-        # Build metadata lookup for surviving universe
-        meta_by_ticker = {
-            s['Ticker']: {
-                'longName': s.get('LongName', ''),
-                'sector': s.get('Sector', ''),
-                'marketCap': _safe_float(s.get('MarketCap', 0.0)),
-            }
-            for s in stocks_df.to_dict(orient='records')
-        }
-
         # ── Type Serialization & NaN Safety ──────────────────────────────────
         stocks_df = stocks_df.fillna(0.0).replace([np.inf, -np.inf], 0.0)
         
@@ -178,14 +168,25 @@ def calculate():
 
         stocks_data = stocks_df.to_dict(orient='records')
 
+        # Build metadata lookup for surviving universe
+        meta_by_ticker = {
+            s['Ticker']: {
+                'longName': s.get('LongName', ''),
+                'sector': s.get('Sector', ''),
+                'marketCap': _safe_float(s.get('MarketCap', 0.0)),
+            }
+            for s in stocks_data
+        }
+
         # ── Step 4: Normalization (Python) ────────────────────────────────────
         normalized_stocks = normalize_stocks(
-            stocks_data,
+            stocks_df,
             strategy=None,               # Already applied conditionally above
             allowed_sectors=None,       # Already filtered in Step 1
             min_market_cap=None,        # Already filtered in Step 1
             max_market_cap=None,        # Already filtered in Step 1
-            global_stocks_list=stocks_data
+            global_stocks_list=stocks_df,
+            use_live_tech_cache=False
         )
 
         if not normalized_stocks:
@@ -207,22 +208,12 @@ def calculate():
         raw_by_ticker    = {s["Ticker"]: s for s in stocks_data if s["Ticker"] in filtered_tickers}
         norm_by_ticker   = {s["Ticker"]: s for s in normalized_stocks}
 
-        # ── Step 4: Run C Scoring Engine ───────────────────────────────────────
+        # ── Step 5: Run C Scoring Engine ───────────────────────────────────────
         sorted_stocks = run_financial_engine(normalized_stocks, weights_list)
 
-        # ── Step 5: Strict Hard Truncation to Top 100 Stocks ────────────────────
+        # ── Step 6: Strict Hard Truncation to Top 100 Stocks ────────────────────
         total_survivors_count = len(sorted_stocks)
         sorted_stocks = sorted_stocks[:100]
-
-        # ── Step 6: Selective Tiingo Live Price Enrichment (Top 100 max) ───────
-        tiingo_key = os.getenv('TIINGO_API_KEY') or os.getenv('API_KEY')
-        if tiingo_key and sorted_stocks:
-            top_tickers = [s['Ticker'] for s in sorted_stocks]
-            tiingo_prices = fetch_tiingo_live_data(tiingo_key, top_tickers, batch_size=50)
-            if tiingo_prices:
-                for ticker, quote in tiingo_prices.items():
-                    if ticker in raw_by_ticker and quote.get('price', 0.0) > 0:
-                        raw_by_ticker[ticker]['Price'] = quote['price']
 
         # ── Step 7: Build enriched JSON response for Top 100 ──────────────────
         frontend_response = []

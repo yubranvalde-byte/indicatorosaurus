@@ -49,11 +49,12 @@ def compile_c_engine():
     # Verify FFI Stock struct alignment
     sys.path.insert(0, os.path.join(PROJECT_ROOT, "core_logic"))
     try:
-        from financial_module import Stock
+        from financial_module import Stock, STOCK_STRUCT_DTYPE
         expected_size = 80
         actual_size = ctypes.sizeof(Stock)
         assert actual_size == expected_size, f"Struct alignment mismatch! Expected {expected_size} bytes, got {actual_size} bytes."
-        print(f"[compile_c_engine] SUCCESS: Shared library built and Stock struct size verified ({actual_size} bytes).")
+        assert STOCK_STRUCT_DTYPE.itemsize == expected_size, f"NumPy dtype mismatch! Expected {expected_size} bytes, got {STOCK_STRUCT_DTYPE.itemsize} bytes."
+        print(f"[compile_c_engine] SUCCESS: Stock struct & NumPy dtype size verified ({actual_size} bytes).")
     except Exception as err:
         print(f"Verification error: {err}", file=sys.stderr)
         sys.exit(1)
