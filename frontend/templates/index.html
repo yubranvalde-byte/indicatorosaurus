@@ -1715,7 +1715,7 @@ function updateTrack(id, val) {
 }
 
 // ── Apply preset ─────────────────────────────────────────────────────────────
-function applyPreset(key) {
+function applyPreset(key, shouldCalculate = true) {
   const p = PROFILES[key];
   if (!p) return;
   INDICATORS.forEach((ind, i) => {
@@ -1726,7 +1726,9 @@ function applyPreset(key) {
   });
   userTouchedSlider = false;
   setActiveProfile(key);
-  calculateScores();
+  if (shouldCalculate) {
+    calculateScores();
+  }
 }
 
 function setActiveProfile(key) {
@@ -2067,13 +2069,19 @@ async function runPortfolioBacktest() {
   const min_market_cap = parseMarketCapInput('min-market-cap');
   const max_market_cap = parseMarketCapInput('max-market-cap');
 
-  const filtersChanged = !latestFilterMeta ||
+  const filtersChanged = !hasCalculatedOnce || !latestFilterMeta ||
     latestFilterMeta.min_market_cap !== min_market_cap ||
     latestFilterMeta.max_market_cap !== max_market_cap ||
     latestFilterMeta.strategy !== (activeProfile || null);
 
-  if (!currentResults || currentResults.length === 0 || filtersChanged) {
+  if (filtersChanged) {
+    if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
     await calculateScores();
+    return;
+  }
+
+  if (!currentResults || currentResults.length === 0) {
+    showToast("No ranked stocks available to backtest.", "error");
     return;
   }
 
@@ -2096,9 +2104,6 @@ async function runPortfolioBacktest() {
       <span class="font-bold text-xs tracking-wide">Simulating trailing portfolio backtest (${backtestWindow})...</span>
     </div>
   `;
-
-  const min_market_cap = parseMarketCapInput('min-market-cap');
-  const max_market_cap = parseMarketCapInput('max-market-cap');
 
   const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
 
@@ -4488,8 +4493,8 @@ function seedDemoPortfolio() {
 setTheme(portfolioState.theme || 'dark');
 setAppLanguage(portfolioState.lang || 'en');
 
-// Initial boot: automatically hydrate Screener & Backtester with default Deep Value profile
-applyPreset('deep-value');
+// Initialize default profile sliders without blocking initial page load
+applyPreset('deep-value', false);
 </script>
 </body>
 </html>
