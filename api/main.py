@@ -96,11 +96,12 @@ def calculate():
             return jsonify({"error": "min_market_cap cannot be greater than max_market_cap"}), 400
 
     # ── Load CSV baseline dataset ─────────────────────────────────────────────
-    stocks_df, err = _load_csv()
+    raw_stocks_df, err = _load_csv()
     if err:
         return jsonify({"error": err}), (404 if "not found" in err else 500)
 
-    total_csv_count = len(stocks_df)
+    total_csv_count = len(raw_stocks_df)
+    stocks_df = raw_stocks_df.copy()
 
     # ── Explicit Pre-Flight Cache Management ──────────────────────────────────
     ensure_tech_cache()
@@ -185,7 +186,7 @@ def calculate():
             allowed_sectors=None,       # Already filtered in Step 1
             min_market_cap=None,        # Already filtered in Step 1
             max_market_cap=None,        # Already filtered in Step 1
-            global_stocks_list=stocks_df,
+            global_stocks_list=raw_stocks_df,
             use_live_tech_cache=False
         )
 

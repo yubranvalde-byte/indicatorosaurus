@@ -241,7 +241,7 @@ def align_pre_split_transactions(tx_items: list, px_df: pd.DataFrame, allow_reve
             by_ticker.setdefault(str(it["ticker"]), []).append(it)
 
     for ticker, t_items in by_ticker.items():
-        if ticker not in px_df.columns:
+        if ticker.endswith(".TA") or ticker not in px_df.columns:
             continue
 
         item_factors = []
@@ -415,7 +415,20 @@ class Transaction:
         if tx_type not in TX_TYPES:
             raise ValueError(f"Invalid tx_type '{tx_type}'. Expected one of {TX_TYPES}.")
 
-        currency = str(currency).upper().strip()
+        raw_ccy = str(currency).upper().strip()
+        if raw_ccy in ("ILA", "AGOROT", "AG"):
+            currency = "ILS"
+            price = _scalar_float(price, 1.0) / 100.0
+        else:
+            currency = raw_ccy
+
+        ticker = str(ticker or "").upper().strip()
+        if ticker.endswith(".TA"):
+            currency = "ILS"
+            p_val = _scalar_float(price, 1.0)
+            if p_val > 200.0:
+                price = p_val / 100.0
+
         if currency not in CURRENCIES:
             raise ValueError(f"Invalid currency '{currency}'. Expected one of {CURRENCIES}.")
 
@@ -602,6 +615,13 @@ class PortfolioLedger:
             df[c] = df[c].astype("float64")
         for c in ("date", "ticker", "tx_type", "currency", "notes"):
             df[c] = df[c].fillna("").astype(str)
+        # Self-heal / normalize TASE (.TA) transactions quoted in Agorot (> 200.0)
+        mask_ta = df["ticker"].str.upper().str.strip().str.endswith(".TA")
+        if mask_ta.any():
+            df.loc[mask_ta, "currency"] = "ILS"
+            mask_agorot = mask_ta & (df["price"] > 200.0)
+            if mask_agorot.any():
+                df.loc[mask_agorot, "price"] = df.loc[mask_agorot, "price"] / 100.0
         return df.sort_values(["date", "tx_id"], kind="mergesort").reset_index(drop=True)
 
     def _load(self) -> pd.DataFrame:
@@ -788,14 +808,20 @@ class PortfolioLedger:
                 continue
 
             fee_val = 0.0 if _is_blank_csv_val(raw_fee) else max(0.0, _scalar_float(raw_fee, 0.0))
-            if _is_blank_csv_val(raw_ccy):
+            raw_ccy_upper = str(raw_ccy).strip().upper() if not _is_blank_csv_val(raw_ccy) else ""
+            if raw_ccy_upper in ("ILA", "AGOROT", "AG"):
+                ccy_val = "ILS"
+                price_val = float(price_val) / 100.0
+            elif _is_blank_csv_val(raw_ccy):
                 ccy_val = "ILS" if symbol_str.endswith(".TA") else "USD"
             else:
                 ccy_val = str(raw_ccy).strip().upper()
                 if ccy_val not in CURRENCIES:
                     ccy_val = "ILS" if symbol_str.endswith(".TA") else "USD"
-            if symbol_str.endswith(".TA") and ccy_val != "ILS":
+            if symbol_str.endswith(".TA"):
                 ccy_val = "ILS"
+                if float(price_val) > 200.0:
+                    price_val = float(price_val) / 100.0
 
             notes_val = "" if _is_blank_csv_val(raw_notes) else str(raw_notes).strip()
 
@@ -912,14 +938,24 @@ class PortfolioLedger:
                         px_df, _ = self.price_provider(sec_tickers, min_dt, max_dt)
                     else:
                         from price_resolver import resolve_prices
+                        has_ta = any(str(t).endswith(".TA") for t in sec_tickers)
                         px_df, _ = resolve_prices(
                             sec_tickers, min_dt, max_dt,
                             allow_partial=True,
-                            local_only=True,
+                            local_only=not has_ta,
                         )
                 except Exception:
                     px_df = pd.DataFrame()
                 if px_df is not None and not px_df.empty:
+                    # TASE (.TA) Agorot-to-ILS validation against resolved ILS market prices
+                    for it in sec_items:
+                        t_sym = str(it.get("ticker", ""))
+                        if t_sym.endswith(".TA") and t_sym in px_df.columns:
+                            p_tx = float(it.get("price", 0.0))
+                            p_mkt = _lookup_market_price_on_date(px_df, t_sym, str(it["date"]))
+                            if p_mkt > 0.0 and 35.0 <= (p_tx / p_mkt) <= 300.0:
+                                it["price"] = p_tx / 100.0
+
                     align_pre_split_transactions(sec_items, px_df)
                     del px_df
                 _release_arrow_memory()

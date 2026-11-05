@@ -141,28 +141,25 @@ def _http_get(url: str) -> requests.Response:
 def _normalize_tase_agorot_series(series: pd.Series, ticker: str, reported_currency=None) -> pd.Series:
     """
     Normalize Tel Aviv Stock Exchange (.TA) quotes from Agorot (ILA) to ILS (1 ILS = 100 Agorot).
-    - reported 'ILA'  -> divide by 100.0
-    - reported 'ILS'  -> unchanged
-    - unknown         -> heuristic (median > 200 => Agorot) with an explicit warning
+    - reported 'ILA', 'AGOROT', 'AG' -> divide by 100.0
+    - median > 200.0                 -> divide by 100.0 (TASE quotes in Agorot even when metadata says 'ILS')
+    - otherwise (median <= 200)      -> ILS, unchanged
     """
     s = pd.to_numeric(series, errors="coerce").astype("float64")
     if s.empty or not str(ticker).upper().strip().endswith(".TA"):
         return s
 
     curr_flag = str(reported_currency or "").strip().upper()
-    if curr_flag == "ILA":
+    if curr_flag in ("ILA", "AGOROT", "AG"):
         return s / 100.0
-    if curr_flag == "ILS":
-        return s
 
     valid_vals = s.dropna()
     if valid_vals.empty:
         return s
     median_price = float(valid_vals.median())
-    is_agorot = median_price > 200.0
-    print(f"[PriceResolver WARNING] {ticker}: quote currency not reported; heuristic "
-          f"(median={median_price:.2f}) -> {'Agorot, scaling /100' if is_agorot else 'ILS, unchanged'}.")
-    return s / 100.0 if is_agorot else s
+    if median_price > 200.0:
+        return s / 100.0
+    return s
 
 
 def _covered_tickers(long_df: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> set:

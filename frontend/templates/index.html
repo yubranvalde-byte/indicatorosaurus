@@ -877,9 +877,9 @@ tailwind.config = {
                 <span class="material-symbols-outlined text-[16px]">download</span>
                 <span data-i18n="btn_export_csv">Export CSV</span>
               </button>
-              <label class="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs sm:text-sm font-semibold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                <span class="material-symbols-outlined text-[16px]">upload</span>
-                <span data-i18n="btn_import_csv">Import CSV</span>
+              <label id="pf-import-csv-label" class="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-bright border border-outline-variant text-xs sm:text-sm font-semibold text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <span id="pf-import-csv-icon" class="material-symbols-outlined text-[16px]">upload</span>
+                <span id="pf-import-csv-text" data-i18n="btn_import_csv">Import CSV</span>
                 <input type="file" id="pf-csv-file" accept=".csv" onchange="importPortfolioCsv(event)" class="hidden" />
               </label>
             </div>
@@ -1552,7 +1552,31 @@ function onSectorChange(cb) {
       btnText.textContent = `${selectedSectors.length} Sectors`;
     }
   }
+
+  if (currentResults && currentResults.length > 0) {
+    calculateScores();
+  }
 }
+
+// Auto recalculate on Enter or change in Market Cap filters
+document.addEventListener('DOMContentLoaded', () => {
+  ['min-market-cap', 'max-market-cap'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          calculateScores();
+        }
+      });
+      el.addEventListener('change', () => {
+        if (currentResults && currentResults.length > 0) {
+          calculateScores();
+        }
+      });
+    }
+  });
+});
 
 document.addEventListener('click', (e) => {
   const dropdown = document.getElementById('sector-dropdown');
@@ -1658,6 +1682,9 @@ function applyPreset(key) {
   });
   userTouchedSlider = false;
   setActiveProfile(key);
+  if (currentResults && currentResults.length > 0) {
+    calculateScores();
+  }
 }
 
 function setActiveProfile(key) {
@@ -1726,6 +1753,19 @@ function buildAccordion(item) {
 }
 
 // ── Client-Side Pagination & Table Rendering ────────────────────────────────
+let latestFilterMeta = null;
+
+function formatMarketCapBadge(mc) {
+  const n = parseFloat(mc);
+  if (!n || isNaN(n) || n <= 0) return '';
+  let str = '';
+  if (n >= 1e12) str = `$${(n / 1e12).toFixed(2)}T`;
+  else if (n >= 1e9) str = `$${(n / 1e9).toFixed(2)}B`;
+  else if (n >= 1e6) str = `$${(n / 1e6).toFixed(1)}M`;
+  else str = `$${Math.round(n).toLocaleString()}`;
+  return `<span class="text-[10px] font-semibold text-tertiary bg-tertiary/10 px-2 py-0.5 rounded-md border border-tertiary/20 tabular-nums num-ltr" title="Market Cap: $${Math.round(n).toLocaleString()}">${str}</span>`;
+}
+
 function renderLeaderboard() {
   const tbody = document.getElementById('leaderboard-body');
   tbody.innerHTML = '';
@@ -1754,6 +1794,7 @@ function renderLeaderboard() {
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2">
               <span class="font-bold text-on-surface text-[15px]">${escapeHTML(item.ticker)}</span>
+              ${formatMarketCapBadge(item.marketCap)}
               ${item.sector ? `<span class="text-[10px] uppercase tracking-wider text-secondary font-semibold bg-secondary/10 px-2 py-0.5 rounded-md border border-secondary/20">${escapeHTML(item.sector)}</span>` : ''}
               <span class="material-symbols-outlined text-on-surface-variant transition-transform duration-200" id="icon-acc-${idx}" style="font-size:16px">expand_more</span>
             </div>
@@ -1787,7 +1828,10 @@ function renderLeaderboard() {
 
   if (currentResults.length > 0) {
     const visibleNum = Math.min(visibleCount, currentResults.length);
-    countSpan.textContent = `Showing ${visibleNum} of ${currentResults.length} stocks · Ranked by ${profileLabel} weights`;
+    const filterInfo = (latestFilterMeta && latestFilterMeta.stocks_after != null && latestFilterMeta.stocks_before != null)
+      ? `(${latestFilterMeta.stocks_after.toLocaleString()} / ${latestFilterMeta.stocks_before.toLocaleString()} matched filters)`
+      : ``;
+    countSpan.textContent = `Showing ${visibleNum} of top ${currentResults.length} stocks ${filterInfo} · Ranked by ${profileLabel} weights`;
     
     if (currentResults.length > 10) {
       paginationControls.classList.remove('hidden');
@@ -1865,6 +1909,7 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.status); }
     const data = await res.json();
+    latestFilterMeta = { stocks_before: data.stocks_before, stocks_after: data.stocks_after };
     currentResults = data.results || [];
     visibleCount = 10;
 
@@ -4213,6 +4258,42 @@ function renderCsvImportDiagnostic(data) {
 async function importPortfolioCsv(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+
+  const labelEl = document.getElementById('pf-import-csv-label');
+  const iconEl = document.getElementById('pf-import-csv-icon');
+  const textEl = document.getElementById('pf-import-csv-text');
+  const diagPanel = document.getElementById('pf-csv-diagnostic-panel');
+  const fileInput = event.target;
+
+  // Set loading state on button
+  if (labelEl) labelEl.classList.add('opacity-70', 'pointer-events-none');
+  if (iconEl) {
+    iconEl.className = 'animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full';
+    iconEl.textContent = '';
+  }
+  if (textEl) textEl.textContent = isHebrew() ? 'מייבא...' : 'Importing...';
+
+  // Show immediate visual feedback in diagnostic panel
+  if (diagPanel) {
+    diagPanel.classList.remove('hidden');
+    diagPanel.className = 'rounded-xl border border-primary/40 bg-primary/5 p-4 text-xs space-y-2.5 animate-pulse';
+    const stage1Text = isHebrew()
+      ? `הקובץ התקבל ("${escapeHTML(file.name)}") — מאמת עסקאות, מנרמל שערי אגורות/שקלים ומבצע התאמת ספליטים...`
+      : `File received ("${escapeHTML(file.name)}") — validating transactions, normalizing Agorot/ILS & aligning splits...`;
+    diagPanel.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full shrink-0"></span>
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-primary text-xs sm:text-sm flex items-center justify-between">
+            <span class="truncate">${isHebrew() ? 'מעבד קובץ CSV...' : 'Processing CSV File...'}</span>
+            <span class="text-[10px] text-primary/80 uppercase tracking-wider font-mono">Stage 1/2</span>
+          </div>
+          <p id="pf-import-live-desc" class="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">${stage1Text}</p>
+        </div>
+      </div>
+    `;
+  }
+
   try {
     const csvText = await file.text();
     const res = await fetch('/api/portfolio/transactions', {
@@ -4222,15 +4303,44 @@ async function importPortfolioCsv(event) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'CSV Import failed');
+
+    // Progress update to Stage 2
+    const liveDesc = document.getElementById('pf-import-live-desc');
+    if (liveDesc) {
+      const importedCount = data.imported_count ?? 0;
+      liveDesc.textContent = isHebrew()
+        ? `נקלטו ${importedCount} עסקאות — מרענן שערי שוק, שכבות מס FIFO, TWR/XIRR וגרפי ביצועים...`
+        : `Ingested ${importedCount} transactions — refreshing market prices, FIFO lots & performance charts...`;
+    }
+
+    fileInput.value = '';
+    await refreshPortfolioWorkspace();
+
     renderCsvImportDiagnostic(data);
     const msg = data.message || `Imported CSV (${data.imported_count ?? 0} transactions)`;
     showTxFeedback(msg);
     showToast(msg, 'success');
-    event.target.value = '';
-    await refreshPortfolioWorkspace();
   } catch (err) {
+    if (diagPanel) {
+      diagPanel.classList.remove('hidden');
+      diagPanel.className = 'rounded-xl border border-error/40 bg-error/10 p-3.5 text-xs space-y-2';
+      diagPanel.innerHTML = `
+        <div class="flex items-center justify-between text-error font-semibold">
+          <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px]">error</span> ${isHebrew() ? 'שגיאה בייבוא CSV' : 'CSV Import Error'}</span>
+          <button type="button" onclick="dismissCsvDiagnostic()" class="text-error font-bold px-1 hover:opacity-80">✕</button>
+        </div>
+        <p class="text-[11px] text-on-surface-variant">${escapeHTML(err.message)}</p>
+      `;
+    }
     showTxFeedback(err.message, true);
     showToast(err.message, 'error');
+  } finally {
+    if (labelEl) labelEl.classList.remove('opacity-70', 'pointer-events-none');
+    if (iconEl) {
+      iconEl.className = 'material-symbols-outlined text-[16px]';
+      iconEl.textContent = 'upload';
+    }
+    if (textEl) textEl.textContent = t('btn_import_csv') || 'Import CSV';
   }
 }
 

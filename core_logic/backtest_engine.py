@@ -293,7 +293,20 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 return_df=True,
             )
 
-            # Max 2 attempts: if empty, fall back directly to baseline unfiltered snapshot
+            # Fallback 1: Relax strategy constraint first while preserving user's sector & market-cap filters
+            if normalized_snapshot.empty and strategy is not None:
+                normalized_snapshot = normalize_stocks(
+                    snapshot_df,
+                    strategy=None,
+                    allowed_sectors=allowed_sectors,
+                    min_market_cap=min_market_cap,
+                    max_market_cap=max_market_cap,
+                    global_stocks_list=snapshot_df,
+                    use_live_tech_cache=False,
+                    return_df=True,
+                )
+
+            # Fallback 2: If still empty, fall back directly to baseline unfiltered snapshot
             if normalized_snapshot.empty:
                 normalized_snapshot = normalize_stocks(
                     snapshot_df,

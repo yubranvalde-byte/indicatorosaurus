@@ -708,10 +708,42 @@ def get_cached_fundamental_snapshot(csv_path, ttl_seconds=CACHE_TTL_SECONDS):
 
 # ─── Data Ingestion Helper ───────────────────────────────────────────────────
 
+_COMPANY_NAMES_CACHE = None
+
+def _get_company_names_map() -> dict:
+    global _COMPANY_NAMES_CACHE
+    if _COMPANY_NAMES_CACHE is not None:
+        return _COMPANY_NAMES_CACHE
+    names = {}
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    mkt_path = os.path.join(base_dir, "..", "data", "market_data.csv")
+    if os.path.exists(mkt_path):
+        try:
+            m_df = pd.read_csv(mkt_path, usecols=["Ticker", "LongName"])
+            for t, n in zip(m_df["Ticker"], m_df["LongName"]):
+                if pd.notna(n) and str(n).strip():
+                    names[str(t).strip().upper()] = str(n).strip()
+        except Exception:
+            pass
+    comp_path = os.path.join(base_dir, "..", "data", "raw_simfin", "us-companies.csv")
+    if os.path.exists(comp_path):
+        try:
+            c_df = pd.read_csv(comp_path, sep=";", usecols=["Ticker", "Company Name"])
+            c_df = c_df.dropna(subset=["Ticker"])
+            for t, n in zip(c_df["Ticker"], c_df["Company Name"]):
+                t_str = str(t).strip().upper()
+                if t_str not in names and pd.notna(n) and str(n).strip():
+                    names[t_str] = str(n).strip()
+        except Exception:
+            pass
+    _COMPANY_NAMES_CACHE = names
+    return _COMPANY_NAMES_CACHE
+
 def load_latest_fundamental_snapshot(csv_path):
     """
     Ingests historical_fundamental_data.csv (or market_data.csv as fallback),
-    extracts the latest cross-sectional snapshot per Ticker, and returns a pandas DataFrame.
+    extracts the latest cross-sectional snapshot per Ticker, enriches with LongName,
+    and returns a pandas DataFrame.
     """
     if not os.path.exists(csv_path):
         return None, f"Dataset not found at {csv_path}"
@@ -725,15 +757,24 @@ def load_latest_fundamental_snapshot(csv_path):
             df["Quarter_End_Date"] = pd.to_datetime(df["Quarter_End_Date"])
             # Filter for the latest available quarter per ticker
             df = df.sort_values("Quarter_End_Date").groupby("Ticker").last().reset_index()
+            # Drop severely outdated/delisted corporate filings (older than 2023-01-01)
+            df = df[df["Quarter_End_Date"] >= "2023-01-01"].copy()
             df["Quarter_End_Date"] = df["Quarter_End_Date"].dt.strftime("%Y-%m-%d")
         
         # Ensure 'Sector' key exists (mapped from GICS_Sector if needed)
         if "GICS_Sector" in df.columns and "Sector" not in df.columns:
             df["Sector"] = df["GICS_Sector"]
 
-        # Ensure 'LongName' key exists
+        # Ensure 'LongName' key exists and is enriched from company reference data
+        names_map = _get_company_names_map()
+        t_clean = df["Ticker"].astype(str).str.strip().str.upper()
         if "LongName" not in df.columns:
-            df["LongName"] = df["Ticker"]
+            df["LongName"] = t_clean.map(names_map).fillna(df["Ticker"])
+        else:
+            # Overwrite placeholder LongNames (where LongName == Ticker) with real names
+            mask_placeholder = df["LongName"].isna() | (df["LongName"] == df["Ticker"])
+            if mask_placeholder.any():
+                df.loc[mask_placeholder, "LongName"] = t_clean[mask_placeholder].map(names_map).fillna(df.loc[mask_placeholder, "Ticker"])
             
         float_cols = df.select_dtypes(include=['float64']).columns
         if not float_cols.empty:
@@ -827,11 +868,14 @@ def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_marke
     GATEKEEPER_MIN_PRICE = 5.00                  # $5.00
     GATEKEEPER_MIN_ADTV = 5_000_000.0            # $5M 20-day ADTV
 
-    # Market Cap Filter
-    m_cap_min = max(min_market_cap if min_market_cap is not None else 0.0, GATEKEEPER_MIN_MARKET_CAP)
+    # Market Cap Filter: respect explicit user min_market_cap, or default to structural $1B floor
+    if min_market_cap is not None:
+        m_cap_min = float(min_market_cap)
+    else:
+        m_cap_min = GATEKEEPER_MIN_MARKET_CAP
     df = df[df['MarketCap'].fillna(0.0) >= m_cap_min]
     if max_market_cap is not None:
-        df = df[df['MarketCap'].fillna(0.0) <= max_market_cap]
+        df = df[df['MarketCap'].fillna(0.0) <= float(max_market_cap)]
 
     # Point-in-Time vs Live Price and ADTV Gatekeeper
     if 'LatestPrice' in df.columns:
@@ -1166,7 +1210,7 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
             df_base['Sector'] = df_base['GICS_Sector'] if 'GICS_Sector' in df_base.columns else ''
 
     df_stocks = df_initial
-    if strategy or allowed_sectors or min_market_cap or max_market_cap or ('LatestPrice' in df_stocks.columns):
+    if strategy or allowed_sectors or (min_market_cap is not None) or (max_market_cap is not None) or ('LatestPrice' in df_stocks.columns):
         df_stocks = apply_early_pruning_vectorized(
             df_stocks,
             strategy,

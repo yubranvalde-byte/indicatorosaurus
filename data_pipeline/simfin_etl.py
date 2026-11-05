@@ -85,10 +85,26 @@ def load_raw_datasets():
     return companies, industries, income, cashflow, balance, prices
 
 def build_sector_map(companies: pd.DataFrame, industries: pd.DataFrame) -> dict:
-    """Map Ticker -> GICS Sector via IndustryId."""
-    comp_ind = companies.merge(industries, on="IndustryId", how="left")
-    sector_map = dict(zip(comp_ind["Ticker"].dropna(), comp_ind["Sector"].fillna("Other")))
-    return sector_map
+    """Map Ticker -> Standard GICS Sector (11 sectors) via IndustryId."""
+    valid_comp = companies.dropna(subset=["Ticker"]).copy()
+    comp_ind = valid_comp.merge(industries, on="IndustryId", how="left")
+    
+    def _map_gics(row):
+        ind = str(row.get("Industry", "")).strip()
+        sec = str(row.get("Sector", "Other")).strip()
+        if ind in (
+            "Online Media", "Entertainment", "Publishing", "Broadcasting",
+            "Telecommunication Services", "Communication Services", "Advertising & Marketing Services"
+        ):
+            return "Communication Services"
+        if sec == "Business Services":
+            return "Industrials"
+        if sec in ("Other", "nan", ""):
+            return "Industrials"
+        return sec
+
+    comp_ind["GICS_Sector"] = comp_ind.apply(_map_gics, axis=1)
+    return dict(zip(comp_ind["Ticker"].astype(str).str.strip().str.upper(), comp_ind["GICS_Sector"]))
 
 def process_daily_prices(prices: pd.DataFrame):
     """
