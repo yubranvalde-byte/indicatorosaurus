@@ -289,12 +289,12 @@ tailwind.config = {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="min_cap">Min Cap ($B)</label>
-          <input type="number" id="min-market-cap" min="0" placeholder="e.g. 10"
+          <input type="number" id="min-market-cap" min="0" step="any" placeholder="e.g. 10"
             class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
         <div>
           <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="max_cap">Max Cap ($B)</label>
-          <input type="number" id="max-market-cap" min="0" placeholder="e.g. 500"
+          <input type="number" id="max-market-cap" min="0" step="any" placeholder="e.g. 500"
             class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
       </div>
@@ -1553,12 +1553,33 @@ function onSectorChange(cb) {
     }
   }
 
-  if (currentResults && currentResults.length > 0) {
+  if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
     calculateScores();
   }
 }
 
-// Auto recalculate on Enter or change in Market Cap filters
+let hasCalculatedOnce = false;
+let _calcReqId = 0;
+let _capDebounceTimer = null;
+
+function parseMarketCapInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const raw = String(el.value || '').trim().replace(/[$,\s]/g, '');
+  if (raw === '') return null;
+  let mult = 1e9;
+  let numStr = raw;
+  if (/[tT]$/.test(raw)) { mult = 1e12; numStr = raw.slice(0, -1); }
+  else if (/[bB]$/.test(raw)) { mult = 1e9; numStr = raw.slice(0, -1); }
+  else if (/[mM]$/.test(raw)) { mult = 1e6; numStr = raw.slice(0, -1); }
+  const val = parseFloat(numStr);
+  if (isNaN(val) || val < 0) return NaN;
+  // If user typed raw dollars (e.g. 10000000000 instead of 10), treat as raw dollars
+  if (mult === 1e9 && val >= 1e6) return val;
+  return val * mult;
+}
+
+// Auto recalculate on Enter, input debounce, or change in Market Cap filters
 document.addEventListener('DOMContentLoaded', () => {
   ['min-market-cap', 'max-market-cap'].forEach(id => {
     const el = document.getElementById(id);
@@ -1566,11 +1587,22 @@ document.addEventListener('DOMContentLoaded', () => {
       el.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
+          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
           calculateScores();
         }
       });
+      el.addEventListener('input', () => {
+        if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
+          renderLeaderboard();
+          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
+          _capDebounceTimer = setTimeout(() => {
+            calculateScores();
+          }, 350);
+        }
+      });
       el.addEventListener('change', () => {
-        if (currentResults && currentResults.length > 0) {
+        if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
+          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
           calculateScores();
         }
       });
@@ -1682,7 +1714,7 @@ function applyPreset(key) {
   });
   userTouchedSlider = false;
   setActiveProfile(key);
-  if (currentResults && currentResults.length > 0) {
+  if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
     calculateScores();
   }
 }
@@ -1775,7 +1807,30 @@ function renderLeaderboard() {
   const chipColor = (activeProfile && PROFILES[activeProfile])
     ? PROFILES[activeProfile].color : '#94A3B8';
 
-  const visibleResults = currentResults.slice(0, visibleCount);
+  const minCapFilter = parseMarketCapInput('min-market-cap');
+  const maxCapFilter = parseMarketCapInput('max-market-cap');
+  const filteredResults = (currentResults || []).filter(item => {
+    const mc = parseFloat(item.marketCap || 0);
+    if (minCapFilter !== null && !isNaN(minCapFilter) && mc < minCapFilter) return false;
+    if (maxCapFilter !== null && !isNaN(maxCapFilter) && mc > maxCapFilter) return false;
+    if (selectedSectors && selectedSectors.length > 0 && item.sector && !selectedSectors.includes(item.sector)) return false;
+    return true;
+  });
+
+  const visibleResults = filteredResults.slice(0, visibleCount);
+
+  if (filteredResults.length === 0 && hasCalculatedOnce) {
+    const emptyTr = document.createElement('tr');
+    emptyTr.className = 'border-b border-outline-variant text-sm';
+    emptyTr.innerHTML = `
+      <td colspan="4" class="py-10 px-4 text-center text-on-surface-variant">
+        <div class="flex flex-col items-center gap-2">
+          <span class="material-symbols-outlined text-[28px] text-outline">filter_alt_off</span>
+          <span class="font-semibold">${isHebrew() ? 'לא נמצאו מניות התואמות את תנאי הסינון (שווי שוק / סקטור)' : 'No stocks matched the selected Market Cap / Sector filters'}</span>
+        </div>
+      </td>`;
+    tbody.appendChild(emptyTr);
+  }
 
   visibleResults.forEach((item, idx) => {
     const sc = parseFloat(item.score);
@@ -1826,18 +1881,18 @@ function renderLeaderboard() {
   const toggleAllBtn = document.getElementById('toggle-all-btn');
   const countSpan = document.getElementById('result-count');
 
-  if (currentResults.length > 0) {
-    const visibleNum = Math.min(visibleCount, currentResults.length);
+  if (filteredResults.length > 0) {
+    const visibleNum = Math.min(visibleCount, filteredResults.length);
     const filterInfo = (latestFilterMeta && latestFilterMeta.stocks_after != null && latestFilterMeta.stocks_before != null)
-      ? `(${latestFilterMeta.stocks_after.toLocaleString()} / ${latestFilterMeta.stocks_before.toLocaleString()} matched filters)`
+      ? `(${filteredResults.length.toLocaleString()} / ${latestFilterMeta.stocks_before.toLocaleString()} matched filters)`
       : ``;
-    countSpan.textContent = `Showing ${visibleNum} of top ${currentResults.length} stocks ${filterInfo} · Ranked by ${profileLabel} weights`;
+    countSpan.textContent = `Showing ${visibleNum} of top ${filteredResults.length} stocks ${filterInfo} · Ranked by ${profileLabel} weights`;
     
-    if (currentResults.length > 10) {
+    if (filteredResults.length > 10) {
       paginationControls.classList.remove('hidden');
       paginationControls.classList.add('flex');
 
-      if (visibleCount < currentResults.length) {
+      if (visibleCount < filteredResults.length) {
         loadMoreBtn.classList.remove('hidden');
         toggleAllBtn.textContent = t('btn_show_all');
         toggleAllBtn.setAttribute('onclick', 'showAllStocks()');
@@ -1851,7 +1906,9 @@ function renderLeaderboard() {
       paginationControls.classList.remove('flex');
     }
   } else {
-    countSpan.textContent = t('no_results_yet');
+    countSpan.textContent = hasCalculatedOnce
+      ? (isHebrew() ? '0 מניות תואמות את הסינון' : '0 stocks matched active filters')
+      : t('no_results_yet');
     paginationControls.classList.add('hidden');
     paginationControls.classList.remove('flex');
   }
@@ -1863,7 +1920,7 @@ function loadMoreStocks() {
 }
 
 function showAllStocks() {
-  visibleCount = currentResults.length;
+  visibleCount = Math.max(currentResults.length, 10);
   renderLeaderboard();
 }
 
@@ -1872,28 +1929,33 @@ function hideAllStocks() {
   renderLeaderboard();
 }
 
-// ── Calculate button ─────────────────────────────────────────────────────────
-document.getElementById('calculate-btn').addEventListener('click', async () => {
+// ── Calculate button & function ──────────────────────────────────────────────
+async function calculateScores() {
+  const reqId = ++_calcReqId;
   const btn = document.getElementById('calculate-btn');
-  btn.innerHTML = `<span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_calculate_score'))}</span>`;
-  btn.disabled = true;
-  btn.classList.add('opacity-75');
+  if (btn) {
+    btn.innerHTML = `<span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span><span>${escapeHTML(t('btn_calculate_score'))}</span>`;
+    btn.classList.add('opacity-75');
+  }
 
-  renderTableSkeleton('leaderboard-body', 4, 5);
+  if (!hasCalculatedOnce || !currentResults || currentResults.length === 0) {
+    renderTableSkeleton('leaderboard-body', 4, 5);
+  }
 
   const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
 
   try {
-    const minCapVal = document.getElementById('min-market-cap').value.trim();
-    const maxCapVal = document.getElementById('max-market-cap').value.trim();
-    const min_market_cap = minCapVal !== '' ? parseFloat(minCapVal) * 1e9 : null;
-    const max_market_cap = maxCapVal !== '' ? parseFloat(maxCapVal) * 1e9 : null;
+    const min_market_cap = parseMarketCapInput('min-market-cap');
+    const max_market_cap = parseMarketCapInput('max-market-cap');
 
     if (min_market_cap !== null && isNaN(min_market_cap)) {
       throw new Error("Invalid Minimum Market Cap value");
     }
     if (max_market_cap !== null && isNaN(max_market_cap)) {
       throw new Error("Invalid Maximum Market Cap value");
+    }
+    if (min_market_cap !== null && max_market_cap !== null && min_market_cap > max_market_cap) {
+      throw new Error("Min Cap ($B) cannot be greater than Max Cap ($B)");
     }
 
     const res = await fetch('/api/calculate', {
@@ -1907,8 +1969,12 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
         max_market_cap
       })
     });
+    if (reqId !== _calcReqId) return;
     if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.status); }
     const data = await res.json();
+    if (reqId !== _calcReqId) return;
+
+    hasCalculatedOnce = true;
     latestFilterMeta = { stocks_before: data.stocks_before, stocks_after: data.stocks_after };
     currentResults = data.results || [];
     visibleCount = 10;
@@ -1939,13 +2005,21 @@ document.getElementById('calculate-btn').addEventListener('click', async () => {
     }
 
   } catch (err) {
+    if (reqId !== _calcReqId) return;
     showToast('Error: ' + err.message, 'error');
     console.error(err);
   } finally {
-    btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">bolt</span><span data-i18n="btn_calculate_score">${escapeHTML(t('btn_calculate_score'))}</span>`;
-    btn.disabled = false;
-    btn.classList.remove('opacity-75');
+    if (reqId === _calcReqId && btn) {
+      btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">bolt</span><span data-i18n="btn_calculate_score">${escapeHTML(t('btn_calculate_score'))}</span>`;
+      btn.disabled = false;
+      btn.classList.remove('opacity-75');
+    }
   }
+}
+
+document.getElementById('calculate-btn').addEventListener('click', () => {
+  if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
+  calculateScores();
 });
 
 function setBacktestWindow(win) {
@@ -1998,10 +2072,8 @@ async function runPortfolioBacktest() {
     </div>
   `;
 
-  const minCapVal = document.getElementById('min-market-cap').value.trim();
-  const maxCapVal = document.getElementById('max-market-cap').value.trim();
-  const min_market_cap = minCapVal !== '' ? parseFloat(minCapVal) * 1e9 : null;
-  const max_market_cap = maxCapVal !== '' ? parseFloat(maxCapVal) * 1e9 : null;
+  const min_market_cap = parseMarketCapInput('min-market-cap');
+  const max_market_cap = parseMarketCapInput('max-market-cap');
 
   const weights = INDICATORS.map(ind => parseInt(document.getElementById(ind.id).value, 10));
 
@@ -2666,6 +2738,10 @@ const portfolioState = {
   lastAnalytics: null,
   initialized: false
 };
+
+function isHebrew() {
+  return typeof portfolioState !== 'undefined' && portfolioState.lang === 'he';
+}
 
 function t(key) {
   const dict = I18N[portfolioState.lang] || I18N.en;
@@ -4256,7 +4332,7 @@ function renderCsvImportDiagnostic(data) {
 }
 
 async function importPortfolioCsv(event) {
-  const file = event.target.files?.[0];
+  const file = event.target?.files?.[0];
   if (!file) return;
 
   const labelEl = document.getElementById('pf-import-csv-label');
@@ -4265,36 +4341,36 @@ async function importPortfolioCsv(event) {
   const diagPanel = document.getElementById('pf-csv-diagnostic-panel');
   const fileInput = event.target;
 
-  // Set loading state on button
-  if (labelEl) labelEl.classList.add('opacity-70', 'pointer-events-none');
-  if (iconEl) {
-    iconEl.className = 'animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full';
-    iconEl.textContent = '';
-  }
-  if (textEl) textEl.textContent = isHebrew() ? 'מייבא...' : 'Importing...';
-
-  // Show immediate visual feedback in diagnostic panel
-  if (diagPanel) {
-    diagPanel.classList.remove('hidden');
-    diagPanel.className = 'rounded-xl border border-primary/40 bg-primary/5 p-4 text-xs space-y-2.5 animate-pulse';
-    const stage1Text = isHebrew()
-      ? `הקובץ התקבל ("${escapeHTML(file.name)}") — מאמת עסקאות, מנרמל שערי אגורות/שקלים ומבצע התאמת ספליטים...`
-      : `File received ("${escapeHTML(file.name)}") — validating transactions, normalizing Agorot/ILS & aligning splits...`;
-    diagPanel.innerHTML = `
-      <div class="flex items-center gap-3">
-        <span class="animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full shrink-0"></span>
-        <div class="flex-1 min-w-0">
-          <div class="font-bold text-primary text-xs sm:text-sm flex items-center justify-between">
-            <span class="truncate">${isHebrew() ? 'מעבד קובץ CSV...' : 'Processing CSV File...'}</span>
-            <span class="text-[10px] text-primary/80 uppercase tracking-wider font-mono">Stage 1/2</span>
-          </div>
-          <p id="pf-import-live-desc" class="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">${stage1Text}</p>
-        </div>
-      </div>
-    `;
-  }
-
   try {
+    // Set loading state on button
+    if (labelEl) labelEl.classList.add('opacity-70', 'pointer-events-none');
+    if (iconEl) {
+      iconEl.className = 'animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full';
+      iconEl.textContent = '';
+    }
+    if (textEl) textEl.textContent = isHebrew() ? 'מייבא...' : 'Importing...';
+
+    // Show immediate visual feedback in diagnostic panel
+    if (diagPanel) {
+      diagPanel.classList.remove('hidden');
+      diagPanel.className = 'rounded-xl border border-primary/40 bg-primary/5 p-4 text-xs space-y-2.5 animate-pulse';
+      const stage1Text = isHebrew()
+        ? `הקובץ התקבל ("${escapeHTML(file.name)}") — מאמת עסקאות, מנרמל שערי אגורות/שקלים ומבצע התאמת ספליטים...`
+        : `File received ("${escapeHTML(file.name)}") — validating transactions, normalizing Agorot/ILS & aligning splits...`;
+      diagPanel.innerHTML = `
+        <div class="flex items-center gap-3">
+          <span class="animate-spin inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full shrink-0"></span>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-primary text-xs sm:text-sm flex items-center justify-between">
+              <span class="truncate">${isHebrew() ? 'מעבד קובץ CSV...' : 'Processing CSV File...'}</span>
+              <span class="text-[10px] text-primary/80 uppercase tracking-wider font-mono">Stage 1/2</span>
+            </div>
+            <p id="pf-import-live-desc" class="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">${stage1Text}</p>
+          </div>
+        </div>
+      `;
+    }
+
     const csvText = await file.text();
     const res = await fetch('/api/portfolio/transactions', {
       method: 'POST',
@@ -4313,7 +4389,6 @@ async function importPortfolioCsv(event) {
         : `Ingested ${importedCount} transactions — refreshing market prices, FIFO lots & performance charts...`;
     }
 
-    fileInput.value = '';
     await refreshPortfolioWorkspace();
 
     renderCsvImportDiagnostic(data);
@@ -4335,6 +4410,7 @@ async function importPortfolioCsv(event) {
     showTxFeedback(err.message, true);
     showToast(err.message, 'error');
   } finally {
+    if (fileInput) fileInput.value = '';
     if (labelEl) labelEl.classList.remove('opacity-70', 'pointer-events-none');
     if (iconEl) {
       iconEl.className = 'material-symbols-outlined text-[16px]';
