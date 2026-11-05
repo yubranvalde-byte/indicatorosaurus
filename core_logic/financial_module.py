@@ -871,6 +871,8 @@ def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_marke
     # Market Cap Filter: respect explicit user min_market_cap, or default to structural $1B floor
     if min_market_cap is not None:
         m_cap_min = float(min_market_cap)
+    elif max_market_cap is not None and float(max_market_cap) < GATEKEEPER_MIN_MARKET_CAP:
+        m_cap_min = 0.0
     else:
         m_cap_min = GATEKEEPER_MIN_MARKET_CAP
     df = df[df['MarketCap'].fillna(0.0) >= m_cap_min]

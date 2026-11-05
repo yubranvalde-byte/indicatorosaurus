@@ -85,6 +85,7 @@ The single-page web client (`frontend/templates/index.html`) provides interactiv
 - **Async Polling & DOM Streaming**: Non-blocking `fetch()` requests submit 16-element weight vectors and strategy parameters to `/api/calculate` and `/api/backtest`.
 - **Chart.js Compounding Growth Visualizer**: Dynamic canvas rendering comparing strategy portfolio NAV against the SPY benchmark over 3Y and 5Y windows.
 - **16-Factor Weight Sliders & Filter Panels**: Dynamic UI control over factor weights, GICS sector filters, and market capitalization boundaries.
+- **Synchronized Market Cap & Universe Filtering**: Strict two-way synchronization between Screener Leaderboard (`/api/calculate`) and Rolling Backtester (`/api/backtest`). Includes client-side decimal comma normalization (e.g. `2,5` -> `2.5`), human shorthand unit parsing (`$10B`, `500M`, `1T`), immediate debounced recalculation on input/change/Enter, and small-cap gatekeeper release when `max_market_cap < $1B`.
 
 ### Memory & Latency Optimizations
 1. **Vectorized Early Pruning & Filter Hoisting (`apply_early_pruning_vectorized`)**: Hoists fundamental strategy knockouts (`INTRINSIC_KNOCKOUTS`), GICS sector bounds, and Gatekeeper Matrix cutoffs (`MarketCap >= $1B`, `Price >= $5.00`, `20-day ADTV >= $5M`) to execute immediately on a `pandas.DataFrame` in-memory cache via boolean masking *before* technical indicator hydration and *before* Z-score/Goldilocks normalization. Shrinks dataset matrix ($N$) in ~1ms.

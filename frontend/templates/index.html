@@ -289,12 +289,12 @@ tailwind.config = {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="min_cap">Min Cap ($B)</label>
-          <input type="number" id="min-market-cap" min="0" step="any" placeholder="e.g. 10"
+          <input type="text" inputmode="decimal" id="min-market-cap" placeholder="e.g. 10"
             class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
         <div>
           <label class="text-[11px] font-bold text-on-surface-variant/80 uppercase tracking-wide block mb-1" data-i18n="max_cap">Max Cap ($B)</label>
-          <input type="number" id="max-market-cap" min="0" step="any" placeholder="e.g. 500"
+          <input type="text" inputmode="decimal" id="max-market-cap" placeholder="e.g. 500"
             class="w-full bg-surface-container border border-outline-variant rounded-md px-2 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 num-ltr" />
         </div>
       </div>
@@ -1553,9 +1553,7 @@ function onSectorChange(cb) {
     }
   }
 
-  if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
-    calculateScores();
-  }
+  calculateScores();
 }
 
 let hasCalculatedOnce = false;
@@ -1565,13 +1563,32 @@ let _capDebounceTimer = null;
 function parseMarketCapInput(id) {
   const el = document.getElementById(id);
   if (!el) return null;
-  const raw = String(el.value || '').trim().replace(/[$,\s]/g, '');
+  let raw = String(el.value || '').trim();
   if (raw === '') return null;
+
+  // Strip currency symbols, spaces, and Unicode LTR/RTL marks
+  raw = raw.replace(/[\$\u20AA\s\u200E\u200F]/g, '');
+  if (raw === '') return null;
+
+  // Replace comma with dot if comma is used as decimal separator (e.g. "2,5" or "0,5" or "10,5B")
+  if (raw.includes(',') && !raw.includes('.')) {
+    const parts = raw.split(',');
+    if (parts.length === 2 && (parts[1].length !== 3 || /[a-zA-Z]/.test(parts[1]))) {
+      raw = parts[0] + '.' + parts[1];
+    } else {
+      raw = raw.replace(/,/g, '');
+    }
+  } else {
+    raw = raw.replace(/,/g, '');
+  }
+
   let mult = 1e9;
   let numStr = raw;
   if (/[tT]$/.test(raw)) { mult = 1e12; numStr = raw.slice(0, -1); }
   else if (/[bB]$/.test(raw)) { mult = 1e9; numStr = raw.slice(0, -1); }
   else if (/[mM]$/.test(raw)) { mult = 1e6; numStr = raw.slice(0, -1); }
+  else if (/[kK]$/.test(raw)) { mult = 1e3; numStr = raw.slice(0, -1); }
+
   const val = parseFloat(numStr);
   if (isNaN(val) || val < 0) return NaN;
   // If user typed raw dollars (e.g. 10000000000 instead of 10), treat as raw dollars
@@ -1579,36 +1596,31 @@ function parseMarketCapInput(id) {
   return val * mult;
 }
 
-// Auto recalculate on Enter, input debounce, or change in Market Cap filters
-document.addEventListener('DOMContentLoaded', () => {
+// Auto recalculate on Enter, input debounce, or change in Market Cap filters (immediate binding, no dead DOMContentLoaded wrapper)
+(function setupMarketCapListeners() {
   ['min-market-cap', 'max-market-cap'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
-          calculateScores();
-        }
-      });
-      el.addEventListener('input', () => {
-        if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
-          renderLeaderboard();
-          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
-          _capDebounceTimer = setTimeout(() => {
-            calculateScores();
-          }, 350);
-        }
-      });
-      el.addEventListener('change', () => {
-        if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
-          if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
-          calculateScores();
-        }
-      });
-    }
+    if (!el) return;
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
+        calculateScores();
+      }
+    });
+    el.addEventListener('input', () => {
+      renderLeaderboard();
+      if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
+      _capDebounceTimer = setTimeout(() => {
+        calculateScores();
+      }, 400);
+    });
+    el.addEventListener('change', () => {
+      if (_capDebounceTimer) clearTimeout(_capDebounceTimer);
+      calculateScores();
+    });
   });
-});
+})();
 
 document.addEventListener('click', (e) => {
   const dropdown = document.getElementById('sector-dropdown');
@@ -1714,9 +1726,7 @@ function applyPreset(key) {
   });
   userTouchedSlider = false;
   setActiveProfile(key);
-  if (hasCalculatedOnce || (currentResults && currentResults.length > 0)) {
-    calculateScores();
-  }
+  calculateScores();
 }
 
 function setActiveProfile(key) {
@@ -1812,7 +1822,7 @@ function renderLeaderboard() {
   const filteredResults = (currentResults || []).filter(item => {
     const mc = parseFloat(item.marketCap || 0);
     if (minCapFilter !== null && !isNaN(minCapFilter) && mc < minCapFilter) return false;
-    if (maxCapFilter !== null && !isNaN(maxCapFilter) && mc > maxCapFilter) return false;
+    if (maxCapFilter !== null && !isNaN(maxCapFilter) && (mc <= 0 || mc > maxCapFilter)) return false;
     if (selectedSectors && selectedSectors.length > 0 && item.sector && !selectedSectors.includes(item.sector)) return false;
     return true;
   });
@@ -1975,7 +1985,14 @@ async function calculateScores() {
     if (reqId !== _calcReqId) return;
 
     hasCalculatedOnce = true;
-    latestFilterMeta = { stocks_before: data.stocks_before, stocks_after: data.stocks_after };
+    latestFilterMeta = {
+      stocks_before: data.stocks_before,
+      stocks_after: data.stocks_after,
+      min_market_cap: min_market_cap,
+      max_market_cap: max_market_cap,
+      strategy: activeProfile || null,
+      sectors: selectedSectors.slice()
+    };
     currentResults = data.results || [];
     visibleCount = 10;
 
@@ -2047,8 +2064,16 @@ async function runPortfolioBacktest() {
   const helperMsg = document.getElementById('backtest-helper-msg');
   const contentDiv = document.getElementById('backtest-content');
   
-  if (!currentResults || currentResults.length === 0) {
-    showToast("No ranked stocks available to backtest.", "error");
+  const min_market_cap = parseMarketCapInput('min-market-cap');
+  const max_market_cap = parseMarketCapInput('max-market-cap');
+
+  const filtersChanged = !latestFilterMeta ||
+    latestFilterMeta.min_market_cap !== min_market_cap ||
+    latestFilterMeta.max_market_cap !== max_market_cap ||
+    latestFilterMeta.strategy !== (activeProfile || null);
+
+  if (!currentResults || currentResults.length === 0 || filtersChanged) {
+    await calculateScores();
     return;
   }
 
@@ -4462,6 +4487,9 @@ function seedDemoPortfolio() {
 // Initialize saved theme (dark/light) and language preference (EN/HE) on load
 setTheme(portfolioState.theme || 'dark');
 setAppLanguage(portfolioState.lang || 'en');
+
+// Initial boot: automatically hydrate Screener & Backtester with default Deep Value profile
+applyPreset('deep-value');
 </script>
 </body>
 </html>
