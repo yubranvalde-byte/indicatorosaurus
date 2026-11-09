@@ -372,7 +372,7 @@ def portfolio_summary():
 
     try:
         snap = ledger.snapshot(as_of=as_of)
-        quant_dna = analytics.compute_quant_dna(as_of=as_of, view_currency=view_currency)
+        quant_dna = analytics.compute_quant_dna(as_of=as_of, view_currency=view_currency, precomputed_snapshot=snap)
     except Exception as e:
         return jsonify({"error": f"Failed to compute portfolio snapshot: {str(e)}"}), 500
 

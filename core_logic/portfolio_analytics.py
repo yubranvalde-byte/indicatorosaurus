@@ -873,17 +873,16 @@ class PortfolioAnalytics:
                     n_years_slice = max((t1 - t0).days / CALENDAR_DAYS_PER_YEAR, 1.0 / CALENDAR_DAYS_PER_YEAR)
                     primary_bench_ann_ret = float((1.0 + max(-0.9999, primary_bench_total_ret)) ** (1.0 / n_years_slice) - 1.0)
 
-                # What-If Opportunity Simulator (cash-mode consistent):
-                #   explicit: benchmark units bought on external capital entering the account and sold on CASH_WITHDRAWAL;
-                #             internal stock SELL/BUY reallocations leave benchmark units untouched.
-                #   implicit: benchmark units bought on net capital deployed into equities and sold on un-reinvested
-                #             SELL proceeds / distributed dividends (same flows that drive invested-equity TWR).
-                inflow_vec = slice_df[f"mode_inflow_{cur_lower}"].to_numpy(dtype=np.float64).copy()
-                wdr_vec = slice_df[f"mode_withdrawal_{cur_lower}"].to_numpy(dtype=np.float64).copy()
+                # What-If Opportunity Simulator (Public Market Equivalent - PME):
+                #   Tracks alternative buy-and-hold returns of external capital entering/leaving the account.
+                #   External cash flows (external_inflow / withdrawal) dictate benchmark purchases & sales;
+                #   Internal stock SELL/BUY reallocations leave benchmark units untouched.
+                inflow_vec = slice_df[f"external_inflow_{cur_lower}"].to_numpy(dtype=np.float64).copy()
+                wdr_vec = slice_df[f"withdrawal_{cur_lower}"].to_numpy(dtype=np.float64).copy()
 
                 if t0 > inception_ts:
-                    # Rebase: seed benchmark with the portfolio's (mode) value carried into t0
-                    v_before_t0 = float(daily_df.loc[: t0 - pd.Timedelta(days=1), mode_nav_col].iloc[-1])
+                    # Rebase: seed benchmark with the total portfolio value carried into t0
+                    v_before_t0 = float(daily_df.loc[: t0 - pd.Timedelta(days=1), nav_col].iloc[-1])
                     inflow_vec[0] += max(0.0, v_before_t0)
 
                 n_pts = len(b_view_px)
@@ -903,7 +902,7 @@ class PortfolioAnalytics:
                 what_if_nav = cum_shares * b_view_px
                 out_series[f"what_if_{b_sym}_nav"] = what_if_nav
 
-                term_port_nav = float(slice_df[mode_nav_col].iloc[-1])
+                term_port_nav = float(slice_df[nav_col].iloc[-1])
                 term_bench_nav = float(what_if_nav[-1]) if len(what_if_nav) else 0.0
 
                 bench_dated_cfs: list[tuple[pd.Timestamp, float]] = []
@@ -914,28 +913,30 @@ class PortfolioAnalytics:
                 bench_dated_cfs.append((t1, term_bench_nav))
                 bench_xirr_ann = compute_xirr(bench_dated_cfs)
 
+                total_bench_invested = float(np.sum(inflow_vec) - np.sum(wdr_vec))
                 what_if_results[b_sym] = {
                     "benchmark": b_sym,
                     "currency": view_cur,
                     "terminal_benchmark_nav": _scalar_float(term_bench_nav),
                     "terminal_portfolio_nav": _scalar_float(term_port_nav),
                     "excess_value_created": _scalar_float(term_port_nav - term_bench_nav),
+                    "total_invested": _scalar_float(total_bench_invested),
                     "benchmark_twr_pct": _scalar_float(b_rebased_ret[-1] * 100.0) if len(b_rebased_ret) else 0.0,
                     "benchmark_xirr_pct": _scalar_float(bench_xirr_ann * 100.0),
                     "xirr_pct": _scalar_float(bench_xirr_ann * 100.0),
                 }
 
-        # ── MWR (XIRR & Modified Dietz) on the Slice (cash-mode consistent flows) ──
+        # ── MWR (XIRR & Modified Dietz) on the Slice (external capital flows) ──
         dated_cfs: list[tuple[pd.Timestamp, float]] = []
         if t0 > inception_ts:
-            v_start = float(daily_df.loc[: t0 - pd.Timedelta(days=1), mode_nav_col].iloc[-1])
+            v_start = float(daily_df.loc[: t0 - pd.Timedelta(days=1), nav_col].iloc[-1])
             if v_start > 0.0:
                 dated_cfs.append((t0, -v_start))
         else:
             v_start = 0.0
 
-        inflow_s = slice_df[f"mode_inflow_{cur_lower}"]
-        wdr_s = slice_df[f"mode_withdrawal_{cur_lower}"]
+        inflow_s = slice_df[f"external_inflow_{cur_lower}"]
+        wdr_s = slice_df[f"withdrawal_{cur_lower}"]
 
         for dt in slice_grid:
             inf = float(inflow_s.loc[dt])
@@ -944,11 +945,11 @@ class PortfolioAnalytics:
             if abs(net_ext) > 1e-9:
                 dated_cfs.append((dt, -net_ext))
 
-        v_end = float(slice_df[mode_nav_col].iloc[-1])
+        v_end = float(slice_df[nav_col].iloc[-1])
         dated_cfs.append((t1, v_end))
 
         xirr_annual = compute_xirr(dated_cfs)
-        cf_series = slice_df[f"mode_cf_{cur_lower}"]
+        cf_series = slice_df[f"external_cf_{cur_lower}"]
         mwr_dietz = compute_modified_dietz_return(v_start, v_end, cf_series, t0, t1)
 
         # ── Institutional Risk & Return KPIs ─────────────────────────────────
@@ -969,6 +970,22 @@ class PortfolioAnalytics:
 
         # ── FX & Tax Attribution Breakdown (ILS View) ────────────────────────
         attribution = self._compute_ils_attribution(daily_df, slice_df, t0, t1)
+
+        # ── After-Tax Alternative Comparison Enrichment ─────────────────────
+        last_fx = float(slice_df["usd_ils"].iloc[-1]) if len(slice_df) else 3.7
+        port_unrealized_tax_ils = float(attribution.get("est_unrealized_tax_ils", 0.0) or 0.0)
+        port_unrealized_tax_view = port_unrealized_tax_ils if view_cur == "ILS" else (port_unrealized_tax_ils / max(last_fx, 1e-4))
+        term_port_after_tax = max(0.0, term_port_nav - port_unrealized_tax_view)
+
+        for b_sym, b_dict in what_if_results.items():
+            b_nav = float(b_dict.get("terminal_benchmark_nav", 0.0))
+            b_invested = float(b_dict.get("total_invested", term_port_nav))
+            b_unrealized_gain = max(0.0, b_nav - b_invested)
+            b_unrealized_tax = b_unrealized_gain * 0.25
+            b_nav_after_tax = max(0.0, b_nav - b_unrealized_tax)
+            b_dict["after_tax_terminal_benchmark_nav"] = _scalar_float(b_nav_after_tax)
+            b_dict["after_tax_terminal_portfolio_nav"] = _scalar_float(term_port_after_tax)
+            b_dict["after_tax_excess_value"] = _scalar_float(term_port_after_tax - b_nav_after_tax)
 
         cleaned_series = _clean_frame(out_series)
         mode_req = str(cash_mode or "auto").strip().lower()
@@ -1145,6 +1162,7 @@ class PortfolioAnalytics:
         as_of=None,
         weights_16: list[float] | None = None,
         view_currency: str = "ILS",
+        precomputed_snapshot: dict | None = None,
     ) -> dict:
         """Memoized wrapper around `compute_portfolio_quant_dna` tied to ledger state."""
         view_cur = str(view_currency or "ILS").upper().strip()
@@ -1155,7 +1173,7 @@ class PortfolioAnalytics:
         )
         tx_count = len(self.ledger._tx) if hasattr(self.ledger, "_tx") else -1
         cache_key = (tx_count, str(as_of), view_cur, w_tuple)
-        if cache_key in self._cached_quant_dna:
+        if cache_key in self._cached_quant_dna and precomputed_snapshot is None:
             return self._cached_quant_dna[cache_key]
 
         res = compute_portfolio_quant_dna(
@@ -1164,6 +1182,7 @@ class PortfolioAnalytics:
             weights_16=list(w_tuple),
             view_currency=view_cur,
             price_provider=self.price_provider,
+            precomputed_snapshot=precomputed_snapshot,
         )
         if len(self._cached_quant_dna) >= 4:
             self._cached_quant_dna.pop(next(iter(self._cached_quant_dna)), None)
@@ -1346,6 +1365,7 @@ def compute_portfolio_quant_dna(
     weights_16: list[float] | None = None,
     view_currency: str = "ILS",
     price_provider=None,
+    precomputed_snapshot: dict | None = None,
 ) -> dict:
     """
     Compute Phase 6 Portfolio Factor DNA, Per-Holding C-FFI Quant Scores,
@@ -1419,7 +1439,7 @@ def compute_portfolio_quant_dna(
             "sector_attribution": [],
         })
 
-    snap = ledger.snapshot(as_of=as_of, price_provider=price_provider)
+    snap = precomputed_snapshot if precomputed_snapshot is not None else ledger.snapshot(as_of=as_of, price_provider=price_provider)
     pos_df = snap["positions"]
     snap_as_of = snap["as_of"]
 

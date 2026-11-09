@@ -279,7 +279,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 snapshot_df['PriceVs200SMA'] = snapshot_df['Ticker'].map(sma_s).fillna(snapshot_df['PriceVs200SMA']).astype('float32')
                 snapshot_df['RSI'] = snapshot_df['Ticker'].map(rsi_s).fillna(snapshot_df['RSI']).astype('float32')
                 snapshot_df['Beta'] = snapshot_df['Ticker'].map(beta_s).fillna(snapshot_df['Beta']).astype('float32')
-                snapshot_df['LatestPrice'] = snapshot_df['Ticker'].map(last_px_s).fillna(5.01).astype('float32')
+                snapshot_df['LatestPrice'] = snapshot_df['Ticker'].map(last_px_s).fillna(0.0).astype('float32')
 
         try:
             normalized_snapshot = normalize_stocks(
@@ -293,7 +293,7 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                 return_df=True,
             )
 
-            # Fallback 1: Relax strategy constraint first while preserving user's sector & market-cap filters
+            # Fallback 1: Relax strategy constraint while strictly preserving user's sector & market-cap filters
             if normalized_snapshot.empty and strategy is not None:
                 normalized_snapshot = normalize_stocks(
                     snapshot_df,
@@ -301,19 +301,6 @@ def run_backtest(tickers, time_window='3y', weights=None, strategy=None, allowed
                     allowed_sectors=allowed_sectors,
                     min_market_cap=min_market_cap,
                     max_market_cap=max_market_cap,
-                    global_stocks_list=snapshot_df,
-                    use_live_tech_cache=False,
-                    return_df=True,
-                )
-
-            # Fallback 2: If still empty, fall back directly to baseline unfiltered snapshot
-            if normalized_snapshot.empty:
-                normalized_snapshot = normalize_stocks(
-                    snapshot_df,
-                    strategy=None,
-                    allowed_sectors=None,
-                    min_market_cap=None,
-                    max_market_cap=None,
                     global_stocks_list=snapshot_df,
                     use_live_tech_cache=False,
                     return_df=True,

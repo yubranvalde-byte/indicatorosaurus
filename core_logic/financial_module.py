@@ -868,10 +868,10 @@ def apply_early_pruning_vectorized(df, strategy, allowed_sectors=None, min_marke
     GATEKEEPER_MIN_PRICE = 5.00                  # $5.00
     GATEKEEPER_MIN_ADTV = 5_000_000.0            # $5M 20-day ADTV
 
-    # Market Cap Filter: respect explicit user min_market_cap, or default to structural $1B floor
+    # Market Cap Filter: respect explicit user bounds if either is provided; default to structural $1B floor only if both are None
     if min_market_cap is not None:
         m_cap_min = float(min_market_cap)
-    elif max_market_cap is not None and float(max_market_cap) < GATEKEEPER_MIN_MARKET_CAP:
+    elif max_market_cap is not None:
         m_cap_min = 0.0
     else:
         m_cap_min = GATEKEEPER_MIN_MARKET_CAP
@@ -1212,7 +1212,7 @@ def normalize_stocks(stocks_list, strategy=None, allowed_sectors=None, min_marke
             df_base['Sector'] = df_base['GICS_Sector'] if 'GICS_Sector' in df_base.columns else ''
 
     df_stocks = df_initial
-    if strategy or allowed_sectors or (min_market_cap is not None) or (max_market_cap is not None) or ('LatestPrice' in df_stocks.columns):
+    if strategy or allowed_sectors or (min_market_cap is not None) or (max_market_cap is not None) or ('LatestPrice' in df_stocks.columns) or use_live_tech_cache:
         df_stocks = apply_early_pruning_vectorized(
             df_stocks,
             strategy,
@@ -1362,13 +1362,16 @@ def run_financial_engine(normalized_stocks, weights_list):
 
     trunc_bytes_list = []
     full_ticker_lookup = {}
-    for full_t in ticker_seq:
+    for idx, full_t in enumerate(ticker_seq):
         # Strictly encode as ASCII and truncate to 7 bytes max so byte 7 in S8 is guaranteed '\x00'
         b7 = full_t.encode('ascii', errors='ignore')[:7]
-        trunc_bytes_list.append(b7)
         t_key = b7.decode('ascii', errors='ignore')
-        if t_key not in full_ticker_lookup:
-            full_ticker_lookup[t_key] = full_t
+        if t_key in full_ticker_lookup and full_ticker_lookup[t_key] != full_t:
+            # Collision guard: assign deterministic unique 7-char token if 7-char prefix matches another ticker
+            t_key = f"~{idx:05d}"
+            b7 = t_key.encode('ascii')
+        trunc_bytes_list.append(b7)
+        full_ticker_lookup[t_key] = full_t
 
     c_buf['ticker'] = trunc_bytes_list
     c_buf['indicators'] = ind_mat

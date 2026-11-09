@@ -2085,7 +2085,15 @@ async function runPortfolioBacktest() {
     return;
   }
 
-  const topTickers = currentResults.slice(0, 10).map(item => item.ticker);
+  const filteredTickers = (currentResults || []).filter(item => {
+    const mc = parseFloat(item.marketCap || 0);
+    if (min_market_cap !== null && !isNaN(min_market_cap) && mc < min_market_cap) return false;
+    if (max_market_cap !== null && !isNaN(max_market_cap) && (mc <= 0 || mc > max_market_cap)) return false;
+    if (selectedSectors && selectedSectors.length > 0 && item.sector && !selectedSectors.includes(item.sector)) return false;
+    return true;
+  }).map(item => item.ticker);
+
+  const topTickers = (filteredTickers.length > 0 ? filteredTickers : currentResults.map(item => item.ticker)).slice(0, 10);
   if (topTickers.length === 0) {
     showToast("No tickers found to run simulation.", "error");
     return;
@@ -3938,6 +3946,10 @@ function renderPortfolioAnalyticsKPIs(data) {
         const xirrVal = w.benchmark_xirr_pct ?? w.xirr_pct ?? 0;
         const exVal = w.excess_value_created ?? w.excess_value ?? 0;
         const excessColor = colorClassForVal(exVal);
+        const exValAfterTax = w.after_tax_excess_value;
+        const afterTaxHtml = exValAfterTax != null
+          ? `<span class="text-[10px] text-on-surface-variant font-mono block num-ltr">After-Tax: <span class="${colorClassForVal(exValAfterTax)} font-bold">${fmtSignedMoney(exValAfterTax, ccy)}</span></span>`
+          : '';
         return `
           <div class="bg-surface-container-low border border-outline-variant rounded-lg px-3.5 py-2.5 flex justify-between items-center text-xs">
             <div class="text-start">
@@ -3948,6 +3960,7 @@ function renderPortfolioAnalyticsKPIs(data) {
             <div class="text-end">
               <span class="text-[10px] uppercase font-bold text-on-surface-variant block">Portfolio Excess</span>
               <span class="font-mono font-bold num-ltr ${excessColor}">${fmtSignedMoney(exVal, ccy)}</span>
+              ${afterTaxHtml}
             </div>
           </div>
         `;

@@ -193,7 +193,7 @@ def build_fundamental_panel(income: pd.DataFrame, cashflow: pd.DataFrame, balanc
     merged = income.merge(
         cashflow, on=["Ticker", "Report Date"], how="inner", suffixes=("_inc", "_cf")
     ).merge(
-        balance, on=["Ticker", "Report Date"], how="inner", suffixes=("_cf", "_bs")
+        balance, on=["Ticker", "Report Date"], how="left", suffixes=("_cf", "_bs")
     )
 
     merged["GICS_Sector"] = merged["Ticker"].map(sector_map).fillna("Other")

@@ -165,13 +165,13 @@ def _normalize_tase_agorot_series(series: pd.Series, ticker: str, reported_curre
 def _covered_tickers(long_df: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> set:
     """
     Tickers whose cached rows span the requested window
-    (first obs <= start + tolerance and last obs >= min(end, local_lake_horizon) - tolerance).
+    (first obs <= start + tolerance and last obs >= min(end, today) - tolerance).
     """
     if long_df is None or long_df.empty:
         return set()
-    eff_end = min(end_ts, _today(), _get_tier1_max_date())
+    eff_end = min(end_ts, _today())
     tol_start = pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)
-    tol_end = pd.Timedelta(days=15)
+    tol_end = pd.Timedelta(days=5)
     bounds = long_df.groupby("Ticker")["Date"].agg(["min", "max"])
     ok = (bounds["min"] <= start_ts + tol_start) & (bounds["max"] >= eff_end - tol_end)
     return set(bounds.index[ok])
@@ -412,7 +412,7 @@ def _fetch_yfinance_daily_history(ticker: str, start_ts: pd.Timestamp, end_ts: p
         return pd.Series(dtype="float64"), None
 
 
-def _hydrate_missing_tickers_tier3(missing_tickers: list, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
+def _hydrate_missing_tickers_tier3(missing_tickers: list, start_ts: pd.Timestamp, end_ts: pd.Timestamp, start_ts_map: dict | None = None) -> pd.DataFrame:
     """
     Fetch missing tickers via Tier 3 (Tiingo -> yfinance), normalize TASE Agorot to ILS,
     persist into `data/portfolio_price_cache.parquet`, and return the long DataFrame.
@@ -428,10 +428,11 @@ def _hydrate_missing_tickers_tier3(missing_tickers: list, start_ts: pd.Timestamp
         last_fail = _TIER3_NEGATIVE_CACHE.get(t_up, 0.0)
         if (now_ts - last_fail) < 600.0:
             continue
-        s = _fetch_tiingo_daily_history(t_up, start_ts, end_ts, tiingo_key)
+        req_start = start_ts_map.get(t_up, start_ts) if start_ts_map else start_ts
+        s = _fetch_tiingo_daily_history(t_up, req_start, end_ts, tiingo_key)
         reported_curr = "USD" if not s.empty else None
         if s.empty:
-            s, reported_curr = _fetch_yfinance_daily_history(t_up, start_ts, end_ts)
+            s, reported_curr = _fetch_yfinance_daily_history(t_up, req_start, end_ts)
         if s.empty:
             _TIER3_NEGATIVE_CACHE[t_up] = now_ts
             print(f"[PriceResolver Tier 3 WARNING] No external data returned for {t_up}.")
@@ -510,7 +511,22 @@ def resolve_prices(tickers: list, start_date, end_date, dtype: str = "float64",
         _append_to_tier2_cache(t1_df)
 
     tier3_candidates = [t for t in clean_tickers if t not in covered_t2 and t not in covered_t1]
-    t3_df = _hydrate_missing_tickers_tier3(tier3_candidates, start_ts, end_ts) if not local_only else pd.DataFrame(columns=LONG_COLUMNS)
+    t3_start_map = {}
+    if tier3_candidates:
+        cached_frames = [f for f in (t2_df, t1_df) if not f.empty]
+        if cached_frames:
+            comb_bounds = pd.concat(cached_frames, ignore_index=True).groupby("Ticker")["Date"].agg(["min", "max"])
+            tol_start = pd.Timedelta(days=COVERAGE_TOLERANCE_DAYS)
+            for t in tier3_candidates:
+                if t in comb_bounds.index and comb_bounds.loc[t, "min"] <= start_ts + tol_start:
+                    # Head covered in local cache; fetch incremental tail from Tier 3
+                    t3_start_map[t] = comb_bounds.loc[t, "max"] - pd.Timedelta(days=5)
+                else:
+                    t3_start_map[t] = start_ts
+        else:
+            t3_start_map = {t: start_ts for t in tier3_candidates}
+
+    t3_df = _hydrate_missing_tickers_tier3(tier3_candidates, start_ts, end_ts, start_ts_map=t3_start_map) if not local_only else pd.DataFrame(columns=LONG_COLUMNS)
 
     # Precedence on overlapping (Date, Ticker): Tier 3 (freshest) > Tier 1 > Tier 2
     frames = [f[["Date", "Ticker", "Close"]] for f in (t2_df, t1_df, t3_df) if not f.empty]
