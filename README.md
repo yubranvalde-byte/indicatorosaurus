@@ -4,6 +4,12 @@
 [![C GCC](https://img.shields.io/badge/C-GCC%2011%2B%20%7C%20Shared%20Lib-orange.svg)](https://gcc.gnu.org/)
 [![Flask 3.x](https://img.shields.io/badge/Flask-3.x-green.svg)](https://flask.palletsprojects.com/)
 [![License](https://img.shields.io/badge/License-Academic-lightgrey.svg)]()
+[![Branch: dev](https://img.shields.io/badge/Branch-dev%20(active)-blue.svg)]()
+
+> [!IMPORTANT]
+> **Branching & Cloud Deployment Policy (Render)**:
+> - **`main` (Production Branch)**: Continuously deployed to the live production server on Render (serving live portfolio links on CV/resume). Kept strictly stable and untouched by unverified development.
+> - **`dev` (Active Development Branch)**: All active feature engineering, optimization iterations, and commits are pushed here. Merges into `main` are executed strictly after complete verification.
 
 ---
 
@@ -684,6 +690,9 @@ python api/main.py
 *Access dashboard at `http://127.0.0.1:5000`.*
 
 ### Step 6 — Production Cloud Deployment (e.g. Render)
+- **Branch Strategy**:
+  - `main`: Connected to Render live auto-deployment. Preserved without breaking changes for external resume/portfolio verification.
+  - `dev`: Active development staging branch. All daily commits and WIP iterations are pushed here.
 - **Build Command**: `python scripts/compile_c_engine.py && pip install -r requirements.txt`
 - **Start Command**: `gunicorn --timeout 120 main:app`
 - **Environment Variables**:
